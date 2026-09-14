@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "com.github.tropin"
-version = "0.7.0"
+version = "0.8.0"
 
 repositories {
     mavenCentral()
@@ -30,7 +30,7 @@ intellijPlatform {
             sinceBuild = "243"
         }
         changeNotes = """
-            v0.7.0: .NET Debugger — breakpoints, debug sessions, evaluate, stack trace, stepping.
+            v0.8.0: NuGet management (list/add/remove/restore), inspection management (list/toggle).
         """.trimIndent()
     }
 }

@@ -51,14 +51,14 @@
 - [x] `rider_debug_step` — stepOver / stepInto / stepOut / resume / pause / stop
 
 ### NuGet
-- [ ] `rider_list_packages` — установленные пакеты с версиями
-- [ ] `rider_add_package` / `rider_update_package` / `rider_remove_package`
-- [ ] `rider_nuget_restore` — restore с выводом
+- [x] `rider_list_packages` — пакеты с версиями (dotnet list package), --outdated
+- [x] `rider_manage_package` — add/remove через dotnet CLI
+- [x] `rider_nuget_restore` — restore с polling
 
 ### IDE Settings
-- [ ] `rider_get_setting` / `rider_set_setting` — чтение/запись настроек
-- [ ] `rider_list_settings` — поиск настроек по ключевому слову
-- [ ] `rider_manage_inspection` — вкл/выкл инспекций, severity
+- [x] `rider_list_inspections` — поиск инспекций по keyword, фильтр enabled
+- [x] `rider_toggle_inspection` — вкл/выкл по shortName
+- [~] ~~Generic get/set/list settings~~ — слишком broad, инспекции покрывают основной use case
 
 ## P3 — Nice to have
 

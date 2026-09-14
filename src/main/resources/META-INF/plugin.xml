@@ -45,6 +45,15 @@
         <mcpTool implementation="com.github.tropin.ridermcp.debugger.DebugEvaluateTool"/>
         <mcpTool implementation="com.github.tropin.ridermcp.debugger.DebugStepTool"/>
 
+        <!-- NuGet -->
+        <mcpTool implementation="com.github.tropin.ridermcp.nuget.ListPackagesTool"/>
+        <mcpTool implementation="com.github.tropin.ridermcp.nuget.ManagePackageTool"/>
+        <mcpTool implementation="com.github.tropin.ridermcp.nuget.NuGetRestoreTool"/>
+
+        <!-- Inspections -->
+        <mcpTool implementation="com.github.tropin.ridermcp.settings.ListInspectionsTool"/>
+        <mcpTool implementation="com.github.tropin.ridermcp.settings.ToggleInspectionTool"/>
+
         <!-- Programmer context -->
         <mcpTool implementation="com.github.tropin.ridermcp.context.GetContextTool"/>
         <mcpTool implementation="com.github.tropin.ridermcp.context.GetRecentFilesTool"/>

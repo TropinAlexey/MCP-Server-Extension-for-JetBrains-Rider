@@ -15,7 +15,7 @@
   A JetBrains Rider plugin that extends the stock <a href="https://github.com/JetBrains/mcp-server-plugin">MCP Server Plugin</a> with full IDE observability and control tools.
 </p>
 
-**Current version: 0.7.0** — .NET debugger tools. [What's New →](#whats-new)
+**Current version: 0.8.0** — NuGet & inspection management. [What's New →](#whats-new)
 
 ## Why This Exists
 
@@ -167,6 +167,17 @@ See [TODO.md](TODO.md) for the full prioritized roadmap.
 - P3: IDE Settings control
 
 ## What's New
+
+### v0.8.0
+
+**NuGet Management**
+- `rider_list_packages` — list installed packages with versions, `outdated` flag for available updates
+- `rider_manage_package` — add or remove NuGet packages via dotnet CLI
+- `rider_nuget_restore` — async restore with polling via `rider_get_output`
+
+**Inspection Management**
+- `rider_list_inspections` — search inspections by keyword, filter by enabled state
+- `rider_toggle_inspection` — enable/disable inspections by shortName
 
 ### v0.7.0
 
