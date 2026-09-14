@@ -1,7 +1,7 @@
 package com.github.tropin.ridermcp.context
 
-import com.intellij.ide.bookmarks.BookmarkManager
-import com.intellij.openapi.application.runReadAction
+import com.intellij.ide.bookmark.BookmarksManager
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.impl.EditorHistoryManager
@@ -29,9 +29,9 @@ class GetContextTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
         val result = buildJsonObject {
             val b = this
 
-            runReadAction {
-                val editor = fem.selectedTextEditor ?: return@runReadAction
-                val vf = editor.virtualFile ?: return@runReadAction
+            ReadAction.run<Throwable> {
+                val editor = fem.selectedTextEditor ?: return@run
+                val vf = editor.virtualFile ?: return@run
                 b.put("file", vf.toNioPathOrNull()?.relTo(projectDir) ?: vf.path)
 
                 val caret = editor.caretModel.primaryCaret
@@ -74,15 +74,15 @@ class GetContextTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
             }
 
             try {
-                @Suppress("DEPRECATION")
-                val bookmarks = BookmarkManager.getInstance(project).validBookmarks
-                if (bookmarks.isNotEmpty()) {
+                val bm = BookmarksManager.getInstance(project) ?: return@buildJsonObject
+                val allBookmarks = bm.bookmarks
+                if (allBookmarks.isNotEmpty()) {
                     b.putJsonArray("bookmarks") {
-                        bookmarks.forEach { bm ->
+                        allBookmarks.forEach { bookmark ->
+                            val desc = bm.getGroups(bookmark).firstOrNull()?.name
                             addJsonObject {
-                                put("file", bm.file?.toNioPathOrNull()?.relTo(projectDir) ?: "unknown")
-                                put("line", bm.line + 1)
-                                bm.description?.takeIf { it.isNotEmpty() }?.let { put("description", it) }
+                                put("bookmark", bookmark.toString())
+                                desc?.takeIf { it.isNotEmpty() }?.let { put("group", it) }
                             }
                         }
                     }

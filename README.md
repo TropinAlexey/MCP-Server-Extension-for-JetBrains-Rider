@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="icon.png" alt="Rider MCP Extension" width="80">
+  <img src="icon.png" alt="MCP Server Extension" width="80">
 </p>
 
-<h1 align="center">Rider MCP Extension</h1>
+<h1 align="center">MCP Server Extension</h1>
 
 <p align="center">
   <a href="https://github.com/TropinAlexey/rider-mcp/releases/latest"><img src="https://img.shields.io/github/v/release/TropinAlexey/rider-mcp?style=flat-square&label=version" alt="Version"></a>
@@ -15,7 +15,7 @@
   A JetBrains Rider plugin that extends the stock <a href="https://github.com/JetBrains/mcp-server-plugin">MCP Server Plugin</a> with full IDE observability and control tools.
 </p>
 
-**Current version: 0.8.1** — NuGet & inspection management. [What's New →](#whats-new)
+**Current version: 0.9.0** — API compatibility fixes, CI & Marketplace. [What's New →](#whats-new)
 
 ## Why This Exists
 
@@ -55,7 +55,7 @@ This is **not a fork** of the JetBrains MCP Server plugin. It's a separate plugi
 MCP Client ←MCP→ JS proxy (mcp-jetbrains) ←HTTP→ Rider JVM
                                                     ├── MCP Server Plugin (JetBrains)
                                                     │   └── stock tools (~30)
-                                                    └── Rider MCP Extension (this plugin)
+                                                    └── MCP Server Extension (this plugin)
                                                         └── additional tools (28)
 ```
 
@@ -185,7 +185,7 @@ See [TODO.md](TODO.md) for the full prioritized roadmap.
 
 **Next up:**
 - P3: Terminal streaming, Tool Windows deep integration
-- CI (GitHub Actions), JetBrains Marketplace publish
+- ~~CI (GitHub Actions), JetBrains Marketplace publish~~ ✅
 
 ## What's New
 

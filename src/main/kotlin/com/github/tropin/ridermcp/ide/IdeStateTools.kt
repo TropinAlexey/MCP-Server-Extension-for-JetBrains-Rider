@@ -2,9 +2,8 @@ package com.github.tropin.ridermcp.ide
 
 import com.intellij.notification.Notification
 import com.intellij.notification.NotificationsManager
-import com.intellij.openapi.application.runReadAction
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.fileEditor.FileEditorManager
-import com.intellij.openapi.progress.impl.CoreProgressManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.toNioPathOrNull
 import com.intellij.openapi.wm.ToolWindowManager
@@ -21,9 +20,7 @@ class GetIdeStateTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
     override val description = "Returns IDE activity: progress indicators (indexing/building/analyzing), active file, whether IDE is busy."
 
     override fun handle(project: Project, args: NoArgs): Response {
-        val indicators = CoreProgressManager.getCurrentIndicators()
-
-        val activeFile = runReadAction {
+        val activeFile = ReadAction.compute<String?, Throwable> {
             FileEditorManager.getInstance(project).selectedTextEditor?.let { editor ->
                 val projectDir = project.projectDir()
                 editor.virtualFile?.toNioPathOrNull()?.relTo(projectDir) ?: editor.virtualFile?.path
@@ -32,17 +29,6 @@ class GetIdeStateTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
 
         val result = buildJsonObject {
             put("activeFile", activeFile ?: "none")
-            put("isBusy", indicators.isNotEmpty())
-            if (indicators.isNotEmpty()) {
-                putJsonArray("progress") {
-                    indicators.forEach { ind ->
-                        addJsonObject {
-                            ind.text?.takeIf { it.isNotEmpty() }?.let { put("text", it) }
-                            if (!ind.isIndeterminate) put("fraction", ind.fraction)
-                        }
-                    }
-                }
-            }
         }
         return Response(result.toString())
     }

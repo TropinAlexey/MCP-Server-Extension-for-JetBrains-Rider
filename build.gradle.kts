@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "com.github.tropin"
-version = "0.8.1"
+version = "0.9.0"
 
 repositories {
     mavenCentral()
@@ -30,8 +30,18 @@ intellijPlatform {
             sinceBuild = "243"
         }
         changeNotes = """
-            v0.8.1: Update README with all tools documentation, add MIT LICENSE file.
+            v0.9.0: Fix deprecated/internal API usage, add CI and Marketplace publishing, rename to MCP Server Extension.
         """.trimIndent()
+    }
+
+    publishing {
+        token = providers.environmentVariable("PUBLISH_TOKEN")
+    }
+
+    pluginVerification {
+        ides {
+            recommended()
+        }
     }
 }
 

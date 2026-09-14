@@ -1,8 +1,8 @@
 package com.github.tropin.ridermcp.build
 
 import com.intellij.openapi.actionSystem.ActionManager
-import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
+import com.intellij.openapi.actionSystem.ex.ActionUtil
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
@@ -79,8 +79,7 @@ class CancelBuildTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
             val dataContext = SimpleDataContext.builder()
                 .add(CommonDataKeys.PROJECT, project)
                 .build()
-            val event = AnActionEvent.createFromAnAction(action, null, "", dataContext)
-            action.actionPerformed(event)
+            ActionUtil.invokeAction(action, dataContext, "", null, null)
         }
         return Response("ok")
     }

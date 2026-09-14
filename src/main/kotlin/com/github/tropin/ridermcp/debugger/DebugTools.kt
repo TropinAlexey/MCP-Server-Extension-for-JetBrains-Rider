@@ -5,9 +5,9 @@ import com.intellij.execution.ExecutionManager
 import com.intellij.execution.ProgramRunnerUtil
 import com.intellij.execution.RunManager
 import com.intellij.execution.executors.DefaultDebugExecutor
-import com.intellij.execution.process.ProcessAdapter
 import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessHandler
+import com.intellij.execution.process.ProcessListener
 import com.intellij.execution.runners.ExecutionEnvironment
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
@@ -114,7 +114,7 @@ class StartDebugTool : AbstractMcpTool<StartDebugArgs>(StartDebugArgs.serializer
                     if (env.runProfile.name != configName) return
                     connection.disconnect()
                     session.tag = handler
-                    handler.addProcessListener(object : ProcessAdapter() {
+                    handler.addProcessListener(object : ProcessListener {
                         override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
                             val text = event.text.trimEnd('\n', '\r')
                             if (text.isNotEmpty()) session.appendLine(text)

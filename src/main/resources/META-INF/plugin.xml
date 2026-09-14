@@ -1,6 +1,6 @@
 <idea-plugin>
     <id>com.github.tropin.rider-mcp</id>
-    <name>Rider MCP Extension</name>
+    <name>MCP Server Extension</name>
     <vendor url="https://github.com/tropin">tropin</vendor>
 
     <description><![CDATA[

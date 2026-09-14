@@ -19,6 +19,7 @@ class ListProcessesTool : AbstractMcpTool<ListProcessesArgs>(ListProcessesArgs.s
 
     override fun handle(project: Project, args: ListProcessesArgs): Response {
         val typeFilter = args.type?.lowercase()
+        @Suppress("DEPRECATION")
         val processes = ExecutionManager.getInstance(project).getRunningDescriptors { true }.mapNotNull { d ->
             val handler = d.processHandler ?: return@mapNotNull null
             if (handler.isProcessTerminated || handler.isProcessTerminating) return@mapNotNull null
@@ -52,6 +53,7 @@ class KillProcessTool : AbstractMcpTool<KillProcessArgs>(KillProcessArgs.seriali
     override val description = "Kills a running process by display name (from rider_list_processes)."
 
     override fun handle(project: Project, args: KillProcessArgs): Response {
+        @Suppress("DEPRECATION")
         val descriptors = ExecutionManager.getInstance(project).getRunningDescriptors { true }
         val target = descriptors.find { it.displayName == args.processName }
             ?: return Response(error = "Process '${args.processName}' not found")

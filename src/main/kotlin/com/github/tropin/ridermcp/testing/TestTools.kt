@@ -7,9 +7,9 @@ import com.intellij.execution.RunManager
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.executors.DefaultRunExecutor
 import com.intellij.execution.process.OSProcessHandler
-import com.intellij.execution.process.ProcessAdapter
 import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessHandler
+import com.intellij.execution.process.ProcessListener
 import com.intellij.execution.runners.ExecutionEnvironment
 import com.intellij.execution.testframework.AbstractTestProxy
 import com.intellij.execution.testframework.sm.runner.SMTestProxy
@@ -85,7 +85,7 @@ class RunTestsTool : AbstractMcpTool<RunTestsArgs>(RunTestsArgs.serializer()) {
                     if (env.runProfile.name != configName) return
                     connection.disconnect()
                     session.tag = handler
-                    handler.addProcessListener(object : ProcessAdapter() {
+                    handler.addProcessListener(object : ProcessListener {
                         override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
                             val text = event.text.trimEnd('\n', '\r')
                             if (text.isNotEmpty()) session.appendLine(text)
@@ -112,7 +112,7 @@ class RunTestsTool : AbstractMcpTool<RunTestsArgs>(RunTestsArgs.serializer()) {
                 .withWorkDirectory(project.basePath)
             val handler = OSProcessHandler(cmd)
             session.tag = handler
-            handler.addProcessListener(object : ProcessAdapter() {
+            handler.addProcessListener(object : ProcessListener {
                 override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
                     val text = event.text.trimEnd('\n', '\r')
                     if (text.isNotEmpty()) session.appendLine(text)
@@ -146,6 +146,7 @@ class GetTestResultsTool : AbstractMcpTool<SessionIdArgs>(SessionIdArgs.serializ
         val handler = session.tag as? ProcessHandler
             ?: return Response(error = "No process handler captured for this session")
 
+        @Suppress("DEPRECATION")
         val descriptors = ExecutionManager.getInstance(project).getRunningDescriptors { true }
         val descriptor = descriptors.find { it.processHandler === handler }
             ?: return Response(error = "Execution descriptor not found (tab may have been closed)")
@@ -218,7 +219,7 @@ class RerunFailedTestsTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
                 override fun processStarted(executorId: String, env: ExecutionEnvironment, handler: ProcessHandler) {
                     connection.disconnect()
                     session.tag = handler
-                    handler.addProcessListener(object : ProcessAdapter() {
+                    handler.addProcessListener(object : ProcessListener {
                         override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
                             val text = event.text.trimEnd('\n', '\r')
                             if (text.isNotEmpty()) session.appendLine(text)
@@ -234,8 +235,7 @@ class RerunFailedTestsTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
             val dataContext = com.intellij.openapi.actionSystem.impl.SimpleDataContext.builder()
                 .add(com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT, project)
                 .build()
-            val event = com.intellij.openapi.actionSystem.AnActionEvent.createFromAnAction(action, null, "", dataContext)
-            action.actionPerformed(event)
+            com.intellij.openapi.actionSystem.ex.ActionUtil.invokeAction(action, dataContext, "", null, null)
         }
 
         return Response(mcpJson.encodeToString(mapOf("sessionId" to session.id)))
