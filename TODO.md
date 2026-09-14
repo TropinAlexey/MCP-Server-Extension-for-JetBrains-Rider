@@ -44,11 +44,11 @@
 ## P2 — Расширенные возможности
 
 ### .NET Debugger
-- [ ] `rider_set_breakpoint` / `rider_remove_breakpoint`
-- [ ] `rider_start_debug` — запуск debugging session
-- [ ] `rider_debug_evaluate` — evaluate expression
-- [ ] `rider_debug_stacktrace` — stack trace + locals
-- [ ] `rider_debug_step` — step over / step into / continue
+- [x] `rider_set_breakpoint` / `rider_remove_breakpoint` — line breakpoints по file:line
+- [x] `rider_start_debug` — запуск debugging session с polling
+- [x] `rider_debug_evaluate` — evaluate expression в текущем фрейме
+- [x] `rider_debug_state` — статус сессии, stack trace с позициями
+- [x] `rider_debug_step` — stepOver / stepInto / stepOut / resume / pause / stop
 
 ### NuGet
 - [ ] `rider_list_packages` — установленные пакеты с версиями

@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "com.github.tropin"
-version = "0.6.0"
+version = "0.7.0"
 
 repositories {
     mavenCentral()
@@ -30,7 +30,7 @@ intellijPlatform {
             sinceBuild = "243"
         }
         changeNotes = """
-            v0.6.0: Test filtering by class/method/expression, process type filtering. Rename uniqueness check fix.
+            v0.7.0: .NET Debugger — breakpoints, debug sessions, evaluate, stack trace, stepping.
         """.trimIndent()
     }
 }

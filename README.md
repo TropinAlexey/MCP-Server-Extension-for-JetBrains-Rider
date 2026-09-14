@@ -15,7 +15,7 @@
   A JetBrains Rider plugin that extends the stock <a href="https://github.com/JetBrains/mcp-server-plugin">MCP Server Plugin</a> with full IDE observability and control tools.
 </p>
 
-**Current version: 0.6.0** — test filtering, process type filter. [What's New →](#whats-new)
+**Current version: 0.7.0** — .NET debugger tools. [What's New →](#whats-new)
 
 ## Why This Exists
 
@@ -167,6 +167,15 @@ See [TODO.md](TODO.md) for the full prioritized roadmap.
 - P3: IDE Settings control
 
 ## What's New
+
+### v0.7.0
+
+**.NET Debugger**
+- `rider_set_breakpoint` / `rider_remove_breakpoint` — line breakpoints by file:line
+- `rider_start_debug` — launch debug session with polling via `rider_get_output`
+- `rider_debug_state` — session status (running/paused/stopped), current position, stack trace with frame names
+- `rider_debug_evaluate` — evaluate expressions in the current debug frame
+- `rider_debug_step` — stepOver, stepInto, stepOut, resume, pause, stop
 
 ### v0.6.0
 

@@ -37,6 +37,14 @@
         <mcpTool implementation="com.github.tropin.ridermcp.runconfig.UpdateRunConfigTool"/>
         <mcpTool implementation="com.github.tropin.ridermcp.runconfig.DeleteRunConfigTool"/>
 
+        <!-- Debugger -->
+        <mcpTool implementation="com.github.tropin.ridermcp.debugger.SetBreakpointTool"/>
+        <mcpTool implementation="com.github.tropin.ridermcp.debugger.RemoveBreakpointTool"/>
+        <mcpTool implementation="com.github.tropin.ridermcp.debugger.StartDebugTool"/>
+        <mcpTool implementation="com.github.tropin.ridermcp.debugger.DebugStateTool"/>
+        <mcpTool implementation="com.github.tropin.ridermcp.debugger.DebugEvaluateTool"/>
+        <mcpTool implementation="com.github.tropin.ridermcp.debugger.DebugStepTool"/>
+
         <!-- Programmer context -->
         <mcpTool implementation="com.github.tropin.ridermcp.context.GetContextTool"/>
         <mcpTool implementation="com.github.tropin.ridermcp.context.GetRecentFilesTool"/>
