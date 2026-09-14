@@ -6,16 +6,14 @@
 - [x] `rider_start_build` — запуск сборки с session ID
 - [x] `rider_get_build_output` — polling вывода сборки
 - [x] `rider_cancel_build` — отмена текущей сборки
-- [ ] Подключить CompilerMessageHandler для реального потокового вывода MSBuild
-- [ ] `rider_start_publish` — запуск publish profile с polling
-- [ ] `rider_get_publish_output` — polling вывода publish
-- [ ] Настройка MSBuild verbosity через tool
+- [~] ~~CompilerMessageHandler~~ — покрывается `rider_get_tool_window_content("Build")`
+- [~] ~~Publish / MSBuild verbosity~~ — Rider не имеет VS-style publish; `dotnet publish` через терминал
 
 ### Process management
 - [x] `rider_list_processes` — список процессов Rider
 - [x] `rider_kill_process` — убить процесс по имени
 - [x] Показывать PID и command line процессов
-- [ ] Фильтрация по типу (MSBuild, compiler, test runner, dev server)
+- [x] Фильтрация по типу (build, test, run) через параметр `type`
 
 ### IDE State
 - [x] `rider_get_ide_state` — прогресс-индикаторы, активный файл, tool windows
@@ -23,7 +21,7 @@
 - [x] `rider_list_tool_windows` — список tool windows с состоянием
 - [x] `rider_get_tool_window_content` — содержимое tool window (базовое)
 - [x] Глубокая экстракция контента для Build Output, Problems, Event Log
-- [ ] Подписка на новые уведомления (через polling session)
+- [~] ~~Подписка на уведомления~~ — `rider_get_notifications` покрывает через периодический вызов
 
 ## P1 — Основной рабочий flow
 
@@ -36,7 +34,7 @@
 - [x] `rider_get_output` — единый polling tool для build/test/любых сессий
 - [x] `rider_rerun_failed_tests` — перезапуск упавших через IDE action
 - [x] Дерево результатов с stack traces (извлечение из SMTestProxy)
-- [ ] Фильтрация: запуск тестов по file/class/method
+- [x] Фильтрация: запуск тестов по className/methodName/filter (через `dotnet test --filter`)
 
 ### Run/Debug Configuration Management
 - [x] `rider_create_run_config` — создание новой конфигурации

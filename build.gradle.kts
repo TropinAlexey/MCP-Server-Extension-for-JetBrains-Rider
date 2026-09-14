@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "com.github.tropin"
-version = "0.5.0"
+version = "0.6.0"
 
 repositories {
     mavenCentral()
@@ -30,7 +30,7 @@ intellijPlatform {
             sinceBuild = "243"
         }
         changeNotes = """
-            v0.5.0: Test results tree with stack traces (rider_get_test_results). Process PID/cmdline in rider_list_processes.
+            v0.6.0: Test filtering by class/method/expression, process type filtering. Rename uniqueness check fix.
         """.trimIndent()
     }
 }

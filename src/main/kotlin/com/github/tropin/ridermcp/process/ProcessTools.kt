@@ -6,21 +6,34 @@ import com.intellij.openapi.project.Project
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
-import org.jetbrains.ide.mcp.NoArgs
 import org.jetbrains.ide.mcp.Response
 import org.jetbrains.mcpserverplugin.AbstractMcpTool
 import com.github.tropin.ridermcp.mcpJson
 
-class ListProcessesTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
-    override val name = "rider_list_processes"
-    override val description = "Lists running processes managed by Rider with PID and command line."
+@Serializable
+data class ListProcessesArgs(val type: String? = null)
 
-    override fun handle(project: Project, args: NoArgs): Response {
+class ListProcessesTool : AbstractMcpTool<ListProcessesArgs>(ListProcessesArgs.serializer()) {
+    override val name = "rider_list_processes"
+    override val description = "Lists running processes managed by Rider with PID and command line. Optional type filter: build, test, run (anything else)."
+
+    override fun handle(project: Project, args: ListProcessesArgs): Response {
+        val typeFilter = args.type?.lowercase()
         val processes = ExecutionManager.getInstance(project).getRunningDescriptors { true }.mapNotNull { d ->
             val handler = d.processHandler ?: return@mapNotNull null
             if (handler.isProcessTerminated || handler.isProcessTerminating) return@mapNotNull null
+            val name = d.displayName ?: "unknown"
+            val nameLower = name.lowercase()
+            val cmdLine = (handler as? OSProcessHandler)?.commandLine?.lowercase() ?: ""
+            val inferredType = when {
+                nameLower.contains("build") || cmdLine.contains("msbuild") -> "build"
+                nameLower.contains("test") || cmdLine.contains("testhost") -> "test"
+                else -> "run"
+            }
+            if (typeFilter != null && inferredType != typeFilter) return@mapNotNull null
             buildJsonObject {
-                put("name", d.displayName ?: "unknown")
+                put("name", name)
+                put("type", inferredType)
                 if (handler is OSProcessHandler) {
                     try { put("pid", handler.process.pid()) } catch (_: Exception) {}
                     handler.commandLine?.let { put("commandLine", it) }

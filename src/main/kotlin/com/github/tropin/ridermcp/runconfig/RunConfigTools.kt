@@ -85,6 +85,9 @@ class UpdateRunConfigTool : AbstractMcpTool<UpdateRunConfigArgs>(UpdateRunConfig
         }
 
         args.newName?.let {
+            if (runManager.allSettings.any { s -> s.name == it && s !== settings }) {
+                return Response(error = "Configuration '$it' already exists")
+            }
             settings.name = it
             changes.add("renamed to '$it'")
         }

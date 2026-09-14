@@ -4,7 +4,9 @@ import com.intellij.execution.ExecutionListener
 import com.intellij.execution.ExecutionManager
 import com.intellij.execution.ProgramRunnerUtil
 import com.intellij.execution.RunManager
+import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.executors.DefaultRunExecutor
+import com.intellij.execution.process.OSProcessHandler
 import com.intellij.execution.process.ProcessAdapter
 import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessHandler
@@ -26,11 +28,16 @@ import com.github.tropin.ridermcp.build.SessionIdArgs
 import com.github.tropin.ridermcp.mcpJson
 
 @Serializable
-data class RunTestsArgs(val configName: String? = null)
+data class RunTestsArgs(
+    val configName: String? = null,
+    val filter: String? = null,
+    val className: String? = null,
+    val methodName: String? = null
+)
 
 class RunTestsTool : AbstractMcpTool<RunTestsArgs>(RunTestsArgs.serializer()) {
     override val name = "rider_run_tests"
-    override val description = "Runs tests. Omit configName to auto-detect; if multiple test configs exist, returns their names. Poll with rider_get_output, then rider_get_test_results for tree."
+    override val description = """Runs tests. Filter options: className ("MyTestClass"), methodName ("ShouldWork"), or raw filter expression ("FullyQualifiedName~Namespace.Class"). Omit configName to auto-detect. Poll with rider_get_output, then rider_get_test_results for tree."""
 
     override fun handle(project: Project, args: RunTestsArgs): Response {
         val runManager = RunManager.getInstance(project)
@@ -55,6 +62,17 @@ class RunTestsTool : AbstractMcpTool<RunTestsArgs>(RunTestsArgs.serializer()) {
                 return Response(result.toString())
             }
         }
+
+        val filterExpr = when {
+            args.filter != null -> args.filter
+            args.className != null && args.methodName != null ->
+                "FullyQualifiedName~${args.className}.${args.methodName}"
+            args.className != null -> "FullyQualifiedName~${args.className}"
+            args.methodName != null -> "FullyQualifiedName~${args.methodName}"
+            else -> null
+        }
+
+        if (filterExpr != null) return runFilteredTests(project, filterExpr)
 
         val session = SessionManager.create("test")
         session.appendLine("Running: ${settings.name}")
@@ -83,6 +101,32 @@ class RunTestsTool : AbstractMcpTool<RunTestsArgs>(RunTestsArgs.serializer()) {
             ProgramRunnerUtil.executeConfiguration(settings, DefaultRunExecutor.getRunExecutorInstance())
         }
 
+        return Response(mcpJson.encodeToString(mapOf("sessionId" to session.id)))
+    }
+
+    private fun runFilteredTests(project: Project, filter: String): Response {
+        val session = SessionManager.create("test")
+        session.appendLine("Running: dotnet test --filter $filter")
+        try {
+            val cmd = GeneralCommandLine("dotnet", "test", "--filter", filter)
+                .withWorkDirectory(project.basePath)
+            val handler = OSProcessHandler(cmd)
+            session.tag = handler
+            handler.addProcessListener(object : ProcessAdapter() {
+                override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
+                    val text = event.text.trimEnd('\n', '\r')
+                    if (text.isNotEmpty()) session.appendLine(text)
+                }
+                override fun processTerminated(event: ProcessEvent) {
+                    session.exitCode = event.exitCode
+                    session.status = if (event.exitCode == 0) "passed" else "failed"
+                }
+            })
+            handler.startNotify()
+        } catch (e: Exception) {
+            session.status = "failed"
+            session.appendLine("Error: ${e.message}")
+        }
         return Response(mcpJson.encodeToString(mapOf("sessionId" to session.id)))
     }
 }

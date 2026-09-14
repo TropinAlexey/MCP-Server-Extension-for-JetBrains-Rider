@@ -1,8 +1,21 @@
-# Rider MCP Extension
+<p align="center">
+  <img src="icon.png" alt="Rider MCP Extension" width="80">
+</p>
 
-A JetBrains Rider plugin that extends the stock [MCP Server Plugin](https://github.com/JetBrains/mcp-server-plugin) with full IDE observability and control tools.
+<h1 align="center">Rider MCP Extension</h1>
 
-**Current version: 0.5.0** — test results tree, process PID/cmdline. [What's New →](#whats-new)
+<p align="center">
+  <a href="https://github.com/TropinAlexey/rider-mcp/releases/latest"><img src="https://img.shields.io/github/v/release/TropinAlexey/rider-mcp?style=flat-square&label=version" alt="Version"></a>
+  <img src="https://img.shields.io/badge/Rider-2024.3%2B-blue?style=flat-square&logo=jetbrains" alt="Rider 2024.3+">
+  <img src="https://img.shields.io/badge/MCP-compatible-green?style=flat-square" alt="MCP Compatible">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/TropinAlexey/rider-mcp?style=flat-square" alt="License"></a>
+</p>
+
+<p align="center">
+  A JetBrains Rider plugin that extends the stock <a href="https://github.com/JetBrains/mcp-server-plugin">MCP Server Plugin</a> with full IDE observability and control tools.
+</p>
+
+**Current version: 0.6.0** — test filtering, process type filter. [What's New →](#whats-new)
 
 ## Why This Exists
 
@@ -154,6 +167,19 @@ See [TODO.md](TODO.md) for the full prioritized roadmap.
 - P3: IDE Settings control
 
 ## What's New
+
+### v0.6.0
+
+**Test Filtering**
+- `rider_run_tests` now accepts `className`, `methodName`, or raw `filter` expression
+- Filtered runs use `dotnet test --filter` directly for reliable .NET test filtering
+- Without filter — still runs via Rider UI configuration as before
+
+**Process Type Filtering**
+- `rider_list_processes` now accepts optional `type` (build/test/run) and infers type from display name and command line
+
+**Bug Fixes**
+- Rename uniqueness check in `rider_update_run_config` — prevents renaming to an existing config name
 
 ### v0.5.0
 
