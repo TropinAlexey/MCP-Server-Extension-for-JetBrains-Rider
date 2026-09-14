@@ -8,14 +8,14 @@
   <a href="https://github.com/TropinAlexey/rider-mcp/releases/latest"><img src="https://img.shields.io/github/v/release/TropinAlexey/rider-mcp?style=flat-square&label=version" alt="Version"></a>
   <img src="https://img.shields.io/badge/Rider-2024.3%2B-blue?style=flat-square&logo=jetbrains" alt="Rider 2024.3+">
   <img src="https://img.shields.io/badge/MCP-compatible-green?style=flat-square" alt="MCP Compatible">
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/TropinAlexey/rider-mcp?style=flat-square" alt="License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="MIT License"></a>
 </p>
 
 <p align="center">
   A JetBrains Rider plugin that extends the stock <a href="https://github.com/JetBrains/mcp-server-plugin">MCP Server Plugin</a> with full IDE observability and control tools.
 </p>
 
-**Current version: 0.8.0** — NuGet & inspection management. [What's New →](#whats-new)
+**Current version: 0.8.1** — NuGet & inspection management. [What's New →](#whats-new)
 
 ## Why This Exists
 
@@ -43,9 +43,9 @@ This plugin bridges that gap. It gives any MCP-compatible client (Claude Code, C
 | Programmer context | ❌ | ✅ open editors, cursor, selection |
 | Test runner | ❌ | ✅ run, poll, results tree with stack traces, rerun failed |
 | Run config CRUD | ❌ | ✅ create, update, delete |
-| .NET debugger | Partial (xdebug only) | 🔜 planned |
-| NuGet management | ❌ | 🔜 planned |
-| IDE settings | ❌ | 🔜 planned |
+| .NET debugger | Partial (xdebug only) | ✅ breakpoints, evaluate, step, stack trace |
+| NuGet management | ❌ | ✅ list, add, remove, restore |
+| IDE settings | ❌ | ✅ inspections list & toggle |
 
 ## Architecture
 
@@ -56,7 +56,7 @@ MCP Client ←MCP→ JS proxy (mcp-jetbrains) ←HTTP→ Rider JVM
                                                     ├── MCP Server Plugin (JetBrains)
                                                     │   └── stock tools (~30)
                                                     └── Rider MCP Extension (this plugin)
-                                                        └── additional tools (~14)
+                                                        └── additional tools (28)
 ```
 
 All tools from both plugins appear as a unified set in any MCP client. Our tools are prefixed with `rider_` to avoid naming conflicts.
@@ -69,7 +69,7 @@ MCP tools are synchronous (request → response). For long-running operations li
 2. `rider_get_output("build_1")` → returns new lines since last call
 3. Repeat until `status` is no longer `"running"`
 
-## Available Tools (17)
+## Available Tools (28)
 
 ### Build (3 tools)
 | Tool | Description |
@@ -80,7 +80,7 @@ MCP tools are synchronous (request → response). For long-running operations li
 ### Test Runner (3 tools)
 | Tool | Args | Description |
 |---|---|---|
-| `rider_run_tests` | `configName?` | Run tests. Auto-detects config if one exists; lists available if multiple |
+| `rider_run_tests` | `configName?`, `className?`, `methodName?`, `filter?` | Run tests. Supports filtering by class/method or raw `dotnet test --filter` expression |
 | `rider_get_test_results` | `sessionId` | Structured test results tree with statuses, durations, errors, stack traces |
 | `rider_rerun_failed_tests` | — | Rerun previously failed tests |
 
@@ -92,7 +92,7 @@ MCP tools are synchronous (request → response). For long-running operations li
 ### Process Management (2 tools)
 | Tool | Description |
 |---|---|
-| `rider_list_processes` | List running processes with PID, command line, display name |
+| `rider_list_processes` | List running processes with PID, command line, display name. Optional `type` filter (build/test/run) |
 | `rider_kill_process` | Kill a process by display name |
 
 ### IDE State (4 tools)
@@ -109,6 +109,29 @@ MCP tools are synchronous (request → response). For long-running operations li
 | `rider_create_run_config` | `name`, `typeId`, `env?`, `programArgs?` | Create a run config. Use stock `get_run_configurations` for available types |
 | `rider_update_run_config` | `name`, `env?`, `programArgs?`, `newName?` | Update env, args, or rename |
 | `rider_delete_run_config` | `name` | Delete a run configuration |
+
+### .NET Debugger (6 tools)
+| Tool | Args | Description |
+|---|---|---|
+| `rider_set_breakpoint` | `file`, `line` | Set a line breakpoint (absolute or project-relative path) |
+| `rider_remove_breakpoint` | `file`, `line` | Remove a line breakpoint |
+| `rider_start_debug` | `configName?` | Start debug session, returns sessionId for polling |
+| `rider_debug_state` | — | Session status, current position, stack trace with frame names |
+| `rider_debug_evaluate` | `expression` | Evaluate expression in current debug frame |
+| `rider_debug_step` | `action` | stepOver, stepInto, stepOut, resume, pause, stop |
+
+### NuGet Management (3 tools)
+| Tool | Args | Description |
+|---|---|---|
+| `rider_list_packages` | `project?`, `outdated?` | List installed NuGet packages, optionally show available updates |
+| `rider_manage_package` | `action`, `name`, `project?`, `version?` | Add or remove a NuGet package |
+| `rider_nuget_restore` | — | Run `dotnet restore`, returns sessionId for polling |
+
+### Inspection Management (2 tools)
+| Tool | Args | Description |
+|---|---|---|
+| `rider_list_inspections` | `keyword?`, `enabledOnly?` | Search inspections by keyword, filter by enabled state |
+| `rider_toggle_inspection` | `shortName`, `enabled` | Enable or disable an inspection |
 
 ### Programmer Context (2 tools)
 | Tool | Description |
@@ -161,10 +184,8 @@ gradlew.bat runIde
 See [TODO.md](TODO.md) for the full prioritized roadmap.
 
 **Next up:**
-- P1: Test filtering by file/class/method
-- P2: .NET Debugger (breakpoints, evaluate, step)
-- P2: NuGet management
-- P3: IDE Settings control
+- P3: Terminal streaming, Tool Windows deep integration
+- CI (GitHub Actions), JetBrains Marketplace publish
 
 ## What's New
 

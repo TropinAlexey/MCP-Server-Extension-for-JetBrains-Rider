@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "com.github.tropin"
-version = "0.8.0"
+version = "0.8.1"
 
 repositories {
     mavenCentral()
@@ -30,7 +30,7 @@ intellijPlatform {
             sinceBuild = "243"
         }
         changeNotes = """
-            v0.8.0: NuGet management (list/add/remove/restore), inspection management (list/toggle).
+            v0.8.1: Update README with all tools documentation, add MIT LICENSE file.
         """.trimIndent()
     }
 }
