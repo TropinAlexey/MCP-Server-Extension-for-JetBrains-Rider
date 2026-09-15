@@ -1,26 +1,24 @@
 package com.github.tropin.ridermcp.build
 
+import com.intellij.mcpserver.McpToolset
+import com.intellij.mcpserver.annotations.McpDescription
+import com.intellij.mcpserver.annotations.McpTool
+import com.intellij.mcpserver.mcpFail
 import com.intellij.openapi.actionSystem.ActionManager
-import com.intellij.openapi.actionSystem.CommonDataKeys
-import com.intellij.openapi.actionSystem.impl.SimpleDataContext
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.wm.WindowManager
-import com.intellij.openapi.project.Project
 import com.intellij.task.ProjectTaskManager
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
-import org.jetbrains.ide.mcp.NoArgs
-import org.jetbrains.ide.mcp.Response
-import org.jetbrains.mcpserverplugin.AbstractMcpTool
 import com.github.tropin.ridermcp.SessionManager
-import com.github.tropin.ridermcp.mcpJson
-import kotlinx.serialization.encodeToString
+import kotlin.coroutines.coroutineContext
+import com.intellij.mcpserver.project
 
-class StartBuildTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
-    override val name = "rider_start_build"
-    override val description = "Starts building the solution (compile/build). Returns sessionId for polling. Use rider_get_output to poll build progress and get build logs until status is not 'running'."
+class BuildToolset : McpToolset {
 
-    override fun handle(project: Project, args: NoArgs): Response {
+    @McpTool
+    @McpDescription("Starts building the solution (compile/build). Returns sessionId for polling. Use rider_get_output to poll build progress and get build logs until status is not 'running'.")
+    suspend fun rider_start_build(): String {
+        val project = coroutineContext.project
         val session = SessionManager.create("build")
         session.appendLine("Build started")
 
@@ -40,45 +38,39 @@ class StartBuildTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
                 session.appendLine("Build error: ${error.message}")
             }
 
-        return Response(mcpJson.encodeToString(mapOf("sessionId" to session.id)))
+        return buildJsonObject { put("sessionId", session.id) }.toString()
     }
-}
 
-@Serializable
-data class SessionIdArgs(val sessionId: String)
-
-class GetOutputTool : AbstractMcpTool<SessionIdArgs>(SessionIdArgs.serializer()) {
-    override val name = "rider_get_output"
-    override val description = "Polls output for any async session (build, test, nuget restore). Returns new log lines since last call, plus current status and exit code. Keep polling until status is not 'running'. Works with sessionId from rider_start_build, rider_run_tests, rider_nuget_restore, rider_start_debug, rider_rerun_failed_tests."
-
-    override fun handle(project: Project, args: SessionIdArgs): Response {
-        val session = SessionManager.get(args.sessionId)
-            ?: return Response(error = "Session '${args.sessionId}' not found")
+    @McpTool
+    @McpDescription("Polls output for any async session (build, test, nuget restore). Returns new log lines since last call, plus current status and exit code. Keep polling until status is not 'running'. Works with sessionId from rider_start_build, rider_run_tests, rider_nuget_restore, rider_start_debug, rider_rerun_failed_tests.")
+    suspend fun rider_get_output(
+        @McpDescription("Session ID from a start operation")
+        sessionId: String
+    ): String {
+        val session = SessionManager.get(sessionId)
+            ?: mcpFail("Session '$sessionId' not found")
 
         val newLines = session.getNewLines()
-        val result = buildJsonObject {
+        return buildJsonObject {
             put("status", session.status)
             if (newLines.isNotEmpty()) {
                 putJsonArray("lines") { newLines.forEach { add(it) } }
             }
             session.exitCode?.let { put("exitCode", it) }
-        }
-        return Response(result.toString())
+        }.toString()
     }
-}
 
-class CancelBuildTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
-    override val name = "rider_cancel_build"
-    override val description = "Cancels/stops the currently running build. Use when a build is taking too long or needs to be aborted."
-
-    override fun handle(project: Project, args: NoArgs): Response {
+    @McpTool
+    @McpDescription("Cancels/stops the currently running build. Use when a build is taking too long or needs to be aborted.")
+    suspend fun rider_cancel_build(): String {
+        val project = coroutineContext.project
         val action = ActionManager.getInstance().getAction("Stop")
-            ?: return Response(error = "No cancel action available")
+            ?: mcpFail("No cancel action available")
 
         ApplicationManager.getApplication().invokeLater {
             val frame = WindowManager.getInstance().getFrame(project)
             ActionManager.getInstance().tryToExecute(action, null, frame, "", true)
         }
-        return Response("ok")
+        return "ok"
     }
 }

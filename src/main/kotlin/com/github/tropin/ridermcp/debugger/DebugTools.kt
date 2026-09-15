@@ -9,8 +9,12 @@ import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.process.ProcessListener
 import com.intellij.execution.runners.ExecutionEnvironment
+import com.intellij.mcpserver.McpToolset
+import com.intellij.mcpserver.annotations.McpDescription
+import com.intellij.mcpserver.annotations.McpTool
+import com.intellij.mcpserver.mcpFail
+import com.intellij.mcpserver.project
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
@@ -23,95 +27,85 @@ import com.intellij.xdebugger.breakpoints.XLineBreakpoint
 import com.intellij.xdebugger.evaluation.XDebuggerEvaluator
 import com.intellij.xdebugger.frame.*
 import com.intellij.xdebugger.frame.presentation.XValuePresentation
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
-import org.jetbrains.ide.mcp.NoArgs
-import org.jetbrains.ide.mcp.Response
-import org.jetbrains.mcpserverplugin.AbstractMcpTool
 import com.github.tropin.ridermcp.SessionManager
-import com.github.tropin.ridermcp.mcpJson
 import com.github.tropin.ridermcp.projectDir
 import com.github.tropin.ridermcp.relTo
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import javax.swing.Icon
+import kotlin.coroutines.coroutineContext
 
-// === Breakpoints ===
+class DebugToolset : McpToolset {
 
-@Serializable
-data class BreakpointArgs(val filePath: String, val line: Int)
-
-class SetBreakpointTool : AbstractMcpTool<BreakpointArgs>(BreakpointArgs.serializer()) {
-    override val name = "rider_set_breakpoint"
-    override val description = "Sets a line breakpoint in the debugger. filePath relative to project root or absolute. line is 1-indexed. Use before rider_start_debug to set up breakpoints for debugging."
-
-    override fun handle(project: Project, args: BreakpointArgs): Response {
-        val vf = resolveFile(project, args.filePath)
-            ?: return Response(error = "File not found: ${args.filePath}")
-        val lineIndex = args.line - 1
+    @McpTool
+    @McpDescription("Sets a line breakpoint in the debugger. filePath relative to project root or absolute. line is 1-indexed. Use before rider_start_debug to set up breakpoints for debugging.")
+    suspend fun rider_set_breakpoint(
+        @McpDescription("File path (relative or absolute)") filePath: String,
+        @McpDescription("Line number (1-indexed)") line: Int
+    ): String {
+        val project = coroutineContext.project
+        val vf = resolveFile(project, filePath)
+            ?: mcpFail("File not found: $filePath")
+        val lineIndex = line - 1
 
         val bm = XDebuggerManager.getInstance(project).breakpointManager
         val existing = bm.allBreakpoints.filterIsInstance<XLineBreakpoint<*>>()
             .find { it.fileUrl == vf.url && it.line == lineIndex }
-        if (existing != null) return Response("Breakpoint already set at ${args.filePath}:${args.line}")
+        if (existing != null) return "Breakpoint already set at $filePath:$line"
 
         ApplicationManager.getApplication().invokeAndWait {
             XDebuggerUtil.getInstance().toggleLineBreakpoint(project, vf, lineIndex, false)
         }
-        return Response("Breakpoint set at ${args.filePath}:${args.line}")
+        return "Breakpoint set at $filePath:$line"
     }
-}
 
-class RemoveBreakpointTool : AbstractMcpTool<BreakpointArgs>(BreakpointArgs.serializer()) {
-    override val name = "rider_remove_breakpoint"
-    override val description = "Removes a line breakpoint at file:line. Use to clean up breakpoints after debugging."
-
-    override fun handle(project: Project, args: BreakpointArgs): Response {
-        val vf = resolveFile(project, args.filePath)
-            ?: return Response(error = "File not found: ${args.filePath}")
-        val lineIndex = args.line - 1
+    @McpTool
+    @McpDescription("Removes a line breakpoint at file:line. Use to clean up breakpoints after debugging.")
+    suspend fun rider_remove_breakpoint(
+        @McpDescription("File path (relative or absolute)") filePath: String,
+        @McpDescription("Line number (1-indexed)") line: Int
+    ): String {
+        val project = coroutineContext.project
+        val vf = resolveFile(project, filePath)
+            ?: mcpFail("File not found: $filePath")
+        val lineIndex = line - 1
 
         val bm = XDebuggerManager.getInstance(project).breakpointManager
         val toRemove = bm.allBreakpoints.filterIsInstance<XLineBreakpoint<*>>()
             .filter { it.fileUrl == vf.url && it.line == lineIndex }
-        if (toRemove.isEmpty()) return Response(error = "No breakpoint at ${args.filePath}:${args.line}")
+        if (toRemove.isEmpty()) mcpFail("No breakpoint at $filePath:$line")
 
         ApplicationManager.getApplication().invokeAndWait {
             toRemove.forEach { bm.removeBreakpoint(it) }
         }
-        return Response("Breakpoint removed at ${args.filePath}:${args.line}")
+        return "Breakpoint removed at $filePath:$line"
     }
-}
 
-// === Debug Session ===
-
-@Serializable
-data class StartDebugArgs(val configName: String? = null)
-
-class StartDebugTool : AbstractMcpTool<StartDebugArgs>(StartDebugArgs.serializer()) {
-    override val name = "rider_start_debug"
-    override val description = "Launches a debug session for a run configuration (starts the app with debugger attached). Omit configName to use the selected one. Poll output with rider_get_output, check paused/running state with rider_debug_state."
-
-    override fun handle(project: Project, args: StartDebugArgs): Response {
+    @McpTool
+    @McpDescription("Launches a debug session for a run configuration (starts the app with debugger attached). Omit configName to use the selected one. Poll output with rider_get_output, check paused/running state with rider_debug_state.")
+    suspend fun rider_start_debug(
+        @McpDescription("Run configuration name (omit for selected)") configName: String? = null
+    ): String {
+        val project = coroutineContext.project
         val runManager = RunManager.getInstance(project)
-        val settings = if (args.configName != null) {
-            runManager.allSettings.find { it.name == args.configName }
-                ?: return Response(error = "Configuration '${args.configName}' not found")
+        val settings = if (configName != null) {
+            runManager.allSettings.find { it.name == configName }
+                ?: mcpFail("Configuration '$configName' not found")
         } else {
             runManager.selectedConfiguration
-                ?: return Response(error = "No active run configuration. Specify configName.")
+                ?: mcpFail("No active run configuration. Specify configName.")
         }
 
         val session = SessionManager.create("debug")
         session.appendLine("Debugging: ${settings.name}")
-        val configName = settings.name
+        val cfgName = settings.name
 
         ApplicationManager.getApplication().invokeLater {
             val connection = project.messageBus.connect()
             connection.subscribe(ExecutionManager.EXECUTION_TOPIC, object : ExecutionListener {
                 override fun processStarted(executorId: String, env: ExecutionEnvironment, handler: ProcessHandler) {
-                    if (env.runProfile.name != configName) return
+                    if (env.runProfile.name != cfgName) return
                     connection.disconnect()
                     session.tag = handler
                     handler.addProcessListener(object : ProcessListener {
@@ -129,22 +123,18 @@ class StartDebugTool : AbstractMcpTool<StartDebugArgs>(StartDebugArgs.serializer
             ProgramRunnerUtil.executeConfiguration(settings, DefaultDebugExecutor.getDebugExecutorInstance())
         }
 
-        return Response(mcpJson.encodeToString(mapOf("sessionId" to session.id)))
+        return buildJsonObject { put("sessionId", session.id) }.toString()
     }
-}
 
-// === Debug State ===
-
-class DebugStateTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
-    override val name = "rider_debug_state"
-    override val description = "Returns current debug session state: status (running/paused/stopped), current file and line when paused at breakpoint, full stack trace with file locations. Use to check where the debugger stopped or whether it's still running."
-
-    override fun handle(project: Project, args: NoArgs): Response {
+    @McpTool
+    @McpDescription("Returns current debug session state: status (running/paused/stopped), current file and line when paused at breakpoint, full stack trace with file locations. Use to check where the debugger stopped or whether it's still running.")
+    suspend fun rider_debug_state(): String {
+        val project = coroutineContext.project
         val session = XDebuggerManager.getInstance(project).currentSession
-            ?: return Response(error = "No active debug session")
+            ?: mcpFail("No active debug session")
 
         val projectDir = project.projectDir()
-        val result = buildJsonObject {
+        return buildJsonObject {
             put("status", when {
                 session.isStopped -> "stopped"
                 session.isPaused -> "paused"
@@ -164,8 +154,7 @@ class DebugStateTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
                     }
                 }
             }
-        }
-        return Response(result.toString())
+        }.toString()
     }
 
     private fun collectStackFrames(stack: XExecutionStack, projectDir: java.nio.file.Path?): List<JsonObject> {
@@ -201,33 +190,28 @@ class DebugStateTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
         })
         return parts.joinToString("")
     }
-}
 
-// === Evaluate ===
-
-@Serializable
-data class EvaluateArgs(val expression: String)
-
-class DebugEvaluateTool : AbstractMcpTool<EvaluateArgs>(EvaluateArgs.serializer()) {
-    override val name = "rider_debug_evaluate"
-    override val description = "Evaluates an expression in the current debug frame (watch expression). Use to inspect variable values, call methods, check object state, or compute values while paused at a breakpoint. Debugger must be paused."
-
-    override fun handle(project: Project, args: EvaluateArgs): Response {
+    @McpTool
+    @McpDescription("Evaluates an expression in the current debug frame (watch expression). Use to inspect variable values, call methods, check object state, or compute values while paused at a breakpoint. Debugger must be paused.")
+    suspend fun rider_debug_evaluate(
+        @McpDescription("Expression to evaluate") expression: String
+    ): String {
+        val project = coroutineContext.project
         val session = XDebuggerManager.getInstance(project).currentSession
-            ?: return Response(error = "No active debug session")
-        if (!session.isPaused) return Response(error = "Debugger is not paused")
+            ?: mcpFail("No active debug session")
+        if (!session.isPaused) mcpFail("Debugger is not paused")
 
         val frame = session.currentStackFrame
-            ?: return Response(error = "No current stack frame")
+            ?: mcpFail("No current stack frame")
         val evaluator = frame.evaluator
-            ?: return Response(error = "Evaluator not available for current frame")
+            ?: mcpFail("Evaluator not available for current frame")
 
         var resultType: String? = null
         var resultValue: String? = null
         var error: String? = null
         val latch = CountDownLatch(1)
 
-        evaluator.evaluate(args.expression, object : XDebuggerEvaluator.XEvaluationCallback {
+        evaluator.evaluate(expression, object : XDebuggerEvaluator.XEvaluationCallback {
             override fun evaluated(result: XValue) {
                 result.computePresentation(object : XValueNode {
                     override fun setPresentation(icon: Icon?, type: String?, value: String, hasChildren: Boolean) {
@@ -250,14 +234,13 @@ class DebugEvaluateTool : AbstractMcpTool<EvaluateArgs>(EvaluateArgs.serializer(
             }
         }, frame.sourcePosition)
 
-        if (!latch.await(10, TimeUnit.SECONDS)) return Response(error = "Evaluation timed out")
-        if (error != null) return Response(error = error)
+        if (!latch.await(10, TimeUnit.SECONDS)) mcpFail("Evaluation timed out")
+        if (error != null) mcpFail(error!!)
 
-        val response = buildJsonObject {
+        return buildJsonObject {
             resultType?.let { put("type", it) }
             put("value", resultValue ?: "null")
-        }
-        return Response(response.toString())
+        }.toString()
     }
 
     private fun renderPresentation(presentation: XValuePresentation): String {
@@ -275,38 +258,31 @@ class DebugEvaluateTool : AbstractMcpTool<EvaluateArgs>(EvaluateArgs.serializer(
         })
         return sb.toString().ifEmpty { "[complex value]" }
     }
-}
 
-// === Step ===
-
-@Serializable
-data class StepArgs(val action: String)
-
-class DebugStepTool : AbstractMcpTool<StepArgs>(StepArgs.serializer()) {
-    override val name = "rider_debug_step"
-    override val description = "Controls debugger execution flow. Actions: stepOver (next line), stepInto (enter method), stepOut (exit method), resume (continue to next breakpoint), pause (break running program), stop (end debug session). Use to navigate through code during debugging."
-
-    override fun handle(project: Project, args: StepArgs): Response {
+    @McpTool
+    @McpDescription("Controls debugger execution flow. Actions: stepOver (next line), stepInto (enter method), stepOut (exit method), resume (continue to next breakpoint), pause (break running program), stop (end debug session). Use to navigate through code during debugging.")
+    suspend fun rider_debug_step(
+        @McpDescription("Action: stepOver, stepInto, stepOut, resume, pause, stop") action: String
+    ): String {
+        val project = coroutineContext.project
         val session = XDebuggerManager.getInstance(project).currentSession
-            ?: return Response(error = "No active debug session")
+            ?: mcpFail("No active debug session")
 
-        when (args.action) {
-            "stepOver" -> { if (!session.isPaused) return Response(error = "Not paused"); session.stepOver(false) }
-            "stepInto" -> { if (!session.isPaused) return Response(error = "Not paused"); session.stepInto() }
-            "stepOut" -> { if (!session.isPaused) return Response(error = "Not paused"); session.stepOut() }
-            "resume" -> { if (!session.isPaused) return Response(error = "Not paused"); session.resume() }
-            "pause" -> { if (session.isPaused) return Response(error = "Already paused"); session.pause() }
+        when (action) {
+            "stepOver" -> { if (!session.isPaused) mcpFail("Not paused"); session.stepOver(false) }
+            "stepInto" -> { if (!session.isPaused) mcpFail("Not paused"); session.stepInto() }
+            "stepOut" -> { if (!session.isPaused) mcpFail("Not paused"); session.stepOut() }
+            "resume" -> { if (!session.isPaused) mcpFail("Not paused"); session.resume() }
+            "pause" -> { if (session.isPaused) mcpFail("Already paused"); session.pause() }
             "stop" -> session.stop()
-            else -> return Response(error = "Unknown action: ${args.action}. Use: stepOver, stepInto, stepOut, resume, pause, stop")
+            else -> mcpFail("Unknown action: $action. Use: stepOver, stepInto, stepOut, resume, pause, stop")
         }
-        return Response("ok")
+        return "ok"
     }
-}
 
-// === Helpers ===
-
-private fun resolveFile(project: Project, filePath: String): VirtualFile? {
-    LocalFileSystem.getInstance().findFileByPath(filePath)?.let { return it }
-    val projectDir = project.basePath ?: return null
-    return LocalFileSystem.getInstance().findFileByPath("$projectDir/$filePath")
+    private fun resolveFile(project: com.intellij.openapi.project.Project, filePath: String): VirtualFile? {
+        LocalFileSystem.getInstance().findFileByPath(filePath)?.let { return it }
+        val projectDir = project.basePath ?: return null
+        return LocalFileSystem.getInstance().findFileByPath("$projectDir/$filePath")
+    }
 }

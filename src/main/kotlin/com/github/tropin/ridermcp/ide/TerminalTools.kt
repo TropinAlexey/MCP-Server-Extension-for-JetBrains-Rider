@@ -1,23 +1,26 @@
 package com.github.tropin.ridermcp.ide
 
-import com.intellij.openapi.project.Project
-import kotlinx.serialization.Serializable
+import com.intellij.mcpserver.McpToolset
+import com.intellij.mcpserver.annotations.McpDescription
+import com.intellij.mcpserver.annotations.McpTool
+import com.intellij.mcpserver.mcpFail
+import com.intellij.mcpserver.project
+import com.intellij.openapi.wm.ToolWindowManager
 import kotlinx.serialization.json.*
-import org.jetbrains.ide.mcp.NoArgs
-import org.jetbrains.ide.mcp.Response
-import org.jetbrains.mcpserverplugin.AbstractMcpTool
+import kotlin.coroutines.coroutineContext
 
-class ListTerminalsTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
-    override val name = "rider_list_terminals"
-    override val description = "Lists open terminal tabs/sessions in the IDE with their names and indices. Use before rider_send_terminal_input to find the correct tab index."
+class TerminalToolset : McpToolset {
 
-    override fun handle(project: Project, args: NoArgs): Response {
-        val twm = com.intellij.openapi.wm.ToolWindowManager.getInstance(project)
+    @McpTool
+    @McpDescription("Lists open terminal tabs/sessions in the IDE with their names and indices. Use before rider_send_terminal_input to find the correct tab index.")
+    suspend fun rider_list_terminals(): String {
+        val project = coroutineContext.project
+        val twm = ToolWindowManager.getInstance(project)
         val tw = twm.getToolWindow("Terminal")
-            ?: return Response(error = "Terminal tool window not available")
+            ?: mcpFail("Terminal tool window not available")
 
         val cm = tw.contentManager
-        val result = buildJsonArray {
+        return buildJsonArray {
             cm.contents.forEachIndexed { index, content ->
                 addJsonObject {
                     put("index", index)
@@ -25,36 +28,33 @@ class ListTerminalsTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
                     if (cm.selectedContent == content) put("active", true)
                 }
             }
-        }
-        return Response(result.toString())
+        }.toString()
     }
-}
 
-@Serializable
-data class SendTerminalInputArgs(val text: String, val tab: Int = 0)
-
-class SendTerminalInputTool : AbstractMcpTool<SendTerminalInputArgs>(SendTerminalInputArgs.serializer()) {
-    override val name = "rider_send_terminal_input"
-    override val description = "Sends a command or text to an IDE terminal tab (executes it). Use tab index from rider_list_terminals (default 0). Appends newline automatically. Use to run shell commands, scripts, or interact with running processes in the IDE terminal."
-
-    override fun handle(project: Project, args: SendTerminalInputArgs): Response {
-        val twm = com.intellij.openapi.wm.ToolWindowManager.getInstance(project)
+    @McpTool
+    @McpDescription("Sends a command or text to an IDE terminal tab (executes it). Use tab index from rider_list_terminals (default 0). Appends newline automatically. Use to run shell commands, scripts, or interact with running processes in the IDE terminal.")
+    suspend fun rider_send_terminal_input(
+        @McpDescription("Text/command to send") text: String,
+        @McpDescription("Terminal tab index") tab: Int = 0
+    ): String {
+        val project = coroutineContext.project
+        val twm = ToolWindowManager.getInstance(project)
         val tw = twm.getToolWindow("Terminal")
-            ?: return Response(error = "Terminal tool window not available")
+            ?: mcpFail("Terminal tool window not available")
 
         val cm = tw.contentManager
-        val content = cm.contents.getOrNull(args.tab)
-            ?: return Response(error = "Terminal tab ${args.tab} not found. Available: ${cm.contents.size}")
+        val content = cm.contents.getOrNull(tab)
+            ?: mcpFail("Terminal tab $tab not found. Available: ${cm.contents.size}")
 
         val component = content.component
         val widget = findTerminalWidget(component)
-            ?: return Response(error = "Cannot find terminal widget in tab ${args.tab}")
+            ?: mcpFail("Cannot find terminal widget in tab $tab")
 
         @Suppress("DEPRECATION")
-        widget.terminalStarter?.sendString(args.text + "\n", false)
-            ?: return Response(error = "Terminal not ready (no process attached)")
+        widget.terminalStarter?.sendString(text + "\n", false)
+            ?: mcpFail("Terminal not ready (no process attached)")
 
-        return Response("ok")
+        return "ok"
     }
 
     private fun findTerminalWidget(component: java.awt.Component): com.jediterm.terminal.ui.JediTermWidget? {

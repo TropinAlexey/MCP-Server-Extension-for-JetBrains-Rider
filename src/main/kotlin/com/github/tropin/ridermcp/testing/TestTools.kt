@@ -15,32 +15,28 @@ import com.intellij.execution.ui.RunContentManager
 import com.intellij.execution.testframework.AbstractTestProxy
 import com.intellij.execution.testframework.sm.runner.SMTestProxy
 import com.intellij.execution.testframework.sm.runner.ui.SMTestRunnerResultsForm
+import com.intellij.mcpserver.McpToolset
+import com.intellij.mcpserver.annotations.McpDescription
+import com.intellij.mcpserver.annotations.McpTool
+import com.intellij.mcpserver.mcpFail
+import com.intellij.mcpserver.project
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
-import org.jetbrains.ide.mcp.NoArgs
-import org.jetbrains.ide.mcp.Response
-import org.jetbrains.mcpserverplugin.AbstractMcpTool
 import com.github.tropin.ridermcp.SessionManager
-import com.github.tropin.ridermcp.build.SessionIdArgs
-import com.github.tropin.ridermcp.mcpJson
+import kotlin.coroutines.coroutineContext
 
-@Serializable
-data class RunTestsArgs(
-    val configName: String? = null,
-    val filter: String? = null,
-    val className: String? = null,
-    val methodName: String? = null
-)
+class TestToolset : McpToolset {
 
-class RunTestsTool : AbstractMcpTool<RunTestsArgs>(RunTestsArgs.serializer()) {
-    override val name = "rider_run_tests"
-    override val description = """Runs unit/integration tests. Filter by className ("MyTestClass"), methodName ("ShouldWork"), or raw dotnet test filter expression ("FullyQualifiedName~Namespace.Class"). Omit all filters to run all tests. Poll progress with rider_get_output, then get structured pass/fail results with rider_get_test_results."""
-
-    override fun handle(project: Project, args: RunTestsArgs): Response {
+    @McpTool
+    @McpDescription("Runs unit/integration tests. Filter by className (\"MyTestClass\"), methodName (\"ShouldWork\"), or raw dotnet test filter expression (\"FullyQualifiedName~Namespace.Class\"). Omit all filters to run all tests. Poll progress with rider_get_output, then get structured pass/fail results with rider_get_test_results.")
+    suspend fun rider_run_tests(
+        @McpDescription("Run configuration name") configName: String? = null,
+        @McpDescription("dotnet test --filter expression") filter: String? = null,
+        @McpDescription("Test class name") className: String? = null,
+        @McpDescription("Test method name") methodName: String? = null
+    ): String {
+        val project = coroutineContext.project
         val runManager = RunManager.getInstance(project)
 
         val testConfigs = runManager.allSettings.filter { config ->
@@ -49,27 +45,27 @@ class RunTestsTool : AbstractMcpTool<RunTestsArgs>(RunTestsArgs.serializer()) {
             id.contains("test") || displayName.contains("test")
         }
 
-        val settings = if (args.configName != null) {
-            runManager.allSettings.find { it.name == args.configName }
-                ?: return Response(error = "Configuration '${args.configName}' not found")
+        val settings = if (configName != null) {
+            runManager.allSettings.find { it.name == configName }
+                ?: mcpFail("Configuration '$configName' not found")
         } else when {
-            testConfigs.isEmpty() -> return Response(error = "No test configurations found. Create one in Rider first.")
+            testConfigs.isEmpty() -> mcpFail("No test configurations found. Create one in Rider first.")
             testConfigs.size == 1 -> testConfigs.first()
             else -> {
                 val result = buildJsonObject {
                     put("error", "Multiple test configs found, specify configName")
                     putJsonArray("configs") { testConfigs.forEach { add(it.name) } }
                 }
-                return Response(result.toString())
+                return result.toString()
             }
         }
 
         val filterExpr = when {
-            args.filter != null -> args.filter
-            args.className != null && args.methodName != null ->
-                "FullyQualifiedName~${args.className}.${args.methodName}"
-            args.className != null -> "FullyQualifiedName~${args.className}"
-            args.methodName != null -> "FullyQualifiedName~${args.methodName}"
+            filter != null -> filter
+            className != null && methodName != null ->
+                "FullyQualifiedName~${className}.${methodName}"
+            className != null -> "FullyQualifiedName~${className}"
+            methodName != null -> "FullyQualifiedName~${methodName}"
             else -> null
         }
 
@@ -77,13 +73,13 @@ class RunTestsTool : AbstractMcpTool<RunTestsArgs>(RunTestsArgs.serializer()) {
 
         val session = SessionManager.create("test")
         session.appendLine("Running: ${settings.name}")
-        val configName = settings.name
+        val cfgName = settings.name
 
         ApplicationManager.getApplication().invokeLater {
             val connection = project.messageBus.connect()
             connection.subscribe(ExecutionManager.EXECUTION_TOPIC, object : ExecutionListener {
                 override fun processStarted(executorId: String, env: ExecutionEnvironment, handler: ProcessHandler) {
-                    if (env.runProfile.name != configName) return
+                    if (env.runProfile.name != cfgName) return
                     connection.disconnect()
                     session.tag = handler
                     handler.addProcessListener(object : ProcessListener {
@@ -102,10 +98,10 @@ class RunTestsTool : AbstractMcpTool<RunTestsArgs>(RunTestsArgs.serializer()) {
             ProgramRunnerUtil.executeConfiguration(settings, DefaultRunExecutor.getRunExecutorInstance())
         }
 
-        return Response(mcpJson.encodeToString(mapOf("sessionId" to session.id)))
+        return buildJsonObject { put("sessionId", session.id) }.toString()
     }
 
-    private fun runFilteredTests(project: Project, filter: String): Response {
+    private fun runFilteredTests(project: com.intellij.openapi.project.Project, filter: String): String {
         val session = SessionManager.create("test")
         session.appendLine("Running: dotnet test --filter $filter")
         try {
@@ -128,45 +124,41 @@ class RunTestsTool : AbstractMcpTool<RunTestsArgs>(RunTestsArgs.serializer()) {
             session.status = "failed"
             session.appendLine("Error: ${e.message}")
         }
-        return Response(mcpJson.encodeToString(mapOf("sessionId" to session.id)))
+        return buildJsonObject { put("sessionId", session.id) }.toString()
     }
-}
 
-class GetTestResultsTool : AbstractMcpTool<SessionIdArgs>(SessionIdArgs.serializer()) {
-    override val name = "rider_get_test_results"
-    override val description = "Returns structured test results tree after tests finish: pass/fail status per test, duration, error messages, and stack traces for failures. Call after rider_get_output shows status is not 'running'. Use to analyze which tests passed or failed and why."
+    @McpTool
+    @McpDescription("Returns structured test results tree after tests finish: pass/fail status per test, duration, error messages, and stack traces for failures. Call after rider_get_output shows status is not 'running'. Use to analyze which tests passed or failed and why.")
+    suspend fun rider_get_test_results(
+        @McpDescription("Session ID from rider_run_tests") sessionId: String
+    ): String {
+        val project = coroutineContext.project
+        val session = SessionManager.get(sessionId)
+            ?: mcpFail("Session '$sessionId' not found")
 
-    override fun handle(project: Project, args: SessionIdArgs): Response {
-        val session = SessionManager.get(args.sessionId)
-            ?: return Response(error = "Session '${args.sessionId}' not found")
-
-        if (session.status == "running") {
-            return Response(error = "Tests still running, wait for completion")
-        }
+        if (session.status == "running") mcpFail("Tests still running, wait for completion")
 
         val handler = session.tag as? ProcessHandler
-            ?: return Response(error = "No process handler captured for this session")
+            ?: mcpFail("No process handler captured for this session")
 
         val descriptors = RunContentManager.getInstance(project).allDescriptors
         val descriptor = descriptors.find { it.processHandler === handler }
-            ?: return Response(error = "Execution descriptor not found (tab may have been closed)")
+            ?: mcpFail("Execution descriptor not found (tab may have been closed)")
 
-        val console = descriptor.executionConsole ?: return Response(error = "No console available")
+        val console = descriptor.executionConsole ?: mcpFail("No console available")
 
         val root = try {
-            val resultsForm = findResultsForm(console) ?: return Response(error = "No test results form found")
+            val resultsForm = findResultsForm(console) ?: mcpFail("No test results form found")
             resultsForm.testsRootNode
         } catch (e: Exception) {
-            return Response(error = "Cannot extract test tree: ${e.message}")
+            mcpFail("Cannot extract test tree: ${e.message}")
         }
 
-        val tree = extractTestNode(root)
-        return Response(tree.toString())
+        return extractTestNode(root).toString()
     }
 
     private fun findResultsForm(console: Any): SMTestRunnerResultsForm? {
         if (console is SMTestRunnerResultsForm) return console
-        // SMTestRunnerConsoleView wraps results form
         try {
             val method = console.javaClass.getMethod("getResultsViewer")
             val viewer = method.invoke(console)
@@ -199,16 +191,14 @@ class GetTestResultsTool : AbstractMcpTool<SessionIdArgs>(SessionIdArgs.serializ
             }
         }
     }
-}
 
-class RerunFailedTestsTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
-    override val name = "rider_rerun_failed_tests"
-    override val description = "Reruns only the previously failed tests (retry failures). Uses the IDE's Rerun Failed Tests action. Poll with rider_get_output, then rider_get_test_results for results."
-
-    override fun handle(project: Project, args: NoArgs): Response {
+    @McpTool
+    @McpDescription("Reruns only the previously failed tests (retry failures). Uses the IDE's Rerun Failed Tests action. Poll with rider_get_output, then rider_get_test_results for results.")
+    suspend fun rider_rerun_failed_tests(): String {
+        val project = coroutineContext.project
         val action = com.intellij.openapi.actionSystem.ActionManager.getInstance()
             .getAction("RerunFailedTests")
-            ?: return Response(error = "Rerun Failed Tests action not available")
+            ?: mcpFail("Rerun Failed Tests action not available")
 
         val session = SessionManager.create("test")
         session.appendLine("Rerunning failed tests")
@@ -236,6 +226,6 @@ class RerunFailedTestsTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
             com.intellij.openapi.actionSystem.ActionManager.getInstance().tryToExecute(action, null, frame, "", true)
         }
 
-        return Response(mcpJson.encodeToString(mapOf("sessionId" to session.id)))
+        return buildJsonObject { put("sessionId", session.id) }.toString()
     }
 }

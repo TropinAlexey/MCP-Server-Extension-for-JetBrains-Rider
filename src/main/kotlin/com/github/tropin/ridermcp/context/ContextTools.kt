@@ -1,27 +1,27 @@
 package com.github.tropin.ridermcp.context
 
 import com.intellij.ide.bookmark.BookmarksManager
+import com.intellij.mcpserver.McpToolset
+import com.intellij.mcpserver.annotations.McpDescription
+import com.intellij.mcpserver.annotations.McpTool
+import com.intellij.mcpserver.project
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.impl.EditorHistoryManager
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.toNioPathOrNull
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
-import org.jetbrains.ide.mcp.NoArgs
-import org.jetbrains.ide.mcp.Response
-import org.jetbrains.mcpserverplugin.AbstractMcpTool
-import com.github.tropin.ridermcp.mcpJson
 import com.github.tropin.ridermcp.projectDir
 import com.github.tropin.ridermcp.relTo
+import kotlin.coroutines.coroutineContext
 
-class GetContextTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
-    override val name = "rider_get_context"
-    override val description = "Returns programmer's current focus: active file path, cursor/caret position (line + column), selected text with line range, surrounding code context (±5 lines), list of other open editors, unsaved/modified files, and bookmarks. Use this to see what the user is looking at, what text they have selected, or where their cursor is."
+class ContextToolset : McpToolset {
 
-    override fun handle(project: Project, args: NoArgs): Response {
+    @McpTool
+    @McpDescription("Returns programmer's current focus: active file path, cursor/caret position (line + column), selected text with line range, surrounding code context (±5 lines), list of other open editors, unsaved/modified files, and bookmarks. Use this to see what the user is looking at, what text they have selected, or where their cursor is.")
+    suspend fun rider_get_context(): String {
+        val project = coroutineContext.project
         val projectDir = project.projectDir()
         val fem = FileEditorManager.getInstance(project)
         val fdm = FileDocumentManager.getInstance()
@@ -90,19 +90,17 @@ class GetContextTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
             } catch (_: Exception) {}
         }
 
-        return Response(result.toString())
+        return result.toString()
     }
-}
 
-class GetRecentFilesTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
-    override val name = "rider_get_recent_files"
-    override val description = "Returns the 20 most recently opened/viewed files (newest first). Use to understand which files the user has been working on, or to find files they recently edited or reviewed."
-
-    override fun handle(project: Project, args: NoArgs): Response {
+    @McpTool
+    @McpDescription("Returns the 20 most recently opened/viewed files (newest first). Use to understand which files the user has been working on, or to find files they recently edited or reviewed.")
+    suspend fun rider_get_recent_files(): String {
+        val project = coroutineContext.project
         val projectDir = project.projectDir()
         val files = EditorHistoryManager.getInstance(project).fileList.takeLast(20).reversed().map { file ->
             file.toNioPathOrNull()?.relTo(projectDir) ?: file.path
         }
-        return Response(mcpJson.encodeToString(files))
+        return buildJsonArray { files.forEach { add(it) } }.toString()
     }
 }

@@ -1,24 +1,24 @@
 package com.github.tropin.ridermcp.profiling
 
-import com.intellij.openapi.project.Project
+import com.intellij.mcpserver.McpToolset
+import com.intellij.mcpserver.annotations.McpDescription
+import com.intellij.mcpserver.annotations.McpTool
+import com.intellij.mcpserver.mcpFail
+import com.intellij.mcpserver.project
 import com.jetbrains.rider.model.*
 import com.jetbrains.rider.projectView.solution
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
-import org.jetbrains.ide.mcp.NoArgs
-import org.jetbrains.ide.mcp.Response
-import org.jetbrains.mcpserverplugin.AbstractMcpTool
+import kotlin.coroutines.coroutineContext
 
-// === Profiling State ===
+class ProfilingToolset : McpToolset {
 
-class ProfilingStateTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
-    override val name = "rider_profiling_state"
-    override val description = "Returns dotTrace performance profiling state: active profiling session info, profiled process PIDs, collected/opened snapshots (paths and sizes), and errors. Use to check if profiling is running, see snapshot status, or diagnose profiling issues."
-
-    override fun handle(project: Project, args: NoArgs): Response {
+    @McpTool
+    @McpDescription("Returns dotTrace performance profiling state: active profiling session info, profiled process PIDs, collected/opened snapshots (paths and sizes), and errors. Use to check if profiling is running, see snapshot status, or diagnose profiling issues.")
+    suspend fun rider_profiling_state(): String {
+        val project = coroutineContext.project
         val host = project.solution.dotTraceHost
 
-        val result = buildJsonObject {
+        return buildJsonObject {
             val session = host.activeSession.value
             if (session != null) {
                 putJsonObject("activeSession") {
@@ -86,45 +86,39 @@ class ProfilingStateTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
             }
 
             put("profilingDisabled", host.disableProfiling.valueOrNull ?: false)
-        }
-        return Response(result.toString())
+        }.toString()
     }
-}
 
-// === Profiling Control ===
-
-@Serializable
-data class ProfilingControlArgs(val command: String, val pid: Int = 0)
-
-class ProfilingControlTool : AbstractMcpTool<ProfilingControlArgs>(ProfilingControlArgs.serializer()) {
-    override val name = "rider_profiling_control"
-    override val description = "Controls an active dotTrace profiling session. Commands: 'start' (begin/resume data collection), 'stop' (stop & save performance snapshot), 'drop' (discard collected data & continue), 'detach' (detach profiler from process), 'close' (end session). Optional pid for multi-process sessions. Use rider_profiling_state first to check session status."
-
-    override fun handle(project: Project, args: ProfilingControlArgs): Response {
+    @McpTool
+    @McpDescription("Controls an active dotTrace profiling session. Commands: 'start' (begin/resume data collection), 'stop' (stop & save performance snapshot), 'drop' (discard collected data & continue), 'detach' (detach profiler from process), 'close' (end session). Optional pid for multi-process sessions. Use rider_profiling_state first to check session status.")
+    suspend fun rider_profiling_control(
+        @McpDescription("Command: start, stop, drop, detach, close") command: String,
+        @McpDescription("Process ID (for multi-process sessions)") pid: Int = 0
+    ): String {
+        val project = coroutineContext.project
         val host = project.solution.dotTraceHost
         val session = host.activeSession.value
-            ?: return Response(error = "No active profiling session. Start profiling from Rider: Run → Profile.")
+            ?: mcpFail("No active profiling session. Start profiling from Rider: Run → Profile.")
 
-        val cmd = when (args.command.lowercase()) {
+        val cmd = when (command.lowercase()) {
             "start" -> ProfilerCoreCommand.Start
             "stop" -> ProfilerCoreCommand.StopSave
             "drop" -> ProfilerCoreCommand.Drop
             "detach" -> ProfilerCoreCommand.Detach
             "close" -> ProfilerCoreCommand.Close
-            else -> return Response(error = "Unknown command '${args.command}'. Use: start, stop, drop, detach, close")
+            else -> mcpFail("Unknown command '$command'. Use: start, stop, drop, detach, close")
         }
 
-        if (args.pid != 0) {
-            session.coreCommand.fire(CommandDef(cmd, args.pid))
+        if (pid != 0) {
+            session.coreCommand.fire(CommandDef(cmd, pid))
         } else {
             session.sessionCommand.fire(cmd)
         }
 
-        val result = buildJsonObject {
-            put("command", args.command.lowercase())
-            if (args.pid != 0) put("pid", args.pid)
+        return buildJsonObject {
+            put("command", command.lowercase())
+            if (pid != 0) put("pid", pid)
             put("sent", true)
-        }
-        return Response(result.toString())
+        }.toString()
     }
 }

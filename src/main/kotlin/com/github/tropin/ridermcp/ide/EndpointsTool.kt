@@ -1,37 +1,37 @@
 package com.github.tropin.ridermcp.ide
 
-import com.intellij.openapi.project.Project
-import kotlinx.serialization.Serializable
+import com.intellij.mcpserver.McpToolset
+import com.intellij.mcpserver.annotations.McpDescription
+import com.intellij.mcpserver.annotations.McpTool
+import com.intellij.mcpserver.mcpFail
+import com.intellij.mcpserver.project
+import com.intellij.openapi.wm.ToolWindowManager
 import kotlinx.serialization.json.*
-import org.jetbrains.ide.mcp.NoArgs
-import org.jetbrains.ide.mcp.Response
-import org.jetbrains.mcpserverplugin.AbstractMcpTool
-import com.github.tropin.ridermcp.projectDir
-import com.github.tropin.ridermcp.relTo
+import kotlin.coroutines.coroutineContext
 
-class GetEndpointsTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
-    override val name = "rider_get_endpoints"
-    override val description = "Returns HTTP API endpoints (routes) detected by the IDE: HTTP method (GET/POST/PUT/DELETE), URL pattern, and handler location. Use to discover REST API routes, check available endpoints, or understand the API surface of the project."
+class EndpointsToolset : McpToolset {
 
-    override fun handle(project: Project, args: NoArgs): Response {
-        val twm = com.intellij.openapi.wm.ToolWindowManager.getInstance(project)
+    @McpTool
+    @McpDescription("Returns HTTP API endpoints (routes) detected by the IDE: HTTP method (GET/POST/PUT/DELETE), URL pattern, and handler location. Use to discover REST API routes, check available endpoints, or understand the API surface of the project.")
+    suspend fun rider_get_endpoints(): String {
+        val project = coroutineContext.project
+        val twm = ToolWindowManager.getInstance(project)
         val tw = twm.getToolWindow("Endpoints")
-            ?: return Response(error = "Endpoints tool window not available. Open it first in Rider (View → Tool Windows → Endpoints).")
+            ?: mcpFail("Endpoints tool window not available. Open it first in Rider (View → Tool Windows → Endpoints).")
 
         val cm = tw.contentManager
         val content = cm.selectedContent ?: cm.contents.firstOrNull()
-            ?: return Response(error = "Endpoints tool window has no content")
+            ?: mcpFail("Endpoints tool window has no content")
 
         val lines = mutableListOf<String>()
         extractEndpointText(content.component, lines, 500)
 
-        if (lines.isEmpty()) return Response(error = "No endpoints found. Make sure the project is indexed.")
+        if (lines.isEmpty()) mcpFail("No endpoints found. Make sure the project is indexed.")
 
-        val result = buildJsonObject {
+        return buildJsonObject {
             put("count", lines.size)
             putJsonArray("endpoints") { lines.forEach { add(it) } }
-        }
-        return Response(result.toString())
+        }.toString()
     }
 
     private fun extractEndpointText(component: java.awt.Component, lines: MutableList<String>, limit: Int) {

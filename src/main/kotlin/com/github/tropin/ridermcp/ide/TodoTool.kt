@@ -1,39 +1,40 @@
 package com.github.tropin.ridermcp.ide
 
-import com.intellij.openapi.project.Project
-import kotlinx.serialization.Serializable
+import com.intellij.mcpserver.McpToolset
+import com.intellij.mcpserver.annotations.McpDescription
+import com.intellij.mcpserver.annotations.McpTool
+import com.intellij.mcpserver.mcpFail
+import com.intellij.mcpserver.project
+import com.intellij.openapi.wm.ToolWindowManager
 import kotlinx.serialization.json.*
-import org.jetbrains.ide.mcp.NoArgs
-import org.jetbrains.ide.mcp.Response
-import org.jetbrains.mcpserverplugin.AbstractMcpTool
+import kotlin.coroutines.coroutineContext
 
-@Serializable
-data class GetTodosArgs(val limit: Int = 100)
+class TodoToolset : McpToolset {
 
-class GetTodosTool : AbstractMcpTool<GetTodosArgs>(GetTodosArgs.serializer()) {
-    override val name = "rider_get_todos"
-    override val description = "Returns TODO, FIXME, HACK comments found across the codebase (from the IDE's TODO tool window). Use to find technical debt, pending work items, or known issues in code. Default limit: 100."
-
-    override fun handle(project: Project, args: GetTodosArgs): Response {
-        val twm = com.intellij.openapi.wm.ToolWindowManager.getInstance(project)
+    @McpTool
+    @McpDescription("Returns TODO, FIXME, HACK comments found across the codebase (from the IDE's TODO tool window). Use to find technical debt, pending work items, or known issues in code. Default limit: 100.")
+    suspend fun rider_get_todos(
+        @McpDescription("Max items to return") limit: Int = 100
+    ): String {
+        val project = coroutineContext.project
+        val twm = ToolWindowManager.getInstance(project)
         val tw = twm.getToolWindow("TODO")
-            ?: return Response(error = "TODO tool window not available")
+            ?: mcpFail("TODO tool window not available")
 
         val cm = tw.contentManager
         val content = cm.selectedContent ?: cm.contents.firstOrNull()
-            ?: return Response(error = "TODO tool window has no content")
+            ?: mcpFail("TODO tool window has no content")
 
         val lines = mutableListOf<String>()
-        extractTreeText(content.component, lines, args.limit)
+        extractTreeText(content.component, lines, limit)
 
-        if (lines.isEmpty()) return Response("[]")
+        if (lines.isEmpty()) return "[]"
 
-        val result = buildJsonObject {
+        return buildJsonObject {
             put("count", lines.size)
-            if (lines.size >= args.limit) put("truncated", true)
+            if (lines.size >= limit) put("truncated", true)
             putJsonArray("items") { lines.forEach { add(it) } }
-        }
-        return Response(result.toString())
+        }.toString()
     }
 
     private fun extractTreeText(component: java.awt.Component, lines: MutableList<String>, limit: Int) {

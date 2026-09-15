@@ -4,74 +4,26 @@
     <vendor url="https://github.com/tropin">tropin</vendor>
 
     <description><![CDATA[
-        Extends the JetBrains MCP Server plugin with IDE observability and control for Rider.
+        Extends the JetBrains MCP Server with IDE observability and control for Rider.
         Build management, test runner, process control, IDE state monitoring, editor context.
     ]]></description>
 
     <depends>com.intellij.modules.rider</depends>
-    <depends>com.intellij.mcpServer</depends>
 
-    <extensions defaultExtensionNs="com.intellij.mcpServer">
-        <!-- Build -->
-        <mcpTool implementation="com.github.tropin.ridermcp.build.StartBuildTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.build.GetOutputTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.build.CancelBuildTool"/>
-
-        <!-- Process management -->
-        <mcpTool implementation="com.github.tropin.ridermcp.process.ListProcessesTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.process.KillProcessTool"/>
-
-        <!-- IDE state -->
-        <mcpTool implementation="com.github.tropin.ridermcp.ide.GetIdeStateTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.ide.GetNotificationsTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.ide.ListToolWindowsTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.ide.GetToolWindowContentTool"/>
-
-        <!-- Test runner -->
-        <mcpTool implementation="com.github.tropin.ridermcp.testing.RunTestsTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.testing.GetTestResultsTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.testing.RerunFailedTestsTool"/>
-
-        <!-- Run config CRUD -->
-        <mcpTool implementation="com.github.tropin.ridermcp.runconfig.CreateRunConfigTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.runconfig.UpdateRunConfigTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.runconfig.DeleteRunConfigTool"/>
-
-        <!-- Debugger -->
-        <mcpTool implementation="com.github.tropin.ridermcp.debugger.SetBreakpointTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.debugger.RemoveBreakpointTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.debugger.StartDebugTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.debugger.DebugStateTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.debugger.DebugEvaluateTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.debugger.DebugStepTool"/>
-
-        <!-- NuGet -->
-        <mcpTool implementation="com.github.tropin.ridermcp.nuget.ListPackagesTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.nuget.ManagePackageTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.nuget.NuGetRestoreTool"/>
-
-        <!-- Inspections -->
-        <mcpTool implementation="com.github.tropin.ridermcp.settings.ListInspectionsTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.settings.ToggleInspectionTool"/>
-
-        <!-- Terminal -->
-        <mcpTool implementation="com.github.tropin.ridermcp.ide.ListTerminalsTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.ide.SendTerminalInputTool"/>
-
-        <!-- Project insights -->
-        <mcpTool implementation="com.github.tropin.ridermcp.ide.GetTodosTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.ide.GetEndpointsTool"/>
-
-        <!-- Programmer context -->
-        <mcpTool implementation="com.github.tropin.ridermcp.context.GetContextTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.context.GetRecentFilesTool"/>
-
-        <!-- Admin -->
-        <mcpTool implementation="com.github.tropin.ridermcp.admin.ManagePluginTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.admin.InvalidateCachesTool"/>
-
-        <!-- dotTrace Profiling -->
-        <mcpTool implementation="com.github.tropin.ridermcp.profiling.ProfilingStateTool"/>
-        <mcpTool implementation="com.github.tropin.ridermcp.profiling.ProfilingControlTool"/>
+    <extensions defaultExtensionNs="com.intellij">
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.build.BuildToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.process.ProcessToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.ide.IdeStateToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.ide.TerminalToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.ide.TodoToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.ide.EndpointsToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.context.ContextToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.testing.TestToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.debugger.DebugToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.nuget.NuGetToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.runconfig.RunConfigToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.settings.SettingsToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.admin.AdminToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.profiling.ProfilingToolset"/>
     </extensions>
 </idea-plugin>

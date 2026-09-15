@@ -8,7 +8,7 @@
   <a href="https://plugins.jetbrains.com/plugin/34264-mcp-server-extension"><img src="https://img.shields.io/jetbrains/plugin/v/34264?style=flat-square&label=marketplace" alt="JetBrains Marketplace"></a>
   <a href="https://github.com/TropinAlexey/rider-mcp/releases/latest"><img src="https://img.shields.io/github/v/release/TropinAlexey/rider-mcp?style=flat-square&label=version" alt="Version"></a>
   <a href="https://github.com/TropinAlexey/rider-mcp/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/TropinAlexey/rider-mcp/build.yml?style=flat-square" alt="Build"></a>
-  <img src="https://img.shields.io/badge/Rider-2024.3%2B-blue?style=flat-square&logo=jetbrains" alt="Rider 2024.3+">
+  <img src="https://img.shields.io/badge/Rider-2025.2%2B-blue?style=flat-square&logo=jetbrains" alt="Rider 2025.2+">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="MIT License"></a>
 </p>
 
@@ -16,7 +16,7 @@
   A JetBrains Rider plugin that extends the stock <a href="https://github.com/JetBrains/mcp-server-plugin">MCP Server Plugin</a> with full IDE observability and control tools.
 </p>
 
-**Current version: 0.11.0** — Plugin management, Invalidate Caches, dotTrace profiling control. [What's New →](#whats-new)
+**Current version: 0.12.3** — Migrated to built-in McpToolset API, Rider 2025.2+ required. [What's New →](#whats-new)
 
 ## Why This Exists
 
@@ -218,6 +218,15 @@ See [TODO.md](TODO.md) for the full prioritized roadmap.
 - Rider 2025.1 compatibility testing
 
 ## What's New
+
+### v0.12.3
+
+**Breaking: Rider 2025.2+ required**
+- Migrated all 36 MCP tools from deprecated `AbstractMcpTool<Args>` API to new built-in `McpToolset` suspend function API
+- Tools grouped into 14 toolsets with `@McpTool`/`@McpDescription` annotations
+- Removed `kotlinx-serialization` plugin dependency (no more `@Serializable` arg classes)
+- Upgraded Kotlin 2.0.21 → 2.2.0, Gradle IntelliJ Platform Plugin 2.3.0 → 2.5.0
+- MCP Server is now a bundled IDE dependency (no longer a separate plugin install)
 
 ### v0.12.0
 
