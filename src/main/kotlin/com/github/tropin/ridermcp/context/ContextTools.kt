@@ -1,7 +1,7 @@
 package com.github.tropin.ridermcp.context
 
 import com.intellij.ide.bookmark.BookmarksManager
-import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.impl.EditorHistoryManager
@@ -19,7 +19,7 @@ import com.github.tropin.ridermcp.relTo
 
 class GetContextTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
     override val name = "rider_get_context"
-    override val description = "Returns programmer's current focus: active file with cursor and surrounding code, selection if any, other open editors, and bookmarks."
+    override val description = "Returns programmer's current focus: active file path, cursor/caret position (line + column), selected text with line range, surrounding code context (±5 lines), list of other open editors, unsaved/modified files, and bookmarks. Use this to see what the user is looking at, what text they have selected, or where their cursor is."
 
     override fun handle(project: Project, args: NoArgs): Response {
         val projectDir = project.projectDir()
@@ -29,9 +29,9 @@ class GetContextTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
         val result = buildJsonObject {
             val b = this
 
-            ReadAction.run<Throwable> {
-                val editor = fem.selectedTextEditor ?: return@run
-                val vf = editor.virtualFile ?: return@run
+            ApplicationManager.getApplication().runReadAction {
+                val editor = fem.selectedTextEditor ?: return@runReadAction
+                val vf = editor.virtualFile ?: return@runReadAction
                 b.put("file", vf.toNioPathOrNull()?.relTo(projectDir) ?: vf.path)
 
                 val caret = editor.caretModel.primaryCaret
@@ -96,7 +96,7 @@ class GetContextTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
 
 class GetRecentFilesTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
     override val name = "rider_get_recent_files"
-    override val description = "Returns the 20 most recently opened files (newest first)."
+    override val description = "Returns the 20 most recently opened/viewed files (newest first). Use to understand which files the user has been working on, or to find files they recently edited or reviewed."
 
     override fun handle(project: Project, args: NoArgs): Response {
         val projectDir = project.projectDir()

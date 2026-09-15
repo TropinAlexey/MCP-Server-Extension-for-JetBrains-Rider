@@ -8,7 +8,7 @@
         Build management, test runner, process control, IDE state monitoring, editor context.
     ]]></description>
 
-    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.rider</depends>
     <depends>com.intellij.mcpServer</depends>
 
     <extensions defaultExtensionNs="com.intellij.mcpServer">
@@ -65,5 +65,13 @@
         <!-- Programmer context -->
         <mcpTool implementation="com.github.tropin.ridermcp.context.GetContextTool"/>
         <mcpTool implementation="com.github.tropin.ridermcp.context.GetRecentFilesTool"/>
+
+        <!-- Admin -->
+        <mcpTool implementation="com.github.tropin.ridermcp.admin.ManagePluginTool"/>
+        <mcpTool implementation="com.github.tropin.ridermcp.admin.InvalidateCachesTool"/>
+
+        <!-- dotTrace Profiling -->
+        <mcpTool implementation="com.github.tropin.ridermcp.profiling.ProfilingStateTool"/>
+        <mcpTool implementation="com.github.tropin.ridermcp.profiling.ProfilingControlTool"/>
     </extensions>
 </idea-plugin>

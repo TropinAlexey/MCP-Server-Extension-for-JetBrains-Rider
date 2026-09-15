@@ -2,9 +2,9 @@ package com.github.tropin.ridermcp.build
 
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.CommonDataKeys
-import com.intellij.openapi.actionSystem.ex.ActionUtil
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.wm.WindowManager
 import com.intellij.openapi.project.Project
 import com.intellij.task.ProjectTaskManager
 import kotlinx.serialization.Serializable
@@ -18,7 +18,7 @@ import kotlinx.serialization.encodeToString
 
 class StartBuildTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
     override val name = "rider_start_build"
-    override val description = "Starts a solution build, returns sessionId. Poll with rider_get_output."
+    override val description = "Starts building the solution (compile/build). Returns sessionId for polling. Use rider_get_output to poll build progress and get build logs until status is not 'running'."
 
     override fun handle(project: Project, args: NoArgs): Response {
         val session = SessionManager.create("build")
@@ -49,7 +49,7 @@ data class SessionIdArgs(val sessionId: String)
 
 class GetOutputTool : AbstractMcpTool<SessionIdArgs>(SessionIdArgs.serializer()) {
     override val name = "rider_get_output"
-    override val description = "Polls output for any session (build, test). Returns new lines since last call. Poll until status is not \"running\"."
+    override val description = "Polls output for any async session (build, test, nuget restore). Returns new log lines since last call, plus current status and exit code. Keep polling until status is not 'running'. Works with sessionId from rider_start_build, rider_run_tests, rider_nuget_restore, rider_start_debug, rider_rerun_failed_tests."
 
     override fun handle(project: Project, args: SessionIdArgs): Response {
         val session = SessionManager.get(args.sessionId)
@@ -69,17 +69,15 @@ class GetOutputTool : AbstractMcpTool<SessionIdArgs>(SessionIdArgs.serializer())
 
 class CancelBuildTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
     override val name = "rider_cancel_build"
-    override val description = "Cancels the currently running build."
+    override val description = "Cancels/stops the currently running build. Use when a build is taking too long or needs to be aborted."
 
     override fun handle(project: Project, args: NoArgs): Response {
         val action = ActionManager.getInstance().getAction("Stop")
             ?: return Response(error = "No cancel action available")
 
         ApplicationManager.getApplication().invokeLater {
-            val dataContext = SimpleDataContext.builder()
-                .add(CommonDataKeys.PROJECT, project)
-                .build()
-            ActionUtil.invokeAction(action, dataContext, "", null, null)
+            val frame = WindowManager.getInstance().getFrame(project)
+            ActionManager.getInstance().tryToExecute(action, null, frame, "", true)
         }
         return Response("ok")
     }

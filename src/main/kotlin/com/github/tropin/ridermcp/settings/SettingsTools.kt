@@ -16,7 +16,7 @@ data class ListInspectionsArgs(val filter: String? = null, val enabledOnly: Bool
 
 class ListInspectionsTool : AbstractMcpTool<ListInspectionsArgs>(ListInspectionsArgs.serializer()) {
     override val name = "rider_list_inspections"
-    override val description = "Lists code inspections. Optional filter by keyword in name/shortName. enabledOnly shows only active ones. Returns shortName for use with rider_toggle_inspection."
+    override val description = "Lists code inspections (static analysis rules, code quality checks). Filter by keyword in name/shortName/group. enabledOnly=true shows only active rules. Returns shortName needed by rider_toggle_inspection. Use to find and review which code analysis rules are active."
 
     override fun handle(project: Project, args: ListInspectionsArgs): Response {
         val profile = InspectionProjectProfileManager.getInstance(project).currentProfile as? InspectionProfileImpl
@@ -63,7 +63,7 @@ data class ToggleInspectionArgs(val shortName: String, val enabled: Boolean)
 
 class ToggleInspectionTool : AbstractMcpTool<ToggleInspectionArgs>(ToggleInspectionArgs.serializer()) {
     override val name = "rider_toggle_inspection"
-    override val description = "Enables or disables a code inspection by shortName (from rider_list_inspections)."
+    override val description = "Enables or disables a code inspection (static analysis rule) by shortName from rider_list_inspections. Use to suppress noisy warnings or enable stricter checks."
 
     override fun handle(project: Project, args: ToggleInspectionArgs): Response {
         val profile = InspectionProjectProfileManager.getInstance(project).currentProfile as? InspectionProfileImpl

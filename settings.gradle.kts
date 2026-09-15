@@ -1,1 +1,1 @@
-rootProject.name = "rider-mcp"
+rootProject.name = "mcp-server-extension"

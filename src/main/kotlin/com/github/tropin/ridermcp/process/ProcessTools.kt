@@ -1,7 +1,7 @@
 package com.github.tropin.ridermcp.process
 
-import com.intellij.execution.ExecutionManager
 import com.intellij.execution.process.OSProcessHandler
+import com.intellij.execution.ui.RunContentManager
 import com.intellij.openapi.project.Project
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -15,12 +15,11 @@ data class ListProcessesArgs(val type: String? = null)
 
 class ListProcessesTool : AbstractMcpTool<ListProcessesArgs>(ListProcessesArgs.serializer()) {
     override val name = "rider_list_processes"
-    override val description = "Lists running processes managed by Rider with PID and command line. Optional type filter: build, test, run (anything else)."
+    override val description = "Lists running processes launched by Rider (builds, tests, app runs) with PID and command line. Optional type filter: 'build', 'test', 'run'. Use to check what's running or find process names for rider_kill_process."
 
     override fun handle(project: Project, args: ListProcessesArgs): Response {
         val typeFilter = args.type?.lowercase()
-        @Suppress("DEPRECATION")
-        val processes = ExecutionManager.getInstance(project).getRunningDescriptors { true }.mapNotNull { d ->
+        val processes = RunContentManager.getInstance(project).allDescriptors.mapNotNull { d ->
             val handler = d.processHandler ?: return@mapNotNull null
             if (handler.isProcessTerminated || handler.isProcessTerminating) return@mapNotNull null
             val name = d.displayName ?: "unknown"
@@ -50,13 +49,13 @@ data class KillProcessArgs(val processName: String)
 
 class KillProcessTool : AbstractMcpTool<KillProcessArgs>(KillProcessArgs.serializer()) {
     override val name = "rider_kill_process"
-    override val description = "Kills a running process by display name (from rider_list_processes)."
+    override val description = "Kills/terminates a running process by its display name (from rider_list_processes). Use to stop a hung build, test, or running application."
 
     override fun handle(project: Project, args: KillProcessArgs): Response {
-        @Suppress("DEPRECATION")
-        val descriptors = ExecutionManager.getInstance(project).getRunningDescriptors { true }
-        val target = descriptors.find { it.displayName == args.processName }
-            ?: return Response(error = "Process '${args.processName}' not found")
+        val descriptors = RunContentManager.getInstance(project).allDescriptors
+        val target = descriptors.find { d ->
+            d.displayName == args.processName && d.processHandler?.let { !it.isProcessTerminated && !it.isProcessTerminating } == true
+        } ?: return Response(error = "Process '${args.processName}' not found")
 
         val handler = target.processHandler
             ?: return Response(error = "No process handler for '${args.processName}'")

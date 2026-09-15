@@ -16,7 +16,7 @@
   A JetBrains Rider plugin that extends the stock <a href="https://github.com/JetBrains/mcp-server-plugin">MCP Server Plugin</a> with full IDE observability and control tools.
 </p>
 
-**Current version: 0.10.0** — Terminal, TODO, Endpoints. [What's New →](#whats-new)
+**Current version: 0.11.0** — Plugin management, Invalidate Caches, dotTrace profiling control. [What's New →](#whats-new)
 
 ## Why This Exists
 
@@ -50,6 +50,9 @@ This plugin bridges that gap. It gives any MCP-compatible client (Claude Code, C
 | Terminal integration | ❌ | ✅ list tabs, send input |
 | TODO items | ❌ | ✅ project-wide TODO/FIXME/HACK |
 | API endpoints | ❌ | ✅ HTTP routes from Endpoints panel |
+| Plugin management | ❌ | ✅ list, enable, disable plugins |
+| Cache invalidation | ❌ | ✅ invalidate caches & restart |
+| dotTrace control | ❌ | ✅ session state, start/stop/detach profiling |
 
 ## Architecture
 
@@ -60,7 +63,7 @@ MCP Client ←MCP→ JS proxy (mcp-jetbrains) ←HTTP→ Rider JVM
                                                     ├── MCP Server Plugin (JetBrains)
                                                     │   └── stock tools (~30)
                                                     └── MCP Server Extension (this plugin)
-                                                        └── additional tools (32)
+                                                        └── additional tools (36)
 ```
 
 All tools from both plugins appear as a unified set in any MCP client. Our tools are prefixed with `rider_` to avoid naming conflicts.
@@ -73,7 +76,7 @@ MCP tools are synchronous (request → response). For long-running operations li
 2. `rider_get_output("build_1")` → returns new lines since last call
 3. Repeat until `status` is no longer `"running"`
 
-## Available Tools (32)
+## Available Tools (36)
 
 ### Build (3 tools)
 | Tool | Description |
@@ -149,6 +152,18 @@ MCP tools are synchronous (request → response). For long-running operations li
 | `rider_get_todos` | `limit?` | TODO/FIXME/HACK items from the TODO tool window (default limit 100) |
 | `rider_get_endpoints` | — | API endpoints from the Endpoints tool window (HTTP method, URL, handler) |
 
+### dotTrace Profiling (2 tools)
+| Tool | Args | Description |
+|---|---|---|
+| `rider_profiling_state` | — | dotTrace state: active session info (processes, snapshots, errors), opened snapshots, profiling availability |
+| `rider_profiling_control` | `command`, `pid?` | Control active session. Commands: `start`, `stop` (save snapshot), `drop` (discard data), `detach`, `close`. Optional `pid` for multi-process |
+
+### Admin (2 tools)
+| Tool | Args | Description |
+|---|---|---|
+| `rider_manage_plugin` | `action`, `filter?`, `pluginId?`, `limit?` | List/enable/disable plugins. Actions: `list` (filter by keyword), `enable`/`disable` (by pluginId). Restart required after enable/disable |
+| `rider_invalidate_caches` | — | Invalidate IDE caches and restart. Use for stale highlighting, missing references, broken indexing |
+
 ### Programmer Context (2 tools)
 | Tool | Description |
 |---|---|
@@ -183,7 +198,7 @@ cd rider-mcp
 gradlew.bat buildPlugin
 ```
 
-Then install: **Rider → Settings → Plugins → ⚙️ → Install Plugin from Disk → select `build/distributions/rider-mcp-*.zip`**
+Then install: **Rider → Settings → Plugins → ⚙️ → Install Plugin from Disk → select `build/distributions/mcp-server-extension-*.zip`**
 
 ### Development
 
@@ -200,9 +215,27 @@ gradlew.bat runIde
 See [TODO.md](TODO.md) for the full prioritized roadmap.
 
 **Next up:**
-- P3: Plugin/Action management (install/enable/disable plugins, file watchers, invalidate caches)
+- Rider 2025.1 compatibility testing
 
 ## What's New
+
+### v0.12.0
+
+**Compatibility**
+- Replaced 14 internal API usages: `ExecutionManager.getRunningDescriptors` → `RunContentManager.allDescriptors`, `IdeaPluginDescriptorImpl.isEnabled` → `PluginManagerCore.isDisabled`
+- Removed 7 deprecated API calls: `ActionUtil.invokeAction`, `ReadAction.compute/run<Throwable>`, `AnActionEvent.createFromDataContext`
+- Renamed distribution artifact from `rider-mcp` to `mcp-server-extension`
+- Upgraded Kotlin 1.9.24 → 2.0.21, kotlinx-serialization 1.6.3 → 1.7.3 (eliminated 22 serialization deprecation warnings)
+
+### v0.11.0
+
+**dotTrace Profiling**
+- `rider_profiling_state` — full dotTrace session state (processes, snapshots, errors, opened snapshots)
+- `rider_profiling_control` — control active session: start/stop/drop/detach/close (complements stock snapshot analysis tools)
+
+**Plugin Management**
+- `rider_manage_plugin` — list/enable/disable plugins by id (restart required for enable/disable)
+- `rider_invalidate_caches` — invalidate IDE caches and restart
 
 ### v0.10.0
 

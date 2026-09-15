@@ -11,6 +11,7 @@ import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.process.ProcessListener
 import com.intellij.execution.runners.ExecutionEnvironment
+import com.intellij.execution.ui.RunContentManager
 import com.intellij.execution.testframework.AbstractTestProxy
 import com.intellij.execution.testframework.sm.runner.SMTestProxy
 import com.intellij.execution.testframework.sm.runner.ui.SMTestRunnerResultsForm
@@ -37,7 +38,7 @@ data class RunTestsArgs(
 
 class RunTestsTool : AbstractMcpTool<RunTestsArgs>(RunTestsArgs.serializer()) {
     override val name = "rider_run_tests"
-    override val description = """Runs tests. Filter options: className ("MyTestClass"), methodName ("ShouldWork"), or raw filter expression ("FullyQualifiedName~Namespace.Class"). Omit configName to auto-detect. Poll with rider_get_output, then rider_get_test_results for tree."""
+    override val description = """Runs unit/integration tests. Filter by className ("MyTestClass"), methodName ("ShouldWork"), or raw dotnet test filter expression ("FullyQualifiedName~Namespace.Class"). Omit all filters to run all tests. Poll progress with rider_get_output, then get structured pass/fail results with rider_get_test_results."""
 
     override fun handle(project: Project, args: RunTestsArgs): Response {
         val runManager = RunManager.getInstance(project)
@@ -133,7 +134,7 @@ class RunTestsTool : AbstractMcpTool<RunTestsArgs>(RunTestsArgs.serializer()) {
 
 class GetTestResultsTool : AbstractMcpTool<SessionIdArgs>(SessionIdArgs.serializer()) {
     override val name = "rider_get_test_results"
-    override val description = "Returns structured test results tree with statuses, durations, error messages and stack traces. Call after test session completes."
+    override val description = "Returns structured test results tree after tests finish: pass/fail status per test, duration, error messages, and stack traces for failures. Call after rider_get_output shows status is not 'running'. Use to analyze which tests passed or failed and why."
 
     override fun handle(project: Project, args: SessionIdArgs): Response {
         val session = SessionManager.get(args.sessionId)
@@ -146,8 +147,7 @@ class GetTestResultsTool : AbstractMcpTool<SessionIdArgs>(SessionIdArgs.serializ
         val handler = session.tag as? ProcessHandler
             ?: return Response(error = "No process handler captured for this session")
 
-        @Suppress("DEPRECATION")
-        val descriptors = ExecutionManager.getInstance(project).getRunningDescriptors { true }
+        val descriptors = RunContentManager.getInstance(project).allDescriptors
         val descriptor = descriptors.find { it.processHandler === handler }
             ?: return Response(error = "Execution descriptor not found (tab may have been closed)")
 
@@ -203,7 +203,7 @@ class GetTestResultsTool : AbstractMcpTool<SessionIdArgs>(SessionIdArgs.serializ
 
 class RerunFailedTestsTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
     override val name = "rider_rerun_failed_tests"
-    override val description = "Reruns previously failed tests via the IDE's Rerun Failed Tests action."
+    override val description = "Reruns only the previously failed tests (retry failures). Uses the IDE's Rerun Failed Tests action. Poll with rider_get_output, then rider_get_test_results for results."
 
     override fun handle(project: Project, args: NoArgs): Response {
         val action = com.intellij.openapi.actionSystem.ActionManager.getInstance()
@@ -232,10 +232,8 @@ class RerunFailedTestsTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
                 }
             })
 
-            val dataContext = com.intellij.openapi.actionSystem.impl.SimpleDataContext.builder()
-                .add(com.intellij.openapi.actionSystem.CommonDataKeys.PROJECT, project)
-                .build()
-            com.intellij.openapi.actionSystem.ex.ActionUtil.invokeAction(action, dataContext, "", null, null)
+            val frame = com.intellij.openapi.wm.WindowManager.getInstance().getFrame(project)
+            com.intellij.openapi.actionSystem.ActionManager.getInstance().tryToExecute(action, null, frame, "", true)
         }
 
         return Response(mcpJson.encodeToString(mapOf("sessionId" to session.id)))

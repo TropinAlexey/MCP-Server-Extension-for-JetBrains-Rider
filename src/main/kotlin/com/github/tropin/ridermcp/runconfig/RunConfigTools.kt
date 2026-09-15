@@ -19,7 +19,7 @@ data class CreateRunConfigArgs(
 
 class CreateRunConfigTool : AbstractMcpTool<CreateRunConfigArgs>(CreateRunConfigArgs.serializer()) {
     override val name = "rider_create_run_config"
-    override val description = "Creates a run configuration. typeId: use stock get_run_configurations to see available types. Optional: env (map), programArgs."
+    override val description = "Creates a new run/debug configuration (launch profile). Specify typeId from get_run_configurations. Optional: env vars (map) and programArgs. Use to set up how the app is launched for running or debugging."
 
     override fun handle(project: Project, args: CreateRunConfigArgs): Response {
         val runManager = RunManager.getInstance(project)
@@ -67,7 +67,7 @@ data class UpdateRunConfigArgs(
 
 class UpdateRunConfigTool : AbstractMcpTool<UpdateRunConfigArgs>(UpdateRunConfigArgs.serializer()) {
     override val name = "rider_update_run_config"
-    override val description = "Updates a run configuration: env vars, program args, or rename."
+    override val description = "Updates an existing run/debug configuration: change environment variables, program arguments, or rename it."
 
     override fun handle(project: Project, args: UpdateRunConfigArgs): Response {
         val runManager = RunManager.getInstance(project)
@@ -107,7 +107,7 @@ data class DeleteRunConfigArgs(val name: String)
 
 class DeleteRunConfigTool : AbstractMcpTool<DeleteRunConfigArgs>(DeleteRunConfigArgs.serializer()) {
     override val name = "rider_delete_run_config"
-    override val description = "Deletes a run configuration by name."
+    override val description = "Deletes a run/debug configuration by name. Use to clean up unused launch profiles."
 
     override fun handle(project: Project, args: DeleteRunConfigArgs): Response {
         val runManager = RunManager.getInstance(project)

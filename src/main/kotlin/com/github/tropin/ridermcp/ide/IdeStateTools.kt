@@ -2,7 +2,7 @@ package com.github.tropin.ridermcp.ide
 
 import com.intellij.notification.Notification
 import com.intellij.notification.NotificationsManager
-import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.toNioPathOrNull
@@ -17,10 +17,10 @@ import com.github.tropin.ridermcp.relTo
 
 class GetIdeStateTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
     override val name = "rider_get_ide_state"
-    override val description = "Returns IDE activity: progress indicators (indexing/building/analyzing), active file, whether IDE is busy."
+    override val description = "Returns IDE activity status: progress indicators (indexing, building, analyzing), currently active/focused file, whether IDE is busy or idle. Use to check if IDE is ready before starting builds, tests, or refactoring."
 
     override fun handle(project: Project, args: NoArgs): Response {
-        val activeFile = ReadAction.compute<String?, Throwable> {
+        val activeFile = ApplicationManager.getApplication().runReadAction<String?> {
             FileEditorManager.getInstance(project).selectedTextEditor?.let { editor ->
                 val projectDir = project.projectDir()
                 editor.virtualFile?.toNioPathOrNull()?.relTo(projectDir) ?: editor.virtualFile?.path
@@ -39,7 +39,7 @@ data class NotificationArgs(val limit: Int = 5)
 
 class GetNotificationsTool : AbstractMcpTool<NotificationArgs>(NotificationArgs.serializer()) {
     override val name = "rider_get_notifications"
-    override val description = "Returns recent IDE notifications. Default limit: 5, pass {\"limit\": N} for more."
+    override val description = "Returns recent IDE notifications (errors, warnings, info messages). Use to check for build errors, plugin updates, indexing issues, or any IDE alerts. Default limit: 5, pass {\"limit\": N} for more."
 
     override fun handle(project: Project, args: NotificationArgs): Response {
         val notifications = NotificationsManager.getNotificationsManager()
@@ -65,7 +65,7 @@ data class ListToolWindowsArgs(val all: Boolean = false)
 
 class ListToolWindowsTool : AbstractMcpTool<ListToolWindowsArgs>(ListToolWindowsArgs.serializer()) {
     override val name = "rider_list_tool_windows"
-    override val description = "Lists tool windows. By default only visible ones; pass {\"all\": true} for all."
+    override val description = "Lists IDE tool windows (panels/panes like Terminal, Build, Debug, NuGet, TODO, Problems, etc.). By default only visible ones; pass {\"all\": true} to discover all available panels. Use to find windowId for rider_get_tool_window_content."
 
     override fun handle(project: Project, args: ListToolWindowsArgs): Response {
         val twm = ToolWindowManager.getInstance(project)
@@ -89,7 +89,7 @@ data class ToolWindowArgs(val windowId: String, val tab: String? = null, val max
 
 class GetToolWindowContentTool : AbstractMcpTool<ToolWindowArgs>(ToolWindowArgs.serializer()) {
     override val name = "rider_get_tool_window_content"
-    override val description = "Returns text content of a tool window. Extracts text from editors, consoles, trees, and lists. Pass tab name to read a specific tab; omit for the selected one. maxLines caps output (default 200)."
+    override val description = "Reads text content from any IDE tool window/panel (Build output, Problems, NuGet, Database, etc.). Extracts text from editors, consoles, trees, and lists. Use to read build logs, error lists, or any panel content. Pass tab name for a specific tab; omit for the active one. maxLines caps output (default 200)."
 
     override fun handle(project: Project, args: ToolWindowArgs): Response {
         val tw = ToolWindowManager.getInstance(project).getToolWindow(args.windowId)

@@ -11,7 +11,7 @@ import com.github.tropin.ridermcp.relTo
 
 class GetEndpointsTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
     override val name = "rider_get_endpoints"
-    override val description = "Returns API endpoints from the Endpoints tool window. Lists HTTP method, URL pattern, and handler location."
+    override val description = "Returns HTTP API endpoints (routes) detected by the IDE: HTTP method (GET/POST/PUT/DELETE), URL pattern, and handler location. Use to discover REST API routes, check available endpoints, or understand the API surface of the project."
 
     override fun handle(project: Project, args: NoArgs): Response {
         val twm = com.intellij.openapi.wm.ToolWindowManager.getInstance(project)

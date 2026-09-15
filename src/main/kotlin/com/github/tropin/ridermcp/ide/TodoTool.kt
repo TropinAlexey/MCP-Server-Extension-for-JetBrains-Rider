@@ -12,7 +12,7 @@ data class GetTodosArgs(val limit: Int = 100)
 
 class GetTodosTool : AbstractMcpTool<GetTodosArgs>(GetTodosArgs.serializer()) {
     override val name = "rider_get_todos"
-    override val description = "Returns TODO/FIXME/HACK items from the TODO tool window. Default limit: 100."
+    override val description = "Returns TODO, FIXME, HACK comments found across the codebase (from the IDE's TODO tool window). Use to find technical debt, pending work items, or known issues in code. Default limit: 100."
 
     override fun handle(project: Project, args: GetTodosArgs): Response {
         val twm = com.intellij.openapi.wm.ToolWindowManager.getInstance(project)

@@ -44,7 +44,7 @@ data class BreakpointArgs(val filePath: String, val line: Int)
 
 class SetBreakpointTool : AbstractMcpTool<BreakpointArgs>(BreakpointArgs.serializer()) {
     override val name = "rider_set_breakpoint"
-    override val description = "Sets a line breakpoint. filePath relative to project root or absolute. line is 1-indexed."
+    override val description = "Sets a line breakpoint in the debugger. filePath relative to project root or absolute. line is 1-indexed. Use before rider_start_debug to set up breakpoints for debugging."
 
     override fun handle(project: Project, args: BreakpointArgs): Response {
         val vf = resolveFile(project, args.filePath)
@@ -65,7 +65,7 @@ class SetBreakpointTool : AbstractMcpTool<BreakpointArgs>(BreakpointArgs.seriali
 
 class RemoveBreakpointTool : AbstractMcpTool<BreakpointArgs>(BreakpointArgs.serializer()) {
     override val name = "rider_remove_breakpoint"
-    override val description = "Removes a line breakpoint at file:line."
+    override val description = "Removes a line breakpoint at file:line. Use to clean up breakpoints after debugging."
 
     override fun handle(project: Project, args: BreakpointArgs): Response {
         val vf = resolveFile(project, args.filePath)
@@ -91,7 +91,7 @@ data class StartDebugArgs(val configName: String? = null)
 
 class StartDebugTool : AbstractMcpTool<StartDebugArgs>(StartDebugArgs.serializer()) {
     override val name = "rider_start_debug"
-    override val description = "Starts debugging a run configuration. Omit configName to use the selected one. Poll with rider_get_output, check state with rider_debug_state."
+    override val description = "Launches a debug session for a run configuration (starts the app with debugger attached). Omit configName to use the selected one. Poll output with rider_get_output, check paused/running state with rider_debug_state."
 
     override fun handle(project: Project, args: StartDebugArgs): Response {
         val runManager = RunManager.getInstance(project)
@@ -137,7 +137,7 @@ class StartDebugTool : AbstractMcpTool<StartDebugArgs>(StartDebugArgs.serializer
 
 class DebugStateTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
     override val name = "rider_debug_state"
-    override val description = "Returns debug session state: status (running/paused/stopped), current position, and stack trace when paused."
+    override val description = "Returns current debug session state: status (running/paused/stopped), current file and line when paused at breakpoint, full stack trace with file locations. Use to check where the debugger stopped or whether it's still running."
 
     override fun handle(project: Project, args: NoArgs): Response {
         val session = XDebuggerManager.getInstance(project).currentSession
@@ -210,7 +210,7 @@ data class EvaluateArgs(val expression: String)
 
 class DebugEvaluateTool : AbstractMcpTool<EvaluateArgs>(EvaluateArgs.serializer()) {
     override val name = "rider_debug_evaluate"
-    override val description = "Evaluates an expression in the current debug frame. Use to inspect variables, call methods, or compute values. Debugger must be paused."
+    override val description = "Evaluates an expression in the current debug frame (watch expression). Use to inspect variable values, call methods, check object state, or compute values while paused at a breakpoint. Debugger must be paused."
 
     override fun handle(project: Project, args: EvaluateArgs): Response {
         val session = XDebuggerManager.getInstance(project).currentSession
@@ -284,7 +284,7 @@ data class StepArgs(val action: String)
 
 class DebugStepTool : AbstractMcpTool<StepArgs>(StepArgs.serializer()) {
     override val name = "rider_debug_step"
-    override val description = "Controls debug execution. action: stepOver, stepInto, stepOut, resume, pause, stop."
+    override val description = "Controls debugger execution flow. Actions: stepOver (next line), stepInto (enter method), stepOut (exit method), resume (continue to next breakpoint), pause (break running program), stop (end debug session). Use to navigate through code during debugging."
 
     override fun handle(project: Project, args: StepArgs): Response {
         val session = XDebuggerManager.getInstance(project).currentSession

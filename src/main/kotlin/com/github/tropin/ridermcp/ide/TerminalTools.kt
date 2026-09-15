@@ -9,7 +9,7 @@ import org.jetbrains.mcpserverplugin.AbstractMcpTool
 
 class ListTerminalsTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
     override val name = "rider_list_terminals"
-    override val description = "Lists open terminal tabs in the IDE with their names."
+    override val description = "Lists open terminal tabs/sessions in the IDE with their names and indices. Use before rider_send_terminal_input to find the correct tab index."
 
     override fun handle(project: Project, args: NoArgs): Response {
         val twm = com.intellij.openapi.wm.ToolWindowManager.getInstance(project)
@@ -35,7 +35,7 @@ data class SendTerminalInputArgs(val text: String, val tab: Int = 0)
 
 class SendTerminalInputTool : AbstractMcpTool<SendTerminalInputArgs>(SendTerminalInputArgs.serializer()) {
     override val name = "rider_send_terminal_input"
-    override val description = "Sends text input to a terminal tab. Use tab index from rider_list_terminals (default 0). Appends newline automatically."
+    override val description = "Sends a command or text to an IDE terminal tab (executes it). Use tab index from rider_list_terminals (default 0). Appends newline automatically. Use to run shell commands, scripts, or interact with running processes in the IDE terminal."
 
     override fun handle(project: Project, args: SendTerminalInputArgs): Response {
         val twm = com.intellij.openapi.wm.ToolWindowManager.getInstance(project)
@@ -50,6 +50,7 @@ class SendTerminalInputTool : AbstractMcpTool<SendTerminalInputArgs>(SendTermina
         val widget = findTerminalWidget(component)
             ?: return Response(error = "Cannot find terminal widget in tab ${args.tab}")
 
+        @Suppress("DEPRECATION")
         widget.terminalStarter?.sendString(args.text + "\n", false)
             ?: return Response(error = "Terminal not ready (no process attached)")
 

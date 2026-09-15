@@ -36,7 +36,7 @@ data class ListPackagesArgs(val project: String? = null, val outdated: Boolean =
 
 class ListPackagesTool : AbstractMcpTool<ListPackagesArgs>(ListPackagesArgs.serializer()) {
     override val name = "rider_list_packages"
-    override val description = "Lists installed NuGet packages. Optional project path (relative .csproj). Pass outdated=true to show available updates."
+    override val description = "Lists installed NuGet packages (dependencies) for the solution or a specific project. Pass outdated=true to check for available package updates. Optional project path (relative .csproj)."
 
     override fun handle(project: Project, args: ListPackagesArgs): Response {
         args.project?.let { validateProjectPath(project, it)?.let { err -> return Response(error = err) } }
@@ -58,7 +58,7 @@ data class ManagePackageArgs(val action: String, val name: String, val project: 
 
 class ManagePackageTool : AbstractMcpTool<ManagePackageArgs>(ManagePackageArgs.serializer()) {
     override val name = "rider_manage_package"
-    override val description = "Adds or removes a NuGet package. action: add or remove. Optional project (.csproj path) and version."
+    override val description = "Adds or removes a NuGet package dependency. action: 'add' (install package) or 'remove' (uninstall). Optional project (.csproj path) and version. Use to manage .NET dependencies."
 
     override fun handle(project: Project, args: ManagePackageArgs): Response {
         if (!args.name.matches(PACKAGE_NAME_RE)) return Response(error = "Invalid package name: ${args.name}")
@@ -91,7 +91,7 @@ class ManagePackageTool : AbstractMcpTool<ManagePackageArgs>(ManagePackageArgs.s
 
 class NuGetRestoreTool : AbstractMcpTool<NoArgs>(NoArgs.serializer()) {
     override val name = "rider_nuget_restore"
-    override val description = "Runs dotnet restore. Returns sessionId — poll with rider_get_output."
+    override val description = "Runs NuGet package restore (dotnet restore) to download missing dependencies. Returns sessionId — poll with rider_get_output until complete. Use after adding packages or when dependencies are missing."
 
     override fun handle(project: Project, args: NoArgs): Response {
         val session = SessionManager.create("nuget")

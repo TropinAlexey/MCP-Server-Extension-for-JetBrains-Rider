@@ -1,4 +1,4 @@
-# Rider MCP Extension — Roadmap
+# MCP Server Extension — Roadmap
 
 ## P0 — Критически нужно
 
@@ -74,10 +74,16 @@
 - [~] ~~Services~~ — docker/servers управляются через CLI
 - [~] ~~Git Log~~ — `git log` через терминал
 
+### dotTrace Profiling
+- [x] `rider_profiling_state` — состояние dotTrace: active session, processes, snapshots, errors
+- [x] `rider_profiling_control` — управление сессией: start/stop/drop/detach/close
+- [~] ~~`rider_start_profiling`~~ — запуск через Run → Profile в Rider (RD-модель не поддерживает программный запуск без UI)
+- [~] ~~Анализ снапшотов~~ — stock `dotTraceGetCallTree/GetTimeline/GetSnapshotInfo` покрывают
+
 ### Plugin/Action Management
-- [x] `rider_manage_plugin` — install/enable/disable
-- [x] `rider_manage_file_watcher` — CRUD file watchers
+- [x] `rider_manage_plugin` — list/enable/disable плагинов по id
 - [x] `rider_invalidate_caches` — Invalidate Caches & Restart
+- [~] ~~`rider_manage_file_watcher`~~ — опциональный плагин, CRUD через CLI/settings файлы
 
 ## Технические задачи
 

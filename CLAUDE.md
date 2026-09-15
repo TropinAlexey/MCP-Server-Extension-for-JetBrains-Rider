@@ -1,4 +1,4 @@
-# Rider MCP Extension Plugin
+# MCP Server Extension Plugin
 
 IntelliJ/Rider плагин, расширяющий JetBrains MCP Server дополнительными инструментами для полного управления IDE.
 
@@ -49,6 +49,30 @@ src/main/kotlin/com/github/tropin/ridermcp/
 ## Naming convention
 
 Все tool names начинаются с `rider_` чтобы не конфликтовать с основным MCP Server plugin.
+
+## Подсказки для LLM-агентов
+
+Карта: задача → tool:
+- Курсор, выделение, открытые файлы, закладки → `rider_get_context`
+- Недавно открытые файлы → `rider_get_recent_files`
+- Готова ли IDE (индексация, занятость) → `rider_get_ide_state`
+- Ошибки и предупреждения IDE → `rider_get_notifications`
+- Содержимое любой панели (Build, Problems, etc.) → `rider_list_tool_windows` + `rider_get_tool_window_content`
+- TODO/FIXME/HACK в коде → `rider_get_todos`
+- API эндпоинты → `rider_get_endpoints`
+- Команды в терминале IDE → `rider_list_terminals` + `rider_send_terminal_input`
+- Сборка → `rider_start_build` + `rider_get_output` + `rider_cancel_build`
+- Запуск тестов → `rider_run_tests` + `rider_get_output` + `rider_get_test_results` + `rider_rerun_failed_tests`
+- NuGet пакеты → `rider_list_packages` / `rider_manage_package` / `rider_nuget_restore`
+- Run/Debug конфигурации → `rider_create_run_config` / `rider_update_run_config` / `rider_delete_run_config`
+- Отладка → `rider_set_breakpoint` / `rider_remove_breakpoint` / `rider_start_debug` / `rider_debug_state` / `rider_debug_evaluate` / `rider_debug_step`
+- Процессы IDE → `rider_list_processes` / `rider_kill_process`
+- Инспекции кода → `rider_list_inspections` / `rider_toggle_inspection`
+- Плагины → `rider_manage_plugin`
+- Кеши IDE → `rider_invalidate_caches`
+- Профилирование (dotTrace) → `rider_profiling_state` / `rider_profiling_control`
+
+Polling pattern: `rider_start_build`, `rider_run_tests`, `rider_nuget_restore`, `rider_start_debug`, `rider_rerun_failed_tests` возвращают `sessionId` — поллить через `rider_get_output` до `status != "running"`.
 
 ## Язык
 
