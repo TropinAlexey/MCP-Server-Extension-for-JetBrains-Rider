@@ -81,8 +81,8 @@
 
 ## Технические задачи
 
-- [ ] Настроить CI (GitHub Actions) для сборки плагина
-- [ ] Опубликовать в JetBrains Marketplace (после стабилизации)
+- [x] Настроить CI (GitHub Actions) для сборки плагина
+- [x] Опубликовать в JetBrains Marketplace
 - [ ] Протестировать совместимость с Rider 2025.1
 - [x] Написать README.md с инструкцией по установке
 - [x] Проверить что `build.gradle.kts` собирает с Rider (RD) а не IntelliJ Community (IC)

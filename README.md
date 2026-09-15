@@ -60,7 +60,7 @@ MCP Client ←MCP→ JS proxy (mcp-jetbrains) ←HTTP→ Rider JVM
                                                     ├── MCP Server Plugin (JetBrains)
                                                     │   └── stock tools (~30)
                                                     └── MCP Server Extension (this plugin)
-                                                        └── additional tools (28)
+                                                        └── additional tools (32)
 ```
 
 All tools from both plugins appear as a unified set in any MCP client. Our tools are prefixed with `rider_` to avoid naming conflicts.
