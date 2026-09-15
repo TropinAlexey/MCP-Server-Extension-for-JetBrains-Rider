@@ -16,7 +16,7 @@
   A JetBrains Rider plugin that extends the stock <a href="https://github.com/JetBrains/mcp-server-plugin">MCP Server Plugin</a> with full IDE observability and control tools.
 </p>
 
-**Current version: 0.9.0** — API compatibility fixes, CI & Marketplace. [What's New →](#whats-new)
+**Current version: 0.10.0** — Terminal, TODO, Endpoints. [What's New →](#whats-new)
 
 ## Why This Exists
 
@@ -47,6 +47,9 @@ This plugin bridges that gap. It gives any MCP-compatible client (Claude Code, C
 | .NET debugger | Partial (xdebug only) | ✅ breakpoints, evaluate, step, stack trace |
 | NuGet management | ❌ | ✅ list, add, remove, restore |
 | IDE settings | ❌ | ✅ inspections list & toggle |
+| Terminal integration | ❌ | ✅ list tabs, send input |
+| TODO items | ❌ | ✅ project-wide TODO/FIXME/HACK |
+| API endpoints | ❌ | ✅ HTTP routes from Endpoints panel |
 
 ## Architecture
 
@@ -70,7 +73,7 @@ MCP tools are synchronous (request → response). For long-running operations li
 2. `rider_get_output("build_1")` → returns new lines since last call
 3. Repeat until `status` is no longer `"running"`
 
-## Available Tools (28)
+## Available Tools (32)
 
 ### Build (3 tools)
 | Tool | Description |
@@ -134,6 +137,18 @@ MCP tools are synchronous (request → response). For long-running operations li
 | `rider_list_inspections` | `keyword?`, `enabledOnly?` | Search inspections by keyword, filter by enabled state |
 | `rider_toggle_inspection` | `shortName`, `enabled` | Enable or disable an inspection |
 
+### Terminal (2 tools)
+| Tool | Args | Description |
+|---|---|---|
+| `rider_list_terminals` | — | List open terminal tabs with names |
+| `rider_send_terminal_input` | `text`, `tab?` | Send text input to a terminal tab (appends newline). Default tab 0 |
+
+### Project Insights (2 tools)
+| Tool | Args | Description |
+|---|---|---|
+| `rider_get_todos` | `limit?` | TODO/FIXME/HACK items from the TODO tool window (default limit 100) |
+| `rider_get_endpoints` | — | API endpoints from the Endpoints tool window (HTTP method, URL, handler) |
+
 ### Programmer Context (2 tools)
 | Tool | Description |
 |---|---|
@@ -185,10 +200,27 @@ gradlew.bat runIde
 See [TODO.md](TODO.md) for the full prioritized roadmap.
 
 **Next up:**
-- P3: Terminal streaming, Tool Windows deep integration
-- ~~CI (GitHub Actions), JetBrains Marketplace publish~~ ✅
+- P3: Plugin/Action management (install/enable/disable plugins, file watchers, invalidate caches)
 
 ## What's New
+
+### v0.10.0
+
+**Terminal Integration**
+- `rider_list_terminals` — list open terminal tabs with names and active state
+- `rider_send_terminal_input` — send text to a terminal tab (auto-appends newline)
+
+**Project Insights**
+- `rider_get_todos` — TODO/FIXME/HACK items from the TODO tool window
+- `rider_get_endpoints` — API endpoints from the Endpoints tool window
+
+### v0.9.0
+
+**API Compatibility**
+- Replaced deprecated `ProcessAdapter` with `ProcessListener`
+- Replaced internal `CoreProgressManager` / `AnActionEvent.createFromAnAction` with public API
+- Renamed to "MCP Server Extension" (JetBrains naming policy)
+- Added GitHub Actions CI and JetBrains Marketplace publishing
 
 ### v0.8.0
 

@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "com.github.tropin"
-version = "0.9.0"
+version = "0.10.0"
 
 repositories {
     mavenCentral()
@@ -30,7 +30,7 @@ intellijPlatform {
             sinceBuild = "243"
         }
         changeNotes = """
-            v0.9.0: Fix deprecated/internal API usage, add CI and Marketplace publishing, rename to MCP Server Extension.
+            v0.10.0: Terminal integration, TODO items, API endpoints.
         """.trimIndent()
     }
 

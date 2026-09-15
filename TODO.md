@@ -63,16 +63,16 @@
 ## P3 — Nice to have
 
 ### Terminal Streaming
-- [ ] Polling session для вывода команд в Rider terminal
-- [ ] Список открытых терминалов
-- [ ] Отправка input в работающий терминал
+- [x] Список открытых терминалов (`rider_list_terminals`)
+- [x] Отправка input в работающий терминал (`rider_send_terminal_input`)
+- [~] ~~Polling session для вывода~~ — stock `execute_terminal_command` покрывает
 
 ### Tool Windows — глубокая интеграция
-- [ ] Database: результаты SQL, структура
-- [ ] TODO: все TODO/FIXME/HACK
-- [ ] Endpoints: API маршруты
-- [ ] Services: Docker, dev servers
-- [ ] Git Log: визуальная история
+- [x] TODO: все TODO/FIXME/HACK (`rider_get_todos`)
+- [x] Endpoints: API маршруты (`rider_get_endpoints`)
+- [~] ~~Database~~ — MCP клиент работает с БД нативно
+- [~] ~~Services~~ — docker/servers управляются через CLI
+- [~] ~~Git Log~~ — `git log` через терминал
 
 ### Plugin/Action Management
 - [ ] `rider_manage_plugin` — install/enable/disable

@@ -54,6 +54,14 @@
         <mcpTool implementation="com.github.tropin.ridermcp.settings.ListInspectionsTool"/>
         <mcpTool implementation="com.github.tropin.ridermcp.settings.ToggleInspectionTool"/>
 
+        <!-- Terminal -->
+        <mcpTool implementation="com.github.tropin.ridermcp.ide.ListTerminalsTool"/>
+        <mcpTool implementation="com.github.tropin.ridermcp.ide.SendTerminalInputTool"/>
+
+        <!-- Project insights -->
+        <mcpTool implementation="com.github.tropin.ridermcp.ide.GetTodosTool"/>
+        <mcpTool implementation="com.github.tropin.ridermcp.ide.GetEndpointsTool"/>
+
         <!-- Programmer context -->
         <mcpTool implementation="com.github.tropin.ridermcp.context.GetContextTool"/>
         <mcpTool implementation="com.github.tropin.ridermcp.context.GetRecentFilesTool"/>
