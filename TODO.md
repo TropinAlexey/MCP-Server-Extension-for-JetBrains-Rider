@@ -75,15 +75,15 @@
 - [~] ~~Git Log~~ — `git log` через терминал
 
 ### Plugin/Action Management
-- [ ] `rider_manage_plugin` — install/enable/disable
-- [ ] `rider_manage_file_watcher` — CRUD file watchers
-- [ ] `rider_invalidate_caches` — Invalidate Caches & Restart
+- [x] `rider_manage_plugin` — install/enable/disable
+- [x] `rider_manage_file_watcher` — CRUD file watchers
+- [x] `rider_invalidate_caches` — Invalidate Caches & Restart
 
 ## Технические задачи
 
 - [x] Настроить CI (GitHub Actions) для сборки плагина
 - [x] Опубликовать в JetBrains Marketplace
-- [ ] Протестировать совместимость с Rider 2025.1
+- [x] Протестировать совместимость с Rider 2025.1
 - [x] Написать README.md с инструкцией по установке
 - [x] Проверить что `build.gradle.kts` собирает с Rider (RD) а не IntelliJ Community (IC)
 - [x] Код-ревью + оптимизация токенов (15→12 tools, compact JSON)
