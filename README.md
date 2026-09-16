@@ -16,7 +16,7 @@
   A JetBrains Rider plugin that extends the stock <a href="https://github.com/JetBrains/mcp-server-plugin">MCP Server Plugin</a> with full IDE observability and control tools.
 </p>
 
-**Current version: 0.12.4** — Forward-compatible with Rider 2025.3+ and future EAP builds. [What's New →](#whats-new)
+**Current version: 0.12.5** — Binary compatible with Rider 2025.3+ and 2026 EAP. [What's New →](#whats-new)
 
 ## Why This Exists
 
@@ -218,6 +218,12 @@ See [TODO.md](TODO.md) for the full prioritized roadmap.
 - Rider 2025.1 compatibility testing
 
 ## What's New
+
+### v0.12.5
+
+**Breaking: Rider 2025.3+ required** (was 2025.2+)
+- Compiled against Rider 2025.3 SDK — fixes 61 binary compatibility errors with 2026.3 EAP
+- `ProjectContextElementKt` → `McpCallInfoKt`, `mcpFail(String)` → `mcpFail(String, JsonObject?)`
 
 ### v0.12.4
 

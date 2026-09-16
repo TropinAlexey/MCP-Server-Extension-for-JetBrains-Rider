@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.github.tropin"
-version = "0.12.4"
+version = "0.12.5"
 
 repositories {
     mavenCentral()
@@ -16,7 +16,7 @@ repositories {
 
 dependencies {
     intellijPlatform {
-        rider("2025.2", useInstaller = false)
+        rider("2025.3", useInstaller = false)
         bundledPlugin("com.intellij.mcpServer")
         testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
     }
@@ -26,10 +26,10 @@ dependencies {
 intellijPlatform {
     pluginConfiguration {
         ideaVersion {
-            sinceBuild = "252"
+            sinceBuild = "253"
         }
         changeNotes = """
-            v0.12.4: Remove upper version limit for forward compatibility, fix MCP Server plugin dependency declaration, replace deprecated terminal API.
+            v0.12.5: Compile against Rider 2025.3 SDK for binary compatibility with 2025.3+ and 2026 EAP. Requires Rider 2025.3+.
         """.trimIndent()
     }
 
