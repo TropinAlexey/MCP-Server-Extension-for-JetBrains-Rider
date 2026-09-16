@@ -68,7 +68,6 @@ src/main/kotlin/com/github/tropin/ridermcp/
 - Отладка → `rider_set_breakpoint` / `rider_remove_breakpoint` / `rider_start_debug` / `rider_debug_state` / `rider_debug_evaluate` / `rider_debug_step`
 - Процессы IDE → `rider_list_processes` / `rider_kill_process`
 - Инспекции кода → `rider_list_inspections` / `rider_toggle_inspection`
-- Плагины → `rider_manage_plugin`
 - Кеши IDE → `rider_invalidate_caches`
 - Профилирование (dotTrace) → `rider_profiling_state` / `rider_profiling_control`
 

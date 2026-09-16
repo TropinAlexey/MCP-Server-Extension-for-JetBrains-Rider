@@ -20,7 +20,7 @@ intellijPlatform {
             sinceBuild = "253"
         }
         changeNotes = """
-            v0.2.0: Canonical Gradle setup (9.5.0, IntelliJ Platform Gradle Plugin 2.16.0), verified compatible with Rider 2026.2. Replaced internal PluginManagerCore APIs with public PluginManager/PluginEnabler. Added V2 module dependency for smRunner.
+            v0.2.1: Remove rider_manage_plugin (all plugin management APIs are internal). Zero internal/experimental API usages.
         """.trimIndent()
     }
 

@@ -16,7 +16,7 @@
   A JetBrains Rider plugin that extends the stock <a href="https://github.com/JetBrains/mcp-server-plugin">MCP Server Plugin</a> with full IDE observability and control tools.
 </p>
 
-**Current version: 0.2.0** — Verified compatible with Rider 2025.3 – 2026.2. [What's New →](#whats-new)
+**Current version: 0.2.1** — Verified compatible with Rider 2025.3 – 2026.2. [What's New →](#whats-new)
 
 ## Why This Exists
 
@@ -50,7 +50,6 @@ This plugin bridges that gap. It gives any MCP-compatible client (Claude Code, C
 | Terminal integration | ❌ | ✅ list tabs, send input |
 | TODO items | ❌ | ✅ project-wide TODO/FIXME/HACK |
 | API endpoints | ❌ | ✅ HTTP routes from Endpoints panel |
-| Plugin management | ❌ | ✅ list, enable, disable plugins |
 | Cache invalidation | ❌ | ✅ invalidate caches & restart |
 | dotTrace control | ❌ | ✅ session state, start/stop/detach profiling |
 
@@ -63,7 +62,7 @@ MCP Client ←MCP→ JS proxy (mcp-jetbrains) ←HTTP→ Rider JVM
                                                     ├── MCP Server Plugin (JetBrains)
                                                     │   └── stock tools (~30)
                                                     └── MCP Server Extension (this plugin)
-                                                        └── additional tools (36)
+                                                        └── additional tools (35)
 ```
 
 All tools from both plugins appear as a unified set in any MCP client. Our tools are prefixed with `rider_` to avoid naming conflicts.
@@ -76,7 +75,7 @@ MCP tools are synchronous (request → response). For long-running operations li
 2. `rider_get_output("build_1")` → returns new lines since last call
 3. Repeat until `status` is no longer `"running"`
 
-## Available Tools (36)
+## Available Tools (35)
 
 ### Build (3 tools)
 | Tool | Description |
@@ -158,10 +157,9 @@ MCP tools are synchronous (request → response). For long-running operations li
 | `rider_profiling_state` | — | dotTrace state: active session info (processes, snapshots, errors), opened snapshots, profiling availability |
 | `rider_profiling_control` | `command`, `pid?` | Control active session. Commands: `start`, `stop` (save snapshot), `drop` (discard data), `detach`, `close`. Optional `pid` for multi-process |
 
-### Admin (2 tools)
+### Admin (1 tool)
 | Tool | Args | Description |
 |---|---|---|
-| `rider_manage_plugin` | `action`, `filter?`, `pluginId?`, `limit?` | List/enable/disable plugins. Actions: `list` (filter by keyword), `enable`/`disable` (by pluginId). Restart required after enable/disable |
 | `rider_invalidate_caches` | — | Invalidate IDE caches and restart. Use for stale highlighting, missing references, broken indexing |
 
 ### Programmer Context (2 tools)
@@ -219,12 +217,16 @@ See [TODO.md](TODO.md) for the full prioritized roadmap.
 
 ## What's New
 
+### v0.2.1
+
+- Removed `rider_manage_plugin` — all plugin management APIs are `@Internal`, no public alternative exists (35 tools now)
+- Plugin Verifier: **Compatible** on Rider 2026.2, zero internal/experimental API usages
+
 ### v0.2.0
 
 **Canonical build setup & Rider 2026 compatibility**
 - Gradle 8.13 → 9.5.0, IntelliJ Platform Gradle Plugin 2.5.0 → 2.16.0
 - Canonical project structure per JetBrains template: `settings.gradle.kts` with `pluginManagement`/`dependencyResolutionManagement`, JDK toolchain, Gradle configuration & build cache
-- Replaced internal `PluginManagerCore` APIs with public `PluginManager`/`PluginEnabler`
 - Added V2 `<dependencies>` block for `intellij.testRunner.plugin` — resolves smRunner class verification on 2026.x
 - Plugin Verifier: **Compatible** on Rider 2026.2, zero compatibility problems, zero deprecated API usages
 
