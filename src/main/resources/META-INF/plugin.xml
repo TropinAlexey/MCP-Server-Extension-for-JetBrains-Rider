@@ -11,6 +11,10 @@
     <depends>com.intellij.modules.rider</depends>
     <depends>com.intellij.mcpServer</depends>
 
+    <dependencies>
+        <plugin id="intellij.testRunner.plugin" />
+    </dependencies>
+
     <extensions defaultExtensionNs="com.intellij">
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.build.BuildToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.process.ProcessToolset"/>

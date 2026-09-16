@@ -8,7 +8,7 @@
   <a href="https://plugins.jetbrains.com/plugin/34264-mcp-server-extension"><img src="https://img.shields.io/jetbrains/plugin/v/34264?style=flat-square&label=marketplace" alt="JetBrains Marketplace"></a>
   <a href="https://github.com/TropinAlexey/rider-mcp/releases/latest"><img src="https://img.shields.io/github/v/release/TropinAlexey/rider-mcp?style=flat-square&label=version" alt="Version"></a>
   <a href="https://github.com/TropinAlexey/rider-mcp/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/TropinAlexey/rider-mcp/build.yml?style=flat-square" alt="Build"></a>
-  <img src="https://img.shields.io/badge/Rider-2025.2%2B-blue?style=flat-square&logo=jetbrains" alt="Rider 2025.2+">
+  <img src="https://img.shields.io/badge/Rider-2025.3%2B-blue?style=flat-square&logo=jetbrains" alt="Rider 2025.3+">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="MIT License"></a>
 </p>
 
@@ -16,7 +16,7 @@
   A JetBrains Rider plugin that extends the stock <a href="https://github.com/JetBrains/mcp-server-plugin">MCP Server Plugin</a> with full IDE observability and control tools.
 </p>
 
-**Current version: 0.12.5** — Binary compatible with Rider 2025.3+ and 2026 EAP. [What's New →](#whats-new)
+**Current version: 0.2.0** — Verified compatible with Rider 2025.3 – 2026.2. [What's New →](#whats-new)
 
 ## Why This Exists
 
@@ -182,7 +182,7 @@ Responses are optimized to minimize token consumption by the MCP client:
 ## Installation
 
 ### Prerequisites
-- JetBrains Rider 2024.3+
+- JetBrains Rider 2025.3+
 - [MCP Server Plugin](https://plugins.jetbrains.com/plugin/26071-mcp-server) installed and enabled
 
 ### From Source
@@ -219,34 +219,14 @@ See [TODO.md](TODO.md) for the full prioritized roadmap.
 
 ## What's New
 
-### v0.12.5
+### v0.2.0
 
-**Breaking: Rider 2025.3+ required** (was 2025.2+)
-- Compiled against Rider 2025.3 SDK — fixes 61 binary compatibility errors with 2026.3 EAP
-- `ProjectContextElementKt` → `McpCallInfoKt`, `mcpFail(String)` → `mcpFail(String, JsonObject?)`
-
-### v0.12.4
-
-- Removed upper IDE version limit — compatible with Rider 2025.3, 2026, and future EAP builds
-- Fixed MCP Server plugin dependency declaration (`<depends>`) — resolves Marketplace verification errors
-- Replaced deprecated `JediTermWidget.terminalStarter` with `TtyConnector.write()`
-
-### v0.12.3
-
-**Breaking: Rider 2025.2+ required**
-- Migrated all 36 MCP tools from deprecated `AbstractMcpTool<Args>` API to new built-in `McpToolset` suspend function API
-- Tools grouped into 14 toolsets with `@McpTool`/`@McpDescription` annotations
-- Removed `kotlinx-serialization` plugin dependency (no more `@Serializable` arg classes)
-- Upgraded Kotlin 2.0.21 → 2.2.0, Gradle IntelliJ Platform Plugin 2.3.0 → 2.5.0
-- MCP Server is now a bundled IDE dependency (no longer a separate plugin install)
-
-### v0.12.0
-
-**Compatibility**
-- Replaced 14 internal API usages: `ExecutionManager.getRunningDescriptors` → `RunContentManager.allDescriptors`, `IdeaPluginDescriptorImpl.isEnabled` → `PluginManagerCore.isDisabled`
-- Removed 7 deprecated API calls: `ActionUtil.invokeAction`, `ReadAction.compute/run<Throwable>`, `AnActionEvent.createFromDataContext`
-- Renamed distribution artifact from `rider-mcp` to `mcp-server-extension`
-- Upgraded Kotlin 1.9.24 → 2.0.21, kotlinx-serialization 1.6.3 → 1.7.3 (eliminated 22 serialization deprecation warnings)
+**Canonical build setup & Rider 2026 compatibility**
+- Gradle 8.13 → 9.5.0, IntelliJ Platform Gradle Plugin 2.5.0 → 2.16.0
+- Canonical project structure per JetBrains template: `settings.gradle.kts` with `pluginManagement`/`dependencyResolutionManagement`, JDK toolchain, Gradle configuration & build cache
+- Replaced internal `PluginManagerCore` APIs with public `PluginManager`/`PluginEnabler`
+- Added V2 `<dependencies>` block for `intellij.testRunner.plugin` — resolves smRunner class verification on 2026.x
+- Plugin Verifier: **Compatible** on Rider 2026.2, zero compatibility problems, zero deprecated API usages
 
 ### v0.11.0
 

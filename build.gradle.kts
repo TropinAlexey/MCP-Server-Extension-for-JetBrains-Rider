@@ -1,22 +1,13 @@
 plugins {
-    id("java")
-    kotlin("jvm") version "2.2.0"
-    id("org.jetbrains.intellij.platform") version "2.5.0"
-}
-
-group = "com.github.tropin"
-version = "0.12.5"
-
-repositories {
-    mavenCentral()
-    intellijPlatform {
-        defaultRepositories()
-    }
+    id("org.jetbrains.kotlin.jvm")
+    id("org.jetbrains.intellij.platform")
 }
 
 dependencies {
     intellijPlatform {
-        rider("2025.3", useInstaller = false)
+        rider("2025.3") {
+            useInstaller = false
+        }
         bundledPlugin("com.intellij.mcpServer")
         testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
     }
@@ -29,7 +20,7 @@ intellijPlatform {
             sinceBuild = "253"
         }
         changeNotes = """
-            v0.12.5: Compile against Rider 2025.3 SDK for binary compatibility with 2025.3+ and 2026 EAP. Requires Rider 2025.3+.
+            v0.2.0: Canonical Gradle setup (9.5.0, IntelliJ Platform Gradle Plugin 2.16.0), verified compatible with Rider 2026.2. Replaced internal PluginManagerCore APIs with public PluginManager/PluginEnabler. Added V2 module dependency for smRunner.
         """.trimIndent()
     }
 
@@ -38,21 +29,16 @@ intellijPlatform {
     }
 
     pluginVerification {
+        failureLevel = listOf(
+            org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
+            org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.OVERRIDE_ONLY_API_USAGES,
+        )
         ides {
-            recommended()
+            local("/Applications/Rider.app/Contents")
         }
     }
 }
 
-tasks {
-    withType<JavaCompile> {
-        sourceCompatibility = "21"
-        targetCompatibility = "21"
-    }
-}
-
 kotlin {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
-    }
+    jvmToolchain(21)
 }

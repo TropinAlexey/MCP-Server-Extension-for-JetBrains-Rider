@@ -2,7 +2,8 @@ package com.github.tropin.ridermcp.admin
 
 import com.intellij.ide.InvalidateCacheService
 import com.intellij.ide.plugins.IdeaPluginDescriptor
-import com.intellij.ide.plugins.PluginManagerCore
+import com.intellij.ide.plugins.PluginEnabler
+import com.intellij.ide.plugins.PluginManager
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
@@ -31,7 +32,7 @@ class AdminToolset : McpToolset {
     }
 
     private fun allPlugins(): List<IdeaPluginDescriptor> =
-        PluginManagerCore.plugins.toList()
+        PluginManager.getPlugins().toList()
 
     private fun listPlugins(filter: String?, limit: Int): String {
         var plugins: List<IdeaPluginDescriptor> = allPlugins()
@@ -52,7 +53,7 @@ class AdminToolset : McpToolset {
                         put("id", p.pluginId.idString)
                         put("name", p.name ?: p.pluginId.idString)
                         p.version?.let { v -> put("version", v) }
-                        put("enabled", !PluginManagerCore.isDisabled(p.pluginId))
+                        put("enabled", !PluginEnabler.getInstance().isDisabled(p.pluginId))
                         if (p.isBundled) put("bundled", true)
                     }
                 }
@@ -61,7 +62,6 @@ class AdminToolset : McpToolset {
         }.toString()
     }
 
-    @Suppress("UnstableApiUsage")
     private fun togglePlugin(pluginId: String?, enable: Boolean): String {
         if (pluginId == null) mcpFail("pluginId is required for enable/disable")
 
@@ -69,12 +69,13 @@ class AdminToolset : McpToolset {
         val descriptor = allPlugins().find { p -> p.pluginId == pid }
             ?: mcpFail("Plugin '$pluginId' not found. Use action 'list' to see available plugins.")
 
-        val isCurrentlyEnabled = !PluginManagerCore.isDisabled(pid)
+        val enabler = PluginEnabler.getInstance()
+        val isCurrentlyEnabled = !enabler.isDisabled(pid)
         if (isCurrentlyEnabled == enable) {
             return "Plugin '$pluginId' is already ${if (enable) "enabled" else "disabled"}"
         }
 
-        if (enable) PluginManagerCore.enablePlugin(pid) else PluginManagerCore.disablePlugin(pid)
+        if (enable) enabler.enable(listOf(descriptor)) else enabler.disable(listOf(descriptor))
 
         return buildJsonObject {
             put("plugin", pluginId)
