@@ -50,9 +50,9 @@ class TerminalToolset : McpToolset {
         val widget = findTerminalWidget(component)
             ?: mcpFail("Cannot find terminal widget in tab $tab")
 
-        @Suppress("DEPRECATION")
-        widget.terminalStarter?.sendString(text + "\n", false)
+        val connector = widget.ttyConnector
             ?: mcpFail("Terminal not ready (no process attached)")
+        connector.write(text + "\n")
 
         return "ok"
     }

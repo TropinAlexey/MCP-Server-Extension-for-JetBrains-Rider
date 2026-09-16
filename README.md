@@ -16,7 +16,7 @@
   A JetBrains Rider plugin that extends the stock <a href="https://github.com/JetBrains/mcp-server-plugin">MCP Server Plugin</a> with full IDE observability and control tools.
 </p>
 
-**Current version: 0.12.3** — Migrated to built-in McpToolset API, Rider 2025.2+ required. [What's New →](#whats-new)
+**Current version: 0.12.4** — Forward-compatible with Rider 2025.3+ and future EAP builds. [What's New →](#whats-new)
 
 ## Why This Exists
 
@@ -218,6 +218,12 @@ See [TODO.md](TODO.md) for the full prioritized roadmap.
 - Rider 2025.1 compatibility testing
 
 ## What's New
+
+### v0.12.4
+
+- Removed upper IDE version limit — compatible with Rider 2025.3, 2026, and future EAP builds
+- Fixed MCP Server plugin dependency declaration (`<depends>`) — resolves Marketplace verification errors
+- Replaced deprecated `JediTermWidget.terminalStarter` with `TtyConnector.write()`
 
 ### v0.12.3
 

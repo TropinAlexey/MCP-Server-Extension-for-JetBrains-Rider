@@ -9,6 +9,7 @@
     ]]></description>
 
     <depends>com.intellij.modules.rider</depends>
+    <depends>com.intellij.mcpServer</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.build.BuildToolset"/>

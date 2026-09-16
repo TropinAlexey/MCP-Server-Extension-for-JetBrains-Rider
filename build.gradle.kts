@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.github.tropin"
-version = "0.12.3"
+version = "0.12.4"
 
 repositories {
     mavenCentral()
@@ -27,10 +27,9 @@ intellijPlatform {
     pluginConfiguration {
         ideaVersion {
             sinceBuild = "252"
-            untilBuild = "253.*"
         }
         changeNotes = """
-            v0.12.3: Migrated all 36 MCP tools from deprecated AbstractMcpTool API to new built-in McpToolset suspend function API. Requires Rider 2025.2+.
+            v0.12.4: Remove upper version limit for forward compatibility, fix MCP Server plugin dependency declaration, replace deprecated terminal API.
         """.trimIndent()
     }
 
