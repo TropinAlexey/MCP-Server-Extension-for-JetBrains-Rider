@@ -81,7 +81,7 @@
 - [~] ~~Анализ снапшотов~~ — stock `dotTraceGetCallTree/GetTimeline/GetSnapshotInfo` покрывают
 
 ### Plugin/Action Management
-- [x] `rider_manage_plugin` — list/enable/disable плагинов по id
+- [~] ~~`rider_manage_plugin`~~ — удалён в v0.2.1 (все Plugin Management API `@Internal`)
 - [x] `rider_invalidate_caches` — Invalidate Caches & Restart
 - [~] ~~`rider_manage_file_watcher`~~ — опциональный плагин, CRUD через CLI/settings файлы
 

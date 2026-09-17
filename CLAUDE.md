@@ -7,7 +7,7 @@ IntelliJ/Rider плагин, расширяющий JetBrains MCP Server доп�
 - **Тип**: IntelliJ Platform Plugin (Kotlin)
 - **Зависимость**: `com.intellij.mcpServer` — основной JetBrains MCP Server plugin
 - **Extension point**: `com.intellij.mcpServer.mcpTool` — регистрация новых MCP tools
-- **Target IDE**: JetBrains Rider 2024.3+
+- **Target IDE**: JetBrains Rider 2026.1+
 - **JDK**: 21
 
 ## Паттерн для новых tools

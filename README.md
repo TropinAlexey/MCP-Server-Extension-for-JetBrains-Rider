@@ -2,13 +2,13 @@
   <img src="icon.png" alt="MCP Server Extension" width="80">
 </p>
 
-<h1 align="center">MCP Server Extension</h1>
+<h1 align="center">MCP Server Extension for JetBrains Rider</h1>
 
 <p align="center">
   <a href="https://plugins.jetbrains.com/plugin/34264-mcp-server-extension"><img src="https://img.shields.io/jetbrains/plugin/v/34264?style=flat-square&label=marketplace" alt="JetBrains Marketplace"></a>
   <a href="https://github.com/TropinAlexey/rider-mcp/releases/latest"><img src="https://img.shields.io/github/v/release/TropinAlexey/rider-mcp?style=flat-square&label=version" alt="Version"></a>
   <a href="https://github.com/TropinAlexey/rider-mcp/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/TropinAlexey/rider-mcp/build.yml?style=flat-square" alt="Build"></a>
-  <img src="https://img.shields.io/badge/Rider-2025.3%2B-blue?style=flat-square&logo=jetbrains" alt="Rider 2025.3+">
+  <img src="https://img.shields.io/badge/Rider-2026.1%2B-blue?style=flat-square&logo=jetbrains" alt="Rider 2026.1+">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="MIT License"></a>
 </p>
 
@@ -16,7 +16,7 @@
   A JetBrains Rider plugin that extends the stock <a href="https://github.com/JetBrains/mcp-server-plugin">MCP Server Plugin</a> with full IDE observability and control tools.
 </p>
 
-**Current version: 0.2.1** — Verified compatible with Rider 2025.3 – 2026.2. [What's New →](#whats-new)
+**Current version: 1.0.0** — Rider 2026.1+, 35 tools. [What's New →](#whats-new)
 
 ## Why This Exists
 
@@ -180,7 +180,7 @@ Responses are optimized to minimize token consumption by the MCP client:
 ## Installation
 
 ### Prerequisites
-- JetBrains Rider 2025.3+
+- JetBrains Rider 2026.1+
 - [MCP Server Plugin](https://plugins.jetbrains.com/plugin/26071-mcp-server) installed and enabled
 
 ### From Source
@@ -208,14 +208,16 @@ Then install: **Rider → Settings → Plugins → ⚙️ → Install Plugin fro
 gradlew.bat runIde
 ```
 
-## Roadmap
-
-See [TODO.md](TODO.md) for the full prioritized roadmap.
-
-**Next up:**
-- Rider 2025.1 compatibility testing
-
 ## What's New
+
+### v1.0.0
+
+- New logo
+- 35 tools, Rider 2026.1+
+
+### v0.2.2
+
+- Minimum version raised to Rider 2026.1+ — `intellij.testRunner.plugin` requires 2026+ (not available in 2025.3)
 
 ### v0.2.1
 
@@ -230,116 +232,43 @@ See [TODO.md](TODO.md) for the full prioritized roadmap.
 - Added V2 `<dependencies>` block for `intellij.testRunner.plugin` — resolves smRunner class verification on 2026.x
 - Plugin Verifier: **Compatible** on Rider 2026.2, zero compatibility problems, zero deprecated API usages
 
-### v0.11.0
+<details>
+<summary>Older releases</summary>
 
-**dotTrace Profiling**
-- `rider_profiling_state` — full dotTrace session state (processes, snapshots, errors, opened snapshots)
-- `rider_profiling_control` — control active session: start/stop/drop/detach/close (complements stock snapshot analysis tools)
+### v0.11.0 — dotTrace Profiling
+- `rider_profiling_state` / `rider_profiling_control` — dotTrace session management
 
-**Plugin Management**
-- `rider_manage_plugin` — list/enable/disable plugins by id (restart required for enable/disable)
-- `rider_invalidate_caches` — invalidate IDE caches and restart
+### v0.10.0 — Terminal & Insights
+- `rider_list_terminals` / `rider_send_terminal_input`, `rider_get_todos`, `rider_get_endpoints`
 
-### v0.10.0
+### v0.9.0 — API Compatibility
+- Deprecated API cleanup, renamed to "MCP Server Extension", CI + Marketplace publishing
 
-**Terminal Integration**
-- `rider_list_terminals` — list open terminal tabs with names and active state
-- `rider_send_terminal_input` — send text to a terminal tab (auto-appends newline)
+### v0.8.0 — NuGet & Inspections
+- `rider_list_packages` / `rider_manage_package` / `rider_nuget_restore`, `rider_list_inspections` / `rider_toggle_inspection`
 
-**Project Insights**
-- `rider_get_todos` — TODO/FIXME/HACK items from the TODO tool window
-- `rider_get_endpoints` — API endpoints from the Endpoints tool window
+### v0.7.0 — .NET Debugger
+- `rider_set_breakpoint` / `rider_remove_breakpoint` / `rider_start_debug` / `rider_debug_state` / `rider_debug_evaluate` / `rider_debug_step`
 
-### v0.9.0
+### v0.6.0 — Test Filtering
+- `rider_run_tests` with `className`/`methodName`/`filter`, process type filtering
 
-**API Compatibility**
-- Replaced deprecated `ProcessAdapter` with `ProcessListener`
-- Replaced internal `CoreProgressManager` / `AnActionEvent.createFromAnAction` with public API
-- Renamed to "MCP Server Extension" (JetBrains naming policy)
-- Added GitHub Actions CI and JetBrains Marketplace publishing
+### v0.5.0 — Test Results Tree
+- `rider_get_test_results` — structured tree with stack traces
 
-### v0.8.0
+### v0.4.0 — Run Config CRUD
+- `rider_create_run_config` / `rider_update_run_config` / `rider_delete_run_config`
 
-**NuGet Management**
-- `rider_list_packages` — list installed packages with versions, `outdated` flag for available updates
-- `rider_manage_package` — add or remove NuGet packages via dotnet CLI
-- `rider_nuget_restore` — async restore with polling via `rider_get_output`
+### v0.3.0 — Tool Window Content
+- Deep text extraction from any tool window
 
-**Inspection Management**
-- `rider_list_inspections` — search inspections by keyword, filter by enabled state
-- `rider_toggle_inspection` — enable/disable inspections by shortName
-
-### v0.7.0
-
-**.NET Debugger**
-- `rider_set_breakpoint` / `rider_remove_breakpoint` — line breakpoints by file:line
-- `rider_start_debug` — launch debug session with polling via `rider_get_output`
-- `rider_debug_state` — session status (running/paused/stopped), current position, stack trace with frame names
-- `rider_debug_evaluate` — evaluate expressions in the current debug frame
-- `rider_debug_step` — stepOver, stepInto, stepOut, resume, pause, stop
-
-### v0.6.0
-
-**Test Filtering**
-- `rider_run_tests` now accepts `className`, `methodName`, or raw `filter` expression
-- Filtered runs use `dotnet test --filter` directly for reliable .NET test filtering
-- Without filter — still runs via Rider UI configuration as before
-
-**Process Type Filtering**
-- `rider_list_processes` now accepts optional `type` (build/test/run) and infers type from display name and command line
-
-**Bug Fixes**
-- Rename uniqueness check in `rider_update_run_config` — prevents renaming to an existing config name
-
-### v0.5.0
-
-**Test Results Tree**
-- `rider_get_test_results` — structured test tree with statuses (passed/failed/ignored), durations, error messages, and full stack traces
-- Extracted from IntelliJ's `SMTestProxy` tree after test execution completes
-
-**Process Observability**
-- `rider_list_processes` now includes PID and command line for each process
-
-### v0.4.0
-
-**Run/Debug Configuration CRUD**
-- `rider_create_run_config` — create with typeId, env vars, program args
-- `rider_update_run_config` — modify env, args, or rename
-- `rider_delete_run_config` — delete by name
-- Uses `CommonProgramRunConfigurationParameters` for type-safe parameter access
-
-### v0.3.0
-
-**Deep Tool Window Content Extraction**
-- `rider_get_tool_window_content` now extracts real text from any tool window — editors, consoles, trees, lists
-- New params: `tab` (specific tab name), `maxLines` (default 200)
-- Read Build Output, Problems, Event Log, Run/Debug output directly without polling
-
-### v0.2.0
-
-**Test Runner**
-- `rider_run_tests` — auto-detects test config or accepts `configName`; streams output via polling
-- `rider_rerun_failed_tests` — reruns previously failed tests via IDE action
-
-**Token Optimizations**
-- Merged 5 context tools → `rider_get_context` (single round-trip for file + cursor + selection + editors + bookmarks)
-- Unified polling: `rider_get_build_output` → `rider_get_output` (works for build, test, any future session)
-- Compact JSON responses — omit false/empty/null fields
-- `rider_get_notifications`: default limit 5, configurable via `limit` param
-- `rider_list_tool_windows`: visible-only by default, `all` param for full list
-- `rider_list_processes`: only running processes, response is array of names
-- Removed tool windows from `rider_get_ide_state` (use `rider_list_tool_windows`)
-
-**Bug Fixes**
-- Build polling now works: `ProjectTaskManager` with `onSuccess`/`onError` callbacks instead of fire-and-forget action
-- Thread safety: `@Volatile` on `OutputSession.status`/`exitCode`/`progress`
-- `CancelBuildTool`: proper `SimpleDataContext` with project binding
-- Session cleanup: timestamp-based TTL (10min) instead of remove-all
-- `canKill` field is now boolean, not string
+### v0.2.0 — Test Runner & Token Optimization
+- `rider_run_tests` / `rider_rerun_failed_tests`, merged 5 context tools → 1, compact JSON
 
 ### v0.1.0
+- Initial release — 15 tools
 
-Initial release — 15 tools: build observability, process management, IDE state, programmer context.
+</details>
 
 ## License
 

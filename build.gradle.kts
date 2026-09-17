@@ -5,7 +5,7 @@ plugins {
 
 dependencies {
     intellijPlatform {
-        rider("2025.3") {
+        rider("2026.1") {
             useInstaller = false
         }
         bundledPlugin("com.intellij.mcpServer")
@@ -17,10 +17,10 @@ dependencies {
 intellijPlatform {
     pluginConfiguration {
         ideaVersion {
-            sinceBuild = "253"
+            sinceBuild = "261"
         }
         changeNotes = """
-            v0.2.1: Remove rider_manage_plugin (all plugin management APIs are internal). Zero internal/experimental API usages.
+            v1.0.0: New logo, 35 tools, Rider 2026.1+.
         """.trimIndent()
     }
 
