@@ -41,17 +41,17 @@ This plugin bridges that gap. It gives any MCP-compatible client (Claude Code, C
 | IDE state/progress | ❌ | ✅ indexing, building, publishing status |
 | Tool windows | ❌ | ✅ read any tool window content |
 | Notifications | ❌ | ✅ balloon messages, event log |
-| Programmer context | ❌ | ✅ open editors, cursor, selection |
-| Test runner | ❌ | ✅ run, poll, results tree with stack traces, rerun failed |
-| Run config CRUD | ❌ | ✅ create, update, delete |
+| Programmer context | Partial (open files, selection) | ✅ all-in-one: cursor, selection, surrounding code, open editors, bookmarks, unsaved files |
+| Test runner | Partial (run via configs) | ✅ run, poll, results tree with stack traces, rerun failed |
+| Run config CRUD | Partial (list & execute) | ✅ create, update, delete |
 | .NET debugger | Partial (xdebug only) | ✅ breakpoints, evaluate, step, stack trace |
 | NuGet management | ❌ | ✅ list, add, remove, restore |
 | IDE settings | ❌ | ✅ inspections list & toggle |
-| Terminal integration | ❌ | ✅ list tabs, send input |
+| Terminal integration | Partial (execute commands) | ✅ list tabs, send input to specific terminals |
 | TODO items | ❌ | ✅ project-wide TODO/FIXME/HACK |
 | API endpoints | ❌ | ✅ HTTP routes from Endpoints panel |
 | Cache invalidation | ❌ | ✅ invalidate caches & restart |
-| dotTrace control | ❌ | ✅ session state, start/stop/detach profiling |
+| dotTrace control | Partial (report analysis) | ✅ live session control: start/stop/detach profiling |
 
 ## Architecture
 
@@ -209,6 +209,12 @@ gradlew.bat runIde
 ```
 
 ## What's New
+
+### v1.0.2
+
+- Fix: marketplace "What's New" now reads from `CHANGELOG.html` instead of hardcoded string
+- CI: upgrade `setup-java` v4 → v5 (Node.js 20 deprecation)
+- Docs: correct stock MCP plugin capabilities in comparison table
 
 ### v1.0.1
 

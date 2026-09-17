@@ -19,9 +19,7 @@ intellijPlatform {
         ideaVersion {
             sinceBuild = "261"
         }
-        changeNotes = """
-            v1.0.0: New logo, 35 tools, Rider 2026.1+.
-        """.trimIndent()
+        changeNotes = file("CHANGELOG.html").readText()
     }
 
     publishing {
