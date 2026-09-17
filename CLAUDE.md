@@ -57,7 +57,7 @@ Task → tool map:
 - Recently opened files → `rider_get_recent_files`
 - IDE readiness (indexing, busy) → `rider_get_ide_state`
 - IDE errors and warnings → `rider_get_notifications`
-- Any panel content (Build, Problems, etc.) → `rider_list_tool_windows` + `rider_get_tool_window_content` (supports `truncateMode`: START/END/MIDDLE/NONE)
+- Any panel content (Build, Problems, etc.) → `rider_list_tool_windows` + `rider_get_tool_window_content` (see **Pagination** below)
 - TODO/FIXME/HACK in code → `rider_get_todos`
 - API endpoints → `rider_get_endpoints`
 - IDE terminal commands → `rider_list_terminals` + `rider_send_terminal_input`
@@ -73,12 +73,51 @@ Task → tool map:
 
 Polling pattern: `rider_start_build`, `rider_run_tests`, `rider_nuget_restore`, `rider_start_debug`, `rider_rerun_failed_tests` return `sessionId` — poll via `rider_get_output` until `status != "running"`.
 
-truncateMode (for `rider_get_tool_window_content` and `rider_get_output`):
-- **START** — trim from the beginning, return last N lines. Use for Debug Output (hundreds of "Loaded Assembly..." lines at the top, exceptions at the bottom), Build Output (compilation errors at the end), any console where useful info accumulates at the bottom.
-- **END** — trim from the end, return first N lines (default). Best for Problems, TODO, trees — structured lists where the beginning matters most.
-- **MIDDLE** — keep head + tail, cut the middle. Useful when you need context from the start (headers, config) and the end (results, errors).
-- **NONE** — no truncation, return everything. Use with caution — output can be very large.
-- Recommendation: for Debug and Build windows, always pass `truncateMode: "START"` — errors and exceptions are almost always at the end.
+### Pagination & filtering (`rider_get_tool_window_content` and `rider_get_output`)
+
+Both tools share the same pagination parameters. Response always includes `totalLines` and `returnedRange` so you know exactly what you got and how much more is available.
+
+**Parameters:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `maxLines` | int | Max lines to return (default 200 for tool windows, 0=unlimited for output) |
+| `fromEnd` | bool | `true` → return **last** `maxLines` lines. **Use this by default** for Debug/Build logs — errors are at the end |
+| `offset` | int? | Start from this line (0-based). Mutually exclusive with `fromEnd`. For page-by-page navigation |
+| `pattern` | string? | Regex filter (case-insensitive). Only matching lines returned, prefixed with `[lineNo]`. E.g. `"error\|exception\|warn"` |
+
+`rider_get_output` also has `allLines` (bool) — `true` reads ALL accumulated session lines, not just new since last poll.
+
+**Response fields:**
+- `totalLines` — total lines in the window/session (always present)
+- `returnedRange` — `{ from, to }` — which lines were returned (0-based)
+- `truncated` — `true` when more lines exist beyond what was returned
+- `matchedLines` — number of lines matching `pattern` (only when `pattern` used)
+
+**Recipes:**
+
+```jsonc
+// Last 20 lines of debug output (90% of use cases)
+{ "windowId": "Debug", "maxLines": 20, "fromEnd": true }
+
+// Grep errors/exceptions from entire log
+{ "windowId": "Debug", "pattern": "error|exception|warn", "maxLines": 50 }
+
+// Page through output: lines 200-250
+{ "windowId": "Debug", "offset": 200, "maxLines": 50 }
+
+// After a build: get all accumulated output, last 30 lines
+{ "sessionId": "build_1", "maxLines": 30, "fromEnd": true, "allLines": true }
+
+// Search for a specific class in test output
+{ "sessionId": "test_1", "pattern": "MyService", "allLines": true }
+```
+
+**Best practices:**
+- Always start with `fromEnd: true` for Debug/Build/Console output — useful info is at the bottom
+- Use `pattern` to search for errors without downloading the entire log
+- Check `totalLines` in the response — if the window has 10K lines, don't request all of them
+- For Problems/TODO/tree windows — default (first N lines) is usually fine, no `fromEnd` needed
 
 ## Language
 

@@ -210,6 +210,13 @@ gradlew.bat runIde
 
 ## What's New
 
+### v1.0.4
+
+- Feature: `rider_get_tool_window_content` — pagination, tail reading (`fromEnd`), regex filtering (`pattern`), and offset-based navigation (`offset`)
+- Feature: `rider_get_output` — same pagination params plus `allLines` to read entire session history
+- Response always includes `totalLines` and `returnedRange` metadata
+- Replaced `truncateMode` with more flexible `fromEnd`/`offset`/`pattern` params
+
 ### v1.0.3
 
 - Feature: `rider_get_tool_window_content` now supports `truncateMode` parameter (START/END/MIDDLE/NONE) — use START to get the last N lines (best for Debug/Build logs where errors are at the end)

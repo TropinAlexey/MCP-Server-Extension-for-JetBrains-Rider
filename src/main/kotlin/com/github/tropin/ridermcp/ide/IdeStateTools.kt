@@ -12,11 +12,9 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.vfs.toNioPathOrNull
 import com.intellij.openapi.wm.ToolWindowManager
 import kotlinx.serialization.json.*
-import com.github.tropin.ridermcp.TruncateMode
-import com.github.tropin.ridermcp.parseTruncateMode
+import com.github.tropin.ridermcp.paginateLines
 import com.github.tropin.ridermcp.projectDir
 import com.github.tropin.ridermcp.relTo
-import com.github.tropin.ridermcp.truncateLines
 import kotlin.coroutines.coroutineContext
 
 class IdeStateToolset : McpToolset {
@@ -80,12 +78,14 @@ class IdeStateToolset : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Reads text content from any IDE tool window/panel (Build output, Problems, NuGet, Database, etc.). Extracts text from editors, consoles, trees, and lists. Use to read build logs, error lists, or any panel content. Pass tab name for a specific tab; omit for the active one. maxLines caps output (default 200). truncateMode controls which part to keep: START trims beginning (returns last N lines — best for Debug/Build logs where errors are at the end), END trims end (returns first N lines, default), MIDDLE keeps head+tail, NONE returns everything.")
+    @McpDescription("Reads text content from any IDE tool window/panel (Build output, Problems, Debug, NuGet, Database, etc.). Supports pagination, tail reading, and regex filtering. Response always includes totalLines so you know the full size. Use fromEnd=true for last N lines (errors, recent logs). Use pattern for regex grep (case-insensitive; matched lines prefixed with [lineNo]). Use offset for random access to a specific range.")
     suspend fun rider_get_tool_window_content(
         @McpDescription("Tool window ID") windowId: String,
         @McpDescription("Tab name (omit for active)") tab: String? = null,
-        @McpDescription("Max output lines") maxLines: Int = 200,
-        @McpDescription("Which part to truncate: START (keep tail), END (keep head, default), MIDDLE (keep head+tail), NONE") truncateMode: String = "END"
+        @McpDescription("Max output lines (default 200, 0 = unlimited)") maxLines: Int = 200,
+        @McpDescription("Start from this line (0-based). Mutually exclusive with fromEnd") offset: Int? = null,
+        @McpDescription("Return last maxLines lines instead of first (default false). Best for Debug/Build logs where errors are at the end") fromEnd: Boolean = false,
+        @McpDescription("Regex filter — return only matching lines (case-insensitive). E.g. 'error|exception|warn'") pattern: String? = null
     ): String {
         val project = coroutineContext.project
         val tw = ToolWindowManager.getInstance(project).getToolWindow(windowId)
@@ -99,22 +99,26 @@ class IdeStateToolset : McpToolset {
             cm.selectedContent ?: cm.contents.firstOrNull()
         } ?: mcpFail("Tool window '$windowId' has no content")
 
-        val mode = parseTruncateMode(truncateMode, TruncateMode.END)
         val allLines = mutableListOf<String>()
         val component = content.component
         extractText(component, allLines, Int.MAX_VALUE)
 
-        val (lines, truncated) = truncateLines(allLines, maxLines, mode)
+        val result = paginateLines(allLines, maxLines, offset, fromEnd, pattern)
 
         return buildJsonObject {
             put("windowId", windowId)
             put("tab", content.displayName ?: "")
-            if (lines.isEmpty()) {
+            put("totalLines", result.totalLines)
+            if (result.lines.isEmpty()) {
                 put("text", "(empty)")
             } else {
-                put("text", lines.joinToString("\n"))
-                if (truncated) put("truncated", true)
-                if (truncated) put("totalLines", allLines.size)
+                putJsonObject("returnedRange") {
+                    put("from", result.returnedFrom)
+                    put("to", result.returnedTo)
+                }
+                put("text", result.lines.joinToString("\n"))
+                if (result.truncated) put("truncated", true)
+                result.matchedLines?.let { put("matchedLines", it) }
             }
             val tabs = cm.contents.map { it.displayName ?: "" }
             if (tabs.size > 1) putJsonArray("otherTabs") { tabs.filter { it != (content.displayName ?: "") }.forEach { add(it) } }

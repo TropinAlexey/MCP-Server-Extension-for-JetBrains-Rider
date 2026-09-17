@@ -10,24 +10,54 @@ fun Project.projectDir(): Path? = guessProjectDir()?.toNioPathOrNull()
 fun Path.relTo(projectDir: Path?): String =
     projectDir?.relativize(this)?.toString() ?: this.toString()
 
-enum class TruncateMode { START, END, MIDDLE, NONE }
+data class PaginationResult(
+    val lines: List<String>,
+    val totalLines: Int,
+    val returnedFrom: Int,
+    val returnedTo: Int,
+    val truncated: Boolean,
+    val matchedLines: Int? = null
+)
 
-fun parseTruncateMode(raw: String, default: TruncateMode): TruncateMode =
-    TruncateMode.entries.firstOrNull { it.name.equals(raw, ignoreCase = true) } ?: default
+fun paginateLines(
+    allLines: List<String>,
+    maxLines: Int,
+    offset: Int? = null,
+    fromEnd: Boolean = false,
+    pattern: String? = null
+): PaginationResult {
+    val totalLines = allLines.size
 
-fun truncateLines(lines: List<String>, maxLines: Int, mode: TruncateMode): Pair<List<String>, Boolean> {
-    if (maxLines <= 0 || mode == TruncateMode.NONE || lines.size <= maxLines)
-        return lines to false
+    val filtered = if (!pattern.isNullOrBlank()) {
+        val regex = try { Regex(pattern, RegexOption.IGNORE_CASE) } catch (_: Exception) { Regex(Regex.escape(pattern), RegexOption.IGNORE_CASE) }
+        allLines.mapIndexedNotNull { idx, line -> if (regex.containsMatchIn(line)) idx to line else null }
+    } else null
 
-    return when (mode) {
-        TruncateMode.END -> lines.take(maxLines) to true
-        TruncateMode.START -> lines.takeLast(maxLines) to true
-        TruncateMode.MIDDLE -> {
-            val head = (maxLines - 1) / 2
-            val tail = maxLines - 1 - head
-            val result = lines.take(head) + listOf("... (${lines.size - head - tail} lines truncated) ...") + lines.takeLast(tail)
-            result to true
-        }
-        TruncateMode.NONE -> lines to false
+    if (filtered != null) {
+        val matchedLines = filtered.size
+        val cap = if (maxLines > 0) maxLines else Int.MAX_VALUE
+        val taken = if (fromEnd) filtered.takeLast(cap) else filtered.take(cap)
+        val lines = taken.map { (idx, line) -> "[${idx + 1}] $line" }
+        val from = taken.firstOrNull()?.first ?: 0
+        val to = taken.lastOrNull()?.first ?: 0
+        return PaginationResult(lines, totalLines, from, to, taken.size < matchedLines, matchedLines)
     }
+
+    if (maxLines <= 0) return PaginationResult(allLines, totalLines, 0, totalLines - 1, false)
+
+    val from: Int
+    val to: Int
+    if (offset != null) {
+        from = offset.coerceIn(0, totalLines)
+        to = (from + maxLines).coerceAtMost(totalLines)
+    } else if (fromEnd) {
+        to = totalLines
+        from = (totalLines - maxLines).coerceAtLeast(0)
+    } else {
+        from = 0
+        to = maxLines.coerceAtMost(totalLines)
+    }
+
+    val result = allLines.subList(from, to)
+    return PaginationResult(result, totalLines, from, to - 1, result.size < totalLines)
 }

@@ -10,9 +10,7 @@ import com.intellij.openapi.wm.WindowManager
 import com.intellij.task.ProjectTaskManager
 import kotlinx.serialization.json.*
 import com.github.tropin.ridermcp.SessionManager
-import com.github.tropin.ridermcp.TruncateMode
-import com.github.tropin.ridermcp.parseTruncateMode
-import com.github.tropin.ridermcp.truncateLines
+import com.github.tropin.ridermcp.paginateLines
 import kotlin.coroutines.coroutineContext
 import com.intellij.mcpserver.project
 
@@ -45,28 +43,33 @@ class BuildToolset : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Polls output for any async session (build, test, nuget restore). Returns new log lines since last call, plus current status and exit code. Keep polling until status is not 'running'. Works with sessionId from rider_start_build, rider_run_tests, rider_nuget_restore, rider_start_debug, rider_rerun_failed_tests. Optional maxLines + truncateMode to limit output (START keeps tail — best for finding errors at end of logs).")
+    @McpDescription("Polls output for any async session (build, test, nuget restore). Returns new log lines since last call, plus current status and exit code. Keep polling until status is not 'running'. Works with sessionId from rider_start_build, rider_run_tests, rider_nuget_restore, rider_start_debug, rider_rerun_failed_tests. Supports pagination: fromEnd=true for last N lines, pattern for regex grep, offset for random access. Pass allLines=true to read ALL accumulated lines (not just new since last poll).")
     suspend fun rider_get_output(
         @McpDescription("Session ID from a start operation") sessionId: String,
         @McpDescription("Max lines to return (0 = unlimited)") maxLines: Int = 0,
-        @McpDescription("Which part to truncate: START (keep tail), END (keep head), MIDDLE (keep head+tail), NONE (default)") truncateMode: String = "NONE"
+        @McpDescription("Start from this line (0-based). Mutually exclusive with fromEnd") offset: Int? = null,
+        @McpDescription("Return last maxLines lines instead of first (default false)") fromEnd: Boolean = false,
+        @McpDescription("Regex filter — return only matching lines (case-insensitive). E.g. 'error|exception|warn'") pattern: String? = null,
+        @McpDescription("Read all accumulated lines, not just new since last poll (default false)") allLines: Boolean = false
     ): String {
         val session = SessionManager.get(sessionId)
             ?: mcpFail("Session '$sessionId' not found")
 
-        val newLines = session.getNewLines()
-        val mode = parseTruncateMode(truncateMode, TruncateMode.NONE)
-        val (lines, truncated) = if (maxLines > 0) truncateLines(newLines, maxLines, mode) else newLines to false
+        val rawLines = if (allLines) session.getAllLines() else session.getNewLines()
+        val result = paginateLines(rawLines, maxLines, offset, fromEnd, pattern)
 
         return buildJsonObject {
             put("status", session.status)
-            if (lines.isNotEmpty()) {
-                putJsonArray("lines") { lines.forEach { add(it) } }
+            put("totalLines", result.totalLines)
+            if (result.lines.isNotEmpty()) {
+                putJsonArray("lines") { result.lines.forEach { add(it) } }
+                putJsonObject("returnedRange") {
+                    put("from", result.returnedFrom)
+                    put("to", result.returnedTo)
+                }
             }
-            if (truncated) {
-                put("truncated", true)
-                put("totalLines", newLines.size)
-            }
+            if (result.truncated) put("truncated", true)
+            result.matchedLines?.let { put("matchedLines", it) }
             session.exitCode?.let { put("exitCode", it) }
         }.toString()
     }
