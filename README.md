@@ -210,6 +210,11 @@ gradlew.bat runIde
 
 ## What's New
 
+### v1.0.1
+
+- Fix: `rider_get_tool_window_content` now reads all internal sub-tabs (JBTabs) — Debug Console, Run output and other sub-panels are no longer invisible
+- Fix: Editor-based console text extraction — previous `is Editor` check was dead code (`Editor` is not a Swing `Component`); replaced with `EditorComponentImpl`
+
 ### v1.0.0
 
 - New logo

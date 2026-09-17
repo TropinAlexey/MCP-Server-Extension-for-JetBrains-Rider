@@ -115,28 +115,40 @@ class IdeStateToolset : McpToolset {
 
     private fun extractText(component: java.awt.Component, lines: MutableList<String>, limit: Int) {
         if (lines.size >= limit) return
-        when (component) {
-            is com.intellij.openapi.editor.Editor -> {
-                val text = component.document.text
+        when {
+            // EditorComponentImpl is the actual Swing wrapper; Editor interface is not a Component
+            component is com.intellij.openapi.editor.impl.EditorComponentImpl -> {
+                val text = component.editor.document.text
                 if (text.isNotBlank()) text.lines().forEach { if (lines.size < limit) lines.add(it) }
             }
-            is javax.swing.JTree -> {
+            // JBTabs only exposes selected tab as Swing child; iterate all tabs explicitly
+            component is com.intellij.ui.tabs.JBTabs -> {
+                for (tabInfo in component.tabs) {
+                    if (lines.size >= limit) break
+                    val before = lines.size
+                    extractText(tabInfo.component, lines, limit)
+                    if (lines.size > before) {
+                        lines.add(before, "--- ${tabInfo.text} ---")
+                    }
+                }
+            }
+            component is javax.swing.JTree -> {
                 val model = component.model ?: return
                 val root = model.root ?: return
                 collectTreeText(model, root, lines, limit, 0)
             }
-            is javax.swing.JList<*> -> {
+            component is javax.swing.JList<*> -> {
                 val m = component.model
                 for (i in 0 until m.size) {
                     if (lines.size >= limit) break
                     lines.add(m.getElementAt(i)?.toString() ?: "")
                 }
             }
-            is javax.swing.text.JTextComponent -> {
+            component is javax.swing.text.JTextComponent -> {
                 val text = component.text
                 if (!text.isNullOrBlank()) text.lines().forEach { if (lines.size < limit) lines.add(it) }
             }
-            is java.awt.Container -> {
+            component is java.awt.Container -> {
                 for (i in 0 until component.componentCount) {
                     if (lines.size >= limit) break
                     extractText(component.getComponent(i), lines, limit)
