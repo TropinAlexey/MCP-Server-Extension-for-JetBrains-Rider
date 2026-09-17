@@ -6,17 +6,17 @@
 
 <p align="center">
   <a href="https://plugins.jetbrains.com/plugin/34264-mcp-server-extension"><img src="https://img.shields.io/jetbrains/plugin/v/34264?style=flat-square&label=marketplace" alt="JetBrains Marketplace"></a>
-  <a href="https://github.com/TropinAlexey/rider-mcp/releases/latest"><img src="https://img.shields.io/github/v/release/TropinAlexey/rider-mcp?style=flat-square&label=version" alt="Version"></a>
-  <a href="https://github.com/TropinAlexey/rider-mcp/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/TropinAlexey/rider-mcp/build.yml?style=flat-square" alt="Build"></a>
+  <a href="https://github.com/TropinAlexey/MCP-Server-Extension-for-JetBrains-Rider/releases/latest"><img src="https://img.shields.io/github/v/release/TropinAlexey/MCP-Server-Extension-for-JetBrains-Rider?style=flat-square&label=version" alt="Version"></a>
+  <a href="https://github.com/TropinAlexey/MCP-Server-Extension-for-JetBrains-Rider/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/TropinAlexey/MCP-Server-Extension-for-JetBrains-Rider/build.yml?style=flat-square" alt="Build"></a>
   <img src="https://img.shields.io/badge/Rider-2026.1%2B-blue?style=flat-square&logo=jetbrains" alt="Rider 2026.1+">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="MIT License"></a>
 </p>
 
 <p align="center">
-  A JetBrains Rider plugin that extends the stock <a href="https://github.com/JetBrains/mcp-server-plugin">MCP Server Plugin</a> with full IDE observability and control tools.
+  A JetBrains Rider plugin that extends the stock <a href="https://github.com/JetBrains/mcp-server-plugin">MCP Server Plugin</a> with full IDE observability and control tools by AI agents.
 </p>
 
-**Current version: 1.0.0** — Rider 2026.1+, 35 tools. [What's New →](#whats-new)
+[What's New →](#whats-new)
 
 ## Why This Exists
 
@@ -186,8 +186,8 @@ Responses are optimized to minimize token consumption by the MCP client:
 ### From Source
 
 ```bash
-git clone https://github.com/TropinAlexey/rider-mcp.git
-cd rider-mcp
+git clone https://github.com/TropinAlexey/MCP-Server-Extension-for-JetBrains-Rider.git
+cd MCP-Server-Extension-for-JetBrains-Rider
 
 # Linux / macOS
 ./gradlew buildPlugin
