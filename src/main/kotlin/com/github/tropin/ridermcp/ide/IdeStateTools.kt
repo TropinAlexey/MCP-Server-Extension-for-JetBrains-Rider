@@ -12,8 +12,11 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.vfs.toNioPathOrNull
 import com.intellij.openapi.wm.ToolWindowManager
 import kotlinx.serialization.json.*
+import com.github.tropin.ridermcp.TruncateMode
+import com.github.tropin.ridermcp.parseTruncateMode
 import com.github.tropin.ridermcp.projectDir
 import com.github.tropin.ridermcp.relTo
+import com.github.tropin.ridermcp.truncateLines
 import kotlin.coroutines.coroutineContext
 
 class IdeStateToolset : McpToolset {
@@ -77,11 +80,12 @@ class IdeStateToolset : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Reads text content from any IDE tool window/panel (Build output, Problems, NuGet, Database, etc.). Extracts text from editors, consoles, trees, and lists. Use to read build logs, error lists, or any panel content. Pass tab name for a specific tab; omit for the active one. maxLines caps output (default 200).")
+    @McpDescription("Reads text content from any IDE tool window/panel (Build output, Problems, NuGet, Database, etc.). Extracts text from editors, consoles, trees, and lists. Use to read build logs, error lists, or any panel content. Pass tab name for a specific tab; omit for the active one. maxLines caps output (default 200). truncateMode controls which part to keep: START trims beginning (returns last N lines — best for Debug/Build logs where errors are at the end), END trims end (returns first N lines, default), MIDDLE keeps head+tail, NONE returns everything.")
     suspend fun rider_get_tool_window_content(
         @McpDescription("Tool window ID") windowId: String,
         @McpDescription("Tab name (omit for active)") tab: String? = null,
-        @McpDescription("Max output lines") maxLines: Int = 200
+        @McpDescription("Max output lines") maxLines: Int = 200,
+        @McpDescription("Which part to truncate: START (keep tail), END (keep head, default), MIDDLE (keep head+tail), NONE") truncateMode: String = "END"
     ): String {
         val project = coroutineContext.project
         val tw = ToolWindowManager.getInstance(project).getToolWindow(windowId)
@@ -95,9 +99,12 @@ class IdeStateToolset : McpToolset {
             cm.selectedContent ?: cm.contents.firstOrNull()
         } ?: mcpFail("Tool window '$windowId' has no content")
 
-        val lines = mutableListOf<String>()
+        val mode = parseTruncateMode(truncateMode, TruncateMode.END)
+        val allLines = mutableListOf<String>()
         val component = content.component
-        extractText(component, lines, maxLines)
+        extractText(component, allLines, Int.MAX_VALUE)
+
+        val (lines, truncated) = truncateLines(allLines, maxLines, mode)
 
         return buildJsonObject {
             put("windowId", windowId)
@@ -105,8 +112,9 @@ class IdeStateToolset : McpToolset {
             if (lines.isEmpty()) {
                 put("text", "(empty)")
             } else {
-                put("text", lines.take(maxLines).joinToString("\n"))
-                if (lines.size > maxLines) put("truncated", true)
+                put("text", lines.joinToString("\n"))
+                if (truncated) put("truncated", true)
+                if (truncated) put("totalLines", allLines.size)
             }
             val tabs = cm.contents.map { it.displayName ?: "" }
             if (tabs.size > 1) putJsonArray("otherTabs") { tabs.filter { it != (content.displayName ?: "") }.forEach { add(it) } }

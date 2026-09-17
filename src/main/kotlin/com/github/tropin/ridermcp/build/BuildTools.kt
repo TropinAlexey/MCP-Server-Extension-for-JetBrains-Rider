@@ -10,6 +10,9 @@ import com.intellij.openapi.wm.WindowManager
 import com.intellij.task.ProjectTaskManager
 import kotlinx.serialization.json.*
 import com.github.tropin.ridermcp.SessionManager
+import com.github.tropin.ridermcp.TruncateMode
+import com.github.tropin.ridermcp.parseTruncateMode
+import com.github.tropin.ridermcp.truncateLines
 import kotlin.coroutines.coroutineContext
 import com.intellij.mcpserver.project
 
@@ -42,19 +45,27 @@ class BuildToolset : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Polls output for any async session (build, test, nuget restore). Returns new log lines since last call, plus current status and exit code. Keep polling until status is not 'running'. Works with sessionId from rider_start_build, rider_run_tests, rider_nuget_restore, rider_start_debug, rider_rerun_failed_tests.")
+    @McpDescription("Polls output for any async session (build, test, nuget restore). Returns new log lines since last call, plus current status and exit code. Keep polling until status is not 'running'. Works with sessionId from rider_start_build, rider_run_tests, rider_nuget_restore, rider_start_debug, rider_rerun_failed_tests. Optional maxLines + truncateMode to limit output (START keeps tail — best for finding errors at end of logs).")
     suspend fun rider_get_output(
-        @McpDescription("Session ID from a start operation")
-        sessionId: String
+        @McpDescription("Session ID from a start operation") sessionId: String,
+        @McpDescription("Max lines to return (0 = unlimited)") maxLines: Int = 0,
+        @McpDescription("Which part to truncate: START (keep tail), END (keep head), MIDDLE (keep head+tail), NONE (default)") truncateMode: String = "NONE"
     ): String {
         val session = SessionManager.get(sessionId)
             ?: mcpFail("Session '$sessionId' not found")
 
         val newLines = session.getNewLines()
+        val mode = parseTruncateMode(truncateMode, TruncateMode.NONE)
+        val (lines, truncated) = if (maxLines > 0) truncateLines(newLines, maxLines, mode) else newLines to false
+
         return buildJsonObject {
             put("status", session.status)
-            if (newLines.isNotEmpty()) {
-                putJsonArray("lines") { newLines.forEach { add(it) } }
+            if (lines.isNotEmpty()) {
+                putJsonArray("lines") { lines.forEach { add(it) } }
+            }
+            if (truncated) {
+                put("truncated", true)
+                put("totalLines", newLines.size)
             }
             session.exitCode?.let { put("exitCode", it) }
         }.toString()

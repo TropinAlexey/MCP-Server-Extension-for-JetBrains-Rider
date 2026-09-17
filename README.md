@@ -210,6 +210,12 @@ gradlew.bat runIde
 
 ## What's New
 
+### v1.0.3
+
+- Feature: `rider_get_tool_window_content` now supports `truncateMode` parameter (START/END/MIDDLE/NONE) — use START to get the last N lines (best for Debug/Build logs where errors are at the end)
+- Feature: `rider_get_output` now supports `maxLines` and `truncateMode` parameters for consistent truncation across all output tools
+- Response now includes `totalLines` count when output is truncated
+
 ### v1.0.2
 
 - Fix: marketplace "What's New" now reads from `CHANGELOG.html` instead of hardcoded string
