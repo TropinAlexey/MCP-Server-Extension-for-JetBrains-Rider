@@ -227,6 +227,9 @@ gradlew.bat runIde
 - Fix: `rider_get_tool_window_content` now reads all internal sub-tabs (JBTabs) — Debug Console, Run output and other sub-panels are no longer invisible
 - Fix: Editor-based console text extraction — previous `is Editor` check was dead code (`Editor` is not a Swing `Component`); replaced with `EditorComponentImpl`
 
+<details>
+<summary>Older releases</summary>
+
 ### v1.0.0
 
 - New logo
@@ -248,9 +251,6 @@ gradlew.bat runIde
 - Canonical project structure per JetBrains template: `settings.gradle.kts` with `pluginManagement`/`dependencyResolutionManagement`, JDK toolchain, Gradle configuration & build cache
 - Added V2 `<dependencies>` block for `intellij.testRunner.plugin` — resolves smRunner class verification on 2026.x
 - Plugin Verifier: **Compatible** on Rider 2026.2, zero compatibility problems, zero deprecated API usages
-
-<details>
-<summary>Older releases</summary>
 
 ### v0.11.0 — dotTrace Profiling
 - `rider_profiling_state` / `rider_profiling_control` — dotTrace session management
