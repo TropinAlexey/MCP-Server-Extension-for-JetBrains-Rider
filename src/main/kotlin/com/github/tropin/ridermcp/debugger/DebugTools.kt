@@ -17,6 +17,7 @@ import com.intellij.mcpserver.project
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.github.tropin.ridermcp.runOnEdt
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.toNioPathOrNull
 import com.intellij.ui.ColoredTextContainer
@@ -54,7 +55,7 @@ class DebugToolset : McpToolset {
             .find { it.fileUrl == vf.url && it.line == lineIndex }
         if (existing != null) return "Breakpoint already set at $filePath:$line"
 
-        ApplicationManager.getApplication().invokeAndWait {
+        runOnEdt {
             XDebuggerUtil.getInstance().toggleLineBreakpoint(project, vf, lineIndex, false)
         }
         return "Breakpoint set at $filePath:$line"
@@ -76,7 +77,7 @@ class DebugToolset : McpToolset {
             .filter { it.fileUrl == vf.url && it.line == lineIndex }
         if (toRemove.isEmpty()) mcpFail("No breakpoint at $filePath:$line")
 
-        ApplicationManager.getApplication().invokeAndWait {
+        runOnEdt {
             toRemove.forEach { bm.removeBreakpoint(it) }
         }
         return "Breakpoint removed at $filePath:$line"

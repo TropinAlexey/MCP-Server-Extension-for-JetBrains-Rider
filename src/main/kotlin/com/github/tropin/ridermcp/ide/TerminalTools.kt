@@ -5,9 +5,9 @@ import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.wm.ToolWindowManager
 import kotlinx.serialization.json.*
+import com.github.tropin.ridermcp.runOnEdt
 import kotlin.coroutines.coroutineContext
 
 class TerminalToolset : McpToolset {
@@ -16,30 +16,22 @@ class TerminalToolset : McpToolset {
     @McpDescription("Lists open terminal tabs/sessions in the IDE with their names and indices. Use before rider_send_terminal_input to find the correct tab index.")
     suspend fun rider_list_terminals(): String {
         val project = coroutineContext.project
-        var result: String? = null
-        var failure: Throwable? = null
-        ApplicationManager.getApplication().invokeAndWait {
-            try {
-                val twm = ToolWindowManager.getInstance(project)
-                val tw = twm.getToolWindow("Terminal")
-                    ?: mcpFail("Terminal tool window not available")
+        return runOnEdt {
+            val twm = ToolWindowManager.getInstance(project)
+            val tw = twm.getToolWindow("Terminal")
+                ?: mcpFail("Terminal tool window not available")
 
-                val cm = tw.contentManager
-                result = buildJsonArray {
-                    cm.contents.forEachIndexed { index, content ->
-                        addJsonObject {
-                            put("index", index)
-                            put("name", content.displayName ?: "Terminal ${index + 1}")
-                            if (cm.selectedContent == content) put("active", true)
-                        }
+            val cm = tw.contentManager
+            buildJsonArray {
+                cm.contents.forEachIndexed { index, content ->
+                    addJsonObject {
+                        put("index", index)
+                        put("name", content.displayName ?: "Terminal ${index + 1}")
+                        if (cm.selectedContent == content) put("active", true)
                     }
-                }.toString()
-            } catch (e: Throwable) {
-                failure = e
-            }
+                }
+            }.toString()
         }
-        failure?.let { throw it }
-        return result!!
     }
 
     @McpTool
@@ -49,29 +41,23 @@ class TerminalToolset : McpToolset {
         @McpDescription("Terminal tab index") tab: Int = 0
     ): String {
         val project = coroutineContext.project
-        var failure: Throwable? = null
-        ApplicationManager.getApplication().invokeAndWait {
-            try {
-                val twm = ToolWindowManager.getInstance(project)
-                val tw = twm.getToolWindow("Terminal")
-                    ?: mcpFail("Terminal tool window not available")
+        runOnEdt {
+            val twm = ToolWindowManager.getInstance(project)
+            val tw = twm.getToolWindow("Terminal")
+                ?: mcpFail("Terminal tool window not available")
 
-                val cm = tw.contentManager
-                val content = cm.contents.getOrNull(tab)
-                    ?: mcpFail("Terminal tab $tab not found. Available: ${cm.contents.size}")
+            val cm = tw.contentManager
+            val content = cm.contents.getOrNull(tab)
+                ?: mcpFail("Terminal tab $tab not found. Available: ${cm.contents.size}")
 
-                val component = content.component
-                val widget = findTerminalWidget(component)
-                    ?: mcpFail("Cannot find terminal widget in tab $tab")
+            val component = content.component
+            val widget = findTerminalWidget(component)
+                ?: mcpFail("Cannot find terminal widget in tab $tab")
 
-                val connector = widget.ttyConnector
-                    ?: mcpFail("Terminal not ready (no process attached)")
-                connector.write(text + "\n")
-            } catch (e: Throwable) {
-                failure = e
-            }
+            val connector = widget.ttyConnector
+                ?: mcpFail("Terminal not ready (no process attached)")
+            connector.write(text + "\n")
         }
-        failure?.let { throw it }
 
         return "ok"
     }

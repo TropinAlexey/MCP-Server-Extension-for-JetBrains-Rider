@@ -1,5 +1,7 @@
 package com.github.tropin.ridermcp
 
+import com.intellij.mcpserver.mcpFail
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.vfs.toNioPathOrNull
@@ -9,6 +11,16 @@ fun Project.projectDir(): Path? = guessProjectDir()?.toNioPathOrNull()
 
 fun Path.relTo(projectDir: Path?): String =
     projectDir?.relativize(this)?.toString() ?: this.toString()
+
+// Runs [block] on the EDT and returns its result, rethrowing any failure.
+// Falls through directly when already on the EDT (invokeAndWait would deadlock there).
+fun <T> runOnEdt(block: () -> T): T {
+    val app = ApplicationManager.getApplication()
+    if (app.isDispatchThread) return block()
+    var outcome: Result<T>? = null
+    app.invokeAndWait { outcome = runCatching(block) }
+    return outcome!!.getOrThrow()
+}
 
 data class PaginationResult(
     val lines: List<String>,
@@ -32,10 +44,12 @@ fun paginateLines(
     baseLine: Int = 0,
     globalTotal: Int? = null
 ): PaginationResult {
+    if (offset != null && fromEnd) mcpFail("offset and fromEnd are mutually exclusive — pass only one")
     val sliceTotal = allLines.size
     val totalLines = globalTotal ?: sliceTotal
 
     val filtered = if (!pattern.isNullOrBlank()) {
+        // Invalid regex is matched literally instead of failing the call.
         val regex = try { Regex(pattern, RegexOption.IGNORE_CASE) } catch (_: Exception) { Regex(Regex.escape(pattern), RegexOption.IGNORE_CASE) }
         allLines.mapIndexedNotNull { idx, line -> if (regex.containsMatchIn(line)) idx to line else null }
     } else null
@@ -43,14 +57,19 @@ fun paginateLines(
     if (filtered != null) {
         val matchedLines = filtered.size
         val cap = if (maxLines > 0) maxLines else Int.MAX_VALUE
-        val taken = if (fromEnd) filtered.takeLast(cap) else filtered.take(cap)
+        // offset pages within the matched lines (fromEnd is excluded above).
+        val taken = when {
+            offset != null -> filtered.drop(offset.coerceAtLeast(0)).take(cap)
+            fromEnd -> filtered.takeLast(cap)
+            else -> filtered.take(cap)
+        }
         val lines = taken.map { (idx, line) -> "[${baseLine + idx + 1}] $line" }
         val from = taken.firstOrNull()?.first ?: 0
         val to = taken.lastOrNull()?.first ?: 0
         return PaginationResult(lines, totalLines, baseLine + from, baseLine + to, taken.size < matchedLines, matchedLines)
     }
 
-    if (maxLines <= 0) return PaginationResult(allLines, totalLines, baseLine, baseLine + sliceTotal - 1, false)
+    if (maxLines <= 0) return PaginationResult(allLines, totalLines, baseLine, maxOf(baseLine, baseLine + sliceTotal - 1), false)
 
     val from: Int
     val to: Int
@@ -66,5 +85,6 @@ fun paginateLines(
     }
 
     val result = allLines.subList(from, to)
-    return PaginationResult(result, totalLines, baseLine + from, baseLine + to - 1, result.size < sliceTotal)
+    // Empty page → zero-width range instead of an underflowing to < from.
+    return PaginationResult(result, totalLines, baseLine + from, maxOf(baseLine + from, baseLine + to - 1), result.size < sliceTotal)
 }

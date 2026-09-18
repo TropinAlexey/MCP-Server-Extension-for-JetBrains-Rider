@@ -47,7 +47,7 @@ class BuildToolset : McpToolset {
     suspend fun rider_get_output(
         @McpDescription("Session ID from a start operation") sessionId: String,
         @McpDescription("Max lines to return (0 = unlimited)") maxLines: Int = 0,
-        @McpDescription("Start from this line (0-based). Mutually exclusive with fromEnd") offset: Int? = null,
+        @McpDescription("Start from this line (0-based). Mutually exclusive with fromEnd (error if combined). Pages within pattern matches when pattern is set") offset: Int? = null,
         @McpDescription("Return last maxLines lines instead of first (default false)") fromEnd: Boolean = false,
         @McpDescription("Regex filter — return only matching lines (case-insensitive). E.g. 'error|exception|warn'") pattern: String? = null,
         @McpDescription("Read all accumulated lines, not just new since last poll (default false)") allLines: Boolean = false
@@ -62,12 +62,12 @@ class BuildToolset : McpToolset {
         return buildJsonObject {
             put("status", session.status)
             put("totalLines", result.totalLines)
+            putJsonObject("returnedRange") {
+                put("from", result.returnedFrom)
+                put("to", result.returnedTo)
+            }
             if (result.lines.isNotEmpty()) {
                 putJsonArray("lines") { result.lines.forEach { add(it) } }
-                putJsonObject("returnedRange") {
-                    put("from", result.returnedFrom)
-                    put("to", result.returnedTo)
-                }
             }
             if (result.truncated) put("truncated", true)
             result.matchedLines?.let { put("matchedLines", it) }

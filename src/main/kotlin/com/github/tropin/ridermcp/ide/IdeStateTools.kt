@@ -9,7 +9,6 @@ import com.intellij.notification.Notification
 import com.intellij.notification.NotificationsManager
 import com.intellij.execution.ui.ExecutionConsole
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.readAction
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
@@ -20,6 +19,7 @@ import kotlinx.serialization.json.*
 import com.github.tropin.ridermcp.paginateLines
 import com.github.tropin.ridermcp.projectDir
 import com.github.tropin.ridermcp.relTo
+import com.github.tropin.ridermcp.runOnEdt
 import kotlin.coroutines.coroutineContext
 
 class IdeStateToolset : McpToolset {
@@ -28,7 +28,8 @@ class IdeStateToolset : McpToolset {
     @McpDescription("Returns IDE activity status: progress indicators (indexing, building, analyzing), currently active/focused file, whether IDE is busy or idle. Use to check if IDE is ready before starting builds, tests, or refactoring.")
     suspend fun rider_get_ide_state(): String {
         val project = coroutineContext.project
-        val activeFile = readAction {
+        // FileEditorManager model reads require the EDT.
+        val activeFile = runOnEdt {
             FileEditorManager.getInstance(project).selectedTextEditor?.let { editor ->
                 val projectDir = project.projectDir()
                 editor.virtualFile?.toNioPathOrNull()?.relTo(projectDir) ?: editor.virtualFile?.path
@@ -46,9 +47,11 @@ class IdeStateToolset : McpToolset {
         @McpDescription("Max notifications to return") limit: Int = 5
     ): String {
         val project = coroutineContext.project
-        val notifications = NotificationsManager.getNotificationsManager()
-            .getNotificationsOfType(Notification::class.java, project)
-            .takeLast(limit)
+        val notifications = runOnEdt {
+            NotificationsManager.getNotificationsManager()
+                .getNotificationsOfType(Notification::class.java, project)
+                .takeLast(limit)
+        }
 
         return buildJsonArray {
             notifications.forEach { n ->
@@ -68,28 +71,20 @@ class IdeStateToolset : McpToolset {
         @McpDescription("Show all tool windows, not just visible") all: Boolean = false
     ): String {
         val project = coroutineContext.project
-        var result: String? = null
-        var failure: Throwable? = null
-        ApplicationManager.getApplication().invokeAndWait {
-            try {
-                val twm = ToolWindowManager.getInstance(project)
-                result = buildJsonArray {
-                    twm.toolWindowIds.forEach { id ->
-                        val tw = twm.getToolWindow(id) ?: return@forEach
-                        if (!all && !tw.isVisible) return@forEach
-                        addJsonObject {
-                            put("id", id)
-                            if (all) put("visible", tw.isVisible)
-                            if (tw.isActive) put("active", true)
-                        }
+        return runOnEdt {
+            val twm = ToolWindowManager.getInstance(project)
+            buildJsonArray {
+                twm.toolWindowIds.forEach { id ->
+                    val tw = twm.getToolWindow(id) ?: return@forEach
+                    if (!all && !tw.isVisible) return@forEach
+                    addJsonObject {
+                        put("id", id)
+                        if (all) put("visible", tw.isVisible)
+                        if (tw.isActive) put("active", true)
                     }
-                }.toString()
-            } catch (e: Throwable) {
-                failure = e
-            }
+                }
+            }.toString()
         }
-        failure?.let { throw it }
-        return result!!
     }
 
     @McpTool
@@ -98,27 +93,19 @@ class IdeStateToolset : McpToolset {
         @McpDescription("Tool window ID (from rider_list_tool_windows)") windowId: String
     ): String {
         val project = coroutineContext.project
-        var result: String? = null
-        var failure: Throwable? = null
-        ApplicationManager.getApplication().invokeAndWait {
-            try {
-                val tw = ToolWindowManager.getInstance(project).getToolWindow(windowId)
-                    ?: mcpFail("Tool window '$windowId' not found")
-                val cm = tw.contentManager
-                if (cm.contentCount == 0) mcpFail("Tool window '$windowId' has no tabs. Open it in Rider first (View → Tool Windows → $windowId).")
-                result = buildJsonObject {
-                    put("windowId", windowId)
-                    put("selected", cm.selectedContent?.displayName ?: "")
-                    putJsonArray("tabs") {
-                        cm.contents.forEach { add(it.displayName ?: "") }
-                    }
-                }.toString()
-            } catch (e: Throwable) {
-                failure = e
-            }
+        return runOnEdt {
+            val tw = ToolWindowManager.getInstance(project).getToolWindow(windowId)
+                ?: mcpFail("Tool window '$windowId' not found")
+            val cm = tw.contentManager
+            if (cm.contentCount == 0) mcpFail("Tool window '$windowId' has no tabs. Open it in Rider first (View → Tool Windows → $windowId).")
+            buildJsonObject {
+                put("windowId", windowId)
+                put("selected", cm.selectedContent?.displayName ?: "")
+                putJsonArray("tabs") {
+                    cm.contents.forEach { add(it.displayName ?: "") }
+                }
+            }.toString()
         }
-        failure?.let { throw it }
-        return result!!
     }
 
     @McpTool
@@ -128,15 +115,12 @@ class IdeStateToolset : McpToolset {
         @McpDescription("Tab name (omit for active). Use rider_list_tabs to discover names") tab: String? = null,
         @McpDescription("Sub-section name (sub-tab title substring, case-insensitive). Debug examples: 'Console' for app stdout, 'Debug Output' for debugger trace. Omit for full content. See availableSections in the response for valid values.") section: String? = null,
         @McpDescription("Max output lines (default 200, 0 = unlimited)") maxLines: Int = 200,
-        @McpDescription("Start from this line (0-based). Mutually exclusive with fromEnd") offset: Int? = null,
+        @McpDescription("Start from this line (0-based). Mutually exclusive with fromEnd (error if combined). Pages within pattern matches when pattern is set") offset: Int? = null,
         @McpDescription("Return last maxLines lines instead of first (default false). Best for Debug/Build logs where errors are at the end") fromEnd: Boolean = false,
         @McpDescription("Regex filter — return only matching lines (case-insensitive). E.g. 'error|exception|warn'") pattern: String? = null
     ): String {
         val project = coroutineContext.project
-        var result: String? = null
-        var failure: Throwable? = null
-        ApplicationManager.getApplication().invokeAndWait {
-            try {
+        return runOnEdt {
                 val tw = ToolWindowManager.getInstance(project).getToolWindow(windowId)
                     ?: mcpFail("Tool window '$windowId' not found")
 
@@ -149,8 +133,9 @@ class IdeStateToolset : McpToolset {
                 } ?: mcpFail("Tool window '$windowId' has no content. Open it in Rider first (View → Tool Windows → $windowId).")
 
                 val component = content.component
-                val availableSections = mutableListOf<String>().also { collectTabTitles(component, it) }
-                if (windowId.equals("Debug", ignoreCase = true)) {
+                val actualSections = mutableListOf<String>().also { collectTabTitles(component, it) }
+                val availableSections = actualSections.toMutableList()
+                if (isDebugWindow(windowId)) {
                     // Documented Debug sub-tabs even when they are not JBTabs in the Swing tree
                     // (the app console is fetched via the debugger API, not from Swing).
                     if (availableSections.none { it.equals("Console", ignoreCase = true) }) availableSections.add(0, "Console")
@@ -160,7 +145,7 @@ class IdeStateToolset : McpToolset {
                 val sectionTitle: String?
                 val allLines = mutableListOf<String>()
                 if (!section.isNullOrBlank()) {
-                    val resolved = resolveSection(project, windowId, tab, component, section, availableSections)
+                    val resolved = resolveSection(project, windowId, tab, component, section, actualSections)
                     sectionTitle = resolved.first
                     allLines.add("--- $sectionTitle ---")
                     allLines.addAll(resolved.second)
@@ -171,19 +156,19 @@ class IdeStateToolset : McpToolset {
 
                 val page = paginateLines(allLines, maxLines, offset, fromEnd, pattern)
 
-                result = buildJsonObject {
+                buildJsonObject {
                     put("windowId", windowId)
                     put("tab", content.displayName ?: "")
                     sectionTitle?.let { put("section", it) }
                     putJsonArray("availableSections") { availableSections.forEach { add(it) } }
                     put("totalLines", page.totalLines)
+                    putJsonObject("returnedRange") {
+                        put("from", page.returnedFrom)
+                        put("to", page.returnedTo)
+                    }
                     if (page.lines.isEmpty()) {
                         put("text", "(empty)")
                     } else {
-                        putJsonObject("returnedRange") {
-                            put("from", page.returnedFrom)
-                            put("to", page.returnedTo)
-                        }
                         put("text", page.lines.joinToString("\n"))
                         if (page.truncated) put("truncated", true)
                         page.matchedLines?.let { put("matchedLines", it) }
@@ -191,29 +176,29 @@ class IdeStateToolset : McpToolset {
                     val tabs = cm.contents.map { it.displayName ?: "" }
                     if (tabs.size > 1) putJsonArray("otherTabs") { tabs.filter { it != (content.displayName ?: "") }.forEach { add(it) } }
                 }.toString()
-            } catch (e: Throwable) {
-                failure = e
-            }
         }
-        failure?.let { throw it }
-        return result!!
     }
+
+    private fun isDebugWindow(windowId: String) = windowId.equals("Debug", ignoreCase = true)
 
     // Resolves a named sub-section (sub-tab) inside tool window content.
     // Runs on EDT. Returns the section title and its already-extracted text lines.
+    // actualSections are titles really found in the Swing tree — the error path
+    // lists only those, never the synthetic Debug titles from availableSections.
     private fun resolveSection(
         project: Project,
         windowId: String,
         tab: String?,
         component: java.awt.Component,
         section: String,
-        availableSections: List<String>
+        actualSections: List<String>
     ): Pair<String, List<String>> {
-        // The debugger's process console (app stdout) is not reliably a Swing sub-tab
-        // of the Debug tool window content — fetch it via the debugger API first.
-        // (RunContentManager lookup by processHandler identity can resolve to a wrong,
-        // empty descriptor, so session.consoleView is the source of truth.)
-        if (windowId.equals("Debug", ignoreCase = true) && section.contains("console", ignoreCase = true)) {
+        val isConsoleQuery = isDebugWindow(windowId) && section.contains("console", ignoreCase = true)
+        if (isConsoleQuery) {
+            // The debugger's process console (app stdout) is not reliably a Swing sub-tab
+            // of the Debug tool window content — fetch it via the debugger API first.
+            // (RunContentManager lookup by processHandler identity can resolve to a wrong,
+            // empty descriptor, so session.consoleView is the source of truth.)
             val lines = debugConsoleLines(project, tab)
             if (lines.any { it.isNotBlank() }) return "Console" to lines
             // Fall through to Swing search if the API console is empty — the real
@@ -226,7 +211,16 @@ class IdeStateToolset : McpToolset {
             return title to lines
         }
 
-        mcpFail("Section '$section' not found. Available: $availableSections")
+        // "Debug Output" is advertised even when it is not a Swing sub-tab —
+        // resolve it to the full-window extraction (debugger trace).
+        if (!isConsoleQuery && isDebugWindow(windowId) && section.contains("output", ignoreCase = true)) {
+            val lines = mutableListOf<String>()
+            extractText(component, lines, Int.MAX_VALUE)
+            return "Debug Output" to lines
+        }
+
+        if (isConsoleQuery) mcpFail("Debug console is empty — the session captured no app stdout")
+        mcpFail("Section '$section' not found. Available: $actualSections")
     }
 
     // Depth-first search for a sub-tab whose title contains the query.
