@@ -1,6 +1,6 @@
-<b>v1.0.5</b>: Debug console — section param for rider_get_tool_window_content (section=console returns the debugged app stdout via the debugger API session consoleView document, not the debugger trace), new rider_list_tabs tool, every response includes availableSections, sub-tab search covers JBTabs and JTabbedPane, EDT fixes for Terminal/TODO/Endpoints/IDE-state reads, session-wide coordinates in rider_get_output.<br/>
-<b>v1.0.4</b>: Pagination & filtering — fromEnd, offset, pattern (regex grep), allLines for rider_get_tool_window_content and rider_get_output. Response always includes totalLines and returnedRange.<br/>
-<b>v1.0.3</b>: Add truncateMode to rider_get_tool_window_content and rider_get_output — START/END/MIDDLE/NONE truncation for reading logs from the end (Debug, Build).<br/>
-<b>v1.0.2</b>: Fix marketplace changelog, update CI actions, correct comparison table in README.<br/>
-<b>v1.0.1</b>: Fix tool window content extraction for sub-tabs and editors.<br/>
-<b>v1.0.0</b>: New logo, 35 tools, Rider 2026.1+.
+<b>v1.0.5</b>: Read a single sub-tab of any tool window (e.g. just the application output, without the debugger noise). The Debug window now separates the application Console from the debugger trace. New rider_list_tabs tool: see tab names of any tool window. New rider_list_db_consoles: open DB consoles with their data sources. New rider_run_tests_and_wait: run tests and wait in one call. More reliable reading of tool windows and IDE panels, easier navigation of long logs.<br/>
+<b>v1.0.4</b>: Read long outputs in pages — for tool window content and build/test sessions. Jump to the last lines, search with a pattern, navigate page by page.<br/>
+<b>v1.0.3</b>: First version of output truncation options (superseded by full pagination in v1.0.4).<br/>
+<b>v1.0.2</b>: Maintenance release, no user-facing changes.<br/>
+<b>v1.0.1</b>: Debug console and Run output sub-panels are now visible to the agent.<br/>
+<b>v1.0.0</b>: First stable release: 35 tools, Rider 2026.1+.
