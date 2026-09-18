@@ -62,7 +62,7 @@ MCP Client ←MCP→ JS proxy (mcp-jetbrains) ←HTTP→ Rider JVM
                                                     ├── MCP Server Plugin (JetBrains)
                                                     │   └── stock tools (~30)
                                                     └── MCP Server Extension (this plugin)
-                                                        └── additional tools (35)
+                                                         └── additional tools (36)
 ```
 
 All tools from both plugins appear as a unified set in any MCP client. Our tools are prefixed with `rider_` to avoid naming conflicts.
@@ -75,7 +75,7 @@ MCP tools are synchronous (request → response). For long-running operations li
 2. `rider_get_output("build_1")` → returns new lines since last call
 3. Repeat until `status` is no longer `"running"`
 
-## Available Tools (35)
+## Available Tools (36)
 
 ### Build (3 tools)
 | Tool | Description |
@@ -101,13 +101,14 @@ MCP tools are synchronous (request → response). For long-running operations li
 | `rider_list_processes` | List running processes with PID, command line, display name. Optional `type` filter (build/test/run) |
 | `rider_kill_process` | Kill a process by display name |
 
-### IDE State (4 tools)
+### IDE State (5 tools)
 | Tool | Args | Description |
 |---|---|---|
 | `rider_get_ide_state` | — | Progress indicators, active file, busy status |
 | `rider_get_notifications` | `limit` (default 5) | Recent IDE notifications |
 | `rider_list_tool_windows` | `all` (default false) | Tool windows (visible only by default) |
-| `rider_get_tool_window_content` | `windowId`, `tab?`, `maxLines?` | Text content of a tool window (editors, consoles, trees, lists). Defaults to selected tab, 200 lines |
+| `rider_list_tabs` | `windowId` | Tab names of a tool window + selected tab |
+| `rider_get_tool_window_content` | `windowId`, `tab?`, `section?`, `maxLines?`, `offset?`, `fromEnd?`, `pattern?` | Text content of a tool window tab (editors, consoles, trees, lists). `section` reads one sub-tab only (e.g. `console` for Debug stdout). Defaults to selected tab, 200 lines |
 
 ### Run Configuration CRUD (3 tools)
 | Tool | Args | Description |
@@ -168,6 +169,44 @@ MCP tools are synchronous (request → response). For long-running operations li
 | `rider_get_context` | Active file + cursor + surrounding code + selection + open editors + bookmarks — all in one call |
 | `rider_get_recent_files` | 20 most recently opened files |
 
+### Tool Window Map
+
+Every tool window follows the same model: **window → tabs → Swing component tree**.
+Navigate it in three steps: `rider_list_tool_windows` → `rider_list_tabs` → `rider_get_tool_window_content`.
+
+| Window | Tabs | Inside each tab |
+|---|---|---|
+| `Debug` | One tab per debug session (tab = session name, e.g. `LAPICore.Api`) | `Threads & Variables` tree, `Console` (debugged app stdout), `Debug Output` (debugger trace: `Loaded Assembly`, `Pdb file`, `Started/Exited Thread`) |
+| `Run` | One tab per active execution (tab = descriptor name, e.g. `e2e tests`) | Process stdout/stderr console |
+| `Build` | Build sessions | Compiler output; structured errors are also in `Problems` |
+| `Problems` | Current file / project scope | Errors and warnings tree |
+| `Terminal` | One tab per terminal | Shell console (read via content, write via `rider_send_terminal_input`) |
+| `TODO` | Scope filter | TODO/FIXME/HACK tree (also via `rider_get_todos`) |
+| `Endpoints` | — | HTTP routes tree/list (also via `rider_get_endpoints`) |
+| `Services` | Run dashboard entries | Service/run consoles. May report `has no content` until opened once in Rider (`View → Tool Windows → Services`) |
+| `NuGet`, `Database`, others | Varies | Generic text/tree extraction (see rules below) |
+
+Text extraction rules (`rider_get_tool_window_content`):
+- Sub-tabs (`JBTabs`) are all visited and marked with `--- <title> ---` headers — read the headers to see which sections exist.
+- Editor-based consoles (run/debug output) are read as plain text.
+- Trees (`JTree`) are flattened with indent; lists (`JList`) item by item.
+- `section` reads a single sub-tab by title substring (case-insensitive), e.g. `section=console`.
+  Exception: the Debug `Console` is not always a Swing sub-tab, so for `windowId=Debug` + `section=console`
+  the text is fetched via the debugger API (process console of the session) instead of the component tree.
+- If `section` is not found, the error lists the actually available sub-tab titles.
+
+Recipes:
+```jsonc
+// App stdout of the active debug session, last 50 lines (NOT the debugger trace)
+{ "windowId": "Debug", "section": "console", "maxLines": 50, "fromEnd": true }
+
+// Debugger trace tail (assemblies, threads)
+{ "windowId": "Debug", "section": "output", "maxLines": 30, "fromEnd": true }
+
+// Process output of a finished run (tab name from rider_list_tabs("Run"))
+{ "windowId": "Run", "tab": "e2e tests", "maxLines": 30, "fromEnd": true }
+```
+
 ### Token Efficiency
 
 Responses are optimized to minimize token consumption by the MCP client:
@@ -209,6 +248,14 @@ gradlew.bat runIde
 ```
 
 ## What's New
+
+### v1.0.5
+
+- Feature: `rider_get_tool_window_content` — `section` parameter reads one sub-tab only. `section=console` on the Debug window returns the debugged app's stdout via the debugger API (previously only the `Debug Output` trace was reachable)
+- Feature: new `rider_list_tabs` tool — list tab names + selected tab of any tool window (36 tools now)
+- Fix: EDT violations in Terminal/TODO/Endpoints/IDE-state reads (`invokeAndWait`); `Services` no longer crashes, reports `has no content` with a hint until opened in UI
+- Fix: `rider_get_output` reports `totalLines`/`returnedRange` in session-wide coordinates
+- Docs: full tool window map (window → tabs → sections) with Debug/Run recipes
 
 ### v1.0.4
 

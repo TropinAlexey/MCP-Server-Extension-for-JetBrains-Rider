@@ -10,8 +10,10 @@ import com.intellij.notification.NotificationsManager
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.toNioPathOrNull
 import com.intellij.openapi.wm.ToolWindowManager
+import com.intellij.xdebugger.XDebuggerManager
 import kotlinx.serialization.json.*
 import com.github.tropin.ridermcp.paginateLines
 import com.github.tropin.ridermcp.projectDir
@@ -89,10 +91,40 @@ class IdeStateToolset : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Reads text content from any IDE tool window/panel (Build output, Problems, Debug, NuGet, Database, etc.). Supports pagination, tail reading, and regex filtering. Response always includes totalLines so you know the full size. Use fromEnd=true for last N lines (errors, recent logs). Use pattern for regex grep (case-insensitive; matched lines prefixed with [lineNo]). Use offset for random access to a specific range.")
+    @McpDescription("Lists tabs of an IDE tool window (debug sessions, run configurations, terminal tabs, etc.). Returns tab names and which one is selected. Use before rider_get_tool_window_content to choose the tab parameter.")
+    suspend fun rider_list_tabs(
+        @McpDescription("Tool window ID (from rider_list_tool_windows)") windowId: String
+    ): String {
+        val project = coroutineContext.project
+        var result: String? = null
+        var failure: Throwable? = null
+        ApplicationManager.getApplication().invokeAndWait {
+            try {
+                val tw = ToolWindowManager.getInstance(project).getToolWindow(windowId)
+                    ?: mcpFail("Tool window '$windowId' not found")
+                val cm = tw.contentManager
+                if (cm.contentCount == 0) mcpFail("Tool window '$windowId' has no tabs. Open it in Rider first (View → Tool Windows → $windowId).")
+                result = buildJsonObject {
+                    put("windowId", windowId)
+                    put("selected", cm.selectedContent?.displayName ?: "")
+                    putJsonArray("tabs") {
+                        cm.contents.forEach { add(it.displayName ?: "") }
+                    }
+                }.toString()
+            } catch (e: Throwable) {
+                failure = e
+            }
+        }
+        failure?.let { throw it }
+        return result!!
+    }
+
+    @McpTool
+    @McpDescription("Reads text content from any IDE tool window/panel (Build output, Problems, Debug, NuGet, Database, etc.). Supports pagination, tail reading, and regex filtering. Response always includes totalLines so you know the full size. Use fromEnd=true for last N lines (errors, recent logs). Use pattern for regex grep (case-insensitive; matched lines prefixed with [lineNo]). Use offset for random access to a specific range. Use rider_list_tabs to discover tab names. Use section to read one sub-tab only (e.g. section=console for the Debug window returns the debugged app's stdout instead of the debugger trace).")
     suspend fun rider_get_tool_window_content(
         @McpDescription("Tool window ID") windowId: String,
-        @McpDescription("Tab name (omit for active)") tab: String? = null,
+        @McpDescription("Tab name (omit for active). Use rider_list_tabs to discover names") tab: String? = null,
+        @McpDescription("Sub-section name (sub-tab title substring, case-insensitive). E.g. 'console' for the Debug window reads the debugged process stdout; omit for full content") section: String? = null,
         @McpDescription("Max output lines (default 200, 0 = unlimited)") maxLines: Int = 200,
         @McpDescription("Start from this line (0-based). Mutually exclusive with fromEnd") offset: Int? = null,
         @McpDescription("Return last maxLines lines instead of first (default false). Best for Debug/Build logs where errors are at the end") fromEnd: Boolean = false,
@@ -112,17 +144,25 @@ class IdeStateToolset : McpToolset {
                         ?: mcpFail("Tab '$tab' not found. Available: ${cm.contents.map { it.displayName }}")
                 } else {
                     cm.selectedContent ?: cm.contents.firstOrNull()
-                } ?: mcpFail("Tool window '$windowId' has no content")
+                } ?: mcpFail("Tool window '$windowId' has no content. Open it in Rider first (View → Tool Windows → $windowId).")
+
+                val component = content.component
+                val (sectionTitle, targetComponent) = if (!section.isNullOrBlank()) {
+                    resolveSection(project, windowId, tab, component, section)
+                } else {
+                    null to component
+                }
 
                 val allLines = mutableListOf<String>()
-                val component = content.component
-                extractText(component, allLines, Int.MAX_VALUE)
+                if (sectionTitle != null) allLines.add("--- $sectionTitle ---")
+                extractText(targetComponent, allLines, Int.MAX_VALUE)
 
                 val page = paginateLines(allLines, maxLines, offset, fromEnd, pattern)
 
                 result = buildJsonObject {
                     put("windowId", windowId)
                     put("tab", content.displayName ?: "")
+                    sectionTitle?.let { put("section", it) }
                     put("totalLines", page.totalLines)
                     if (page.lines.isEmpty()) {
                         put("text", "(empty)")
@@ -144,6 +184,76 @@ class IdeStateToolset : McpToolset {
         }
         failure?.let { throw it }
         return result!!
+    }
+
+    // Resolves a named sub-section (sub-tab) inside tool window content.
+    // Runs on EDT. Returns the section title and the component to extract text from.
+    private fun resolveSection(
+        project: Project,
+        windowId: String,
+        tab: String?,
+        component: java.awt.Component,
+        section: String
+    ): Pair<String, java.awt.Component> {
+        findSectionComponent(component, section)?.let { return it }
+
+        // The debugger's process console (app stdout) is not always a Swing sub-tab
+        // of the Debug tool window content — fetch it via the debugger API instead.
+        if (windowId.equals("Debug", ignoreCase = true) && section.contains("console", ignoreCase = true)) {
+            return "Console" to debugProcessConsole(project, tab)
+        }
+
+        val available = mutableListOf<String>()
+        collectTabTitles(component, available)
+        mcpFail("Section '$section' not found. Available: $available")
+    }
+
+    // Depth-first search for a JBTabs sub-tab whose title contains the query.
+    private fun findSectionComponent(component: java.awt.Component, query: String): Pair<String, java.awt.Component>? {
+        if (component is com.intellij.ui.tabs.JBTabs) {
+            component.tabs.firstOrNull { it.text.contains(query, ignoreCase = true) }
+                ?.let { return it.text to it.component }
+            for (tabInfo in component.tabs) {
+                findSectionComponent(tabInfo.component, query)?.let { return it }
+            }
+            return null
+        }
+        if (component is java.awt.Container) {
+            for (i in 0 until component.componentCount) {
+                findSectionComponent(component.getComponent(i), query)?.let { return it }
+            }
+        }
+        return null
+    }
+
+    private fun collectTabTitles(component: java.awt.Component, out: MutableList<String>) {
+        when (component) {
+            is com.intellij.ui.tabs.JBTabs -> {
+                component.tabs.forEach { out.add(it.text) }
+                component.tabs.forEach { collectTabTitles(it.component, out) }
+            }
+            is java.awt.Container -> {
+                for (i in 0 until component.componentCount) collectTabTitles(component.getComponent(i), out)
+            }
+        }
+    }
+
+    // Process console (stdout/stdin) of the active debug session, independent of UI layout.
+    private fun debugProcessConsole(project: Project, tab: String?): java.awt.Component {
+        val mgr = XDebuggerManager.getInstance(project)
+        val session = if (tab != null) {
+            mgr.debugSessions.firstOrNull { it.sessionName.equals(tab, ignoreCase = true) }
+                ?: mcpFail("Debug session '$tab' not found. Active: ${mgr.debugSessions.map { it.sessionName }}")
+        } else {
+            mgr.currentSession ?: mcpFail("No active debug session")
+        }
+        val handler = session.debugProcess.processHandler
+        val descriptor = com.intellij.execution.ui.RunContentManager.getInstance(project).allDescriptors
+            .firstOrNull { it.processHandler === handler }
+            ?: mcpFail("Debug session '${session.sessionName}' has no process console. The app may use an external console window.")
+        return descriptor.executionConsole
+            ?.component
+            ?: mcpFail("Debug session '${session.sessionName}' has no execution console")
     }
 
     private fun extractText(component: java.awt.Component, lines: MutableList<String>, limit: Int) {
