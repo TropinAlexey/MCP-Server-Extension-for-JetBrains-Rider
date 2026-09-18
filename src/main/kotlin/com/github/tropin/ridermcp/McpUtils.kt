@@ -24,9 +24,16 @@ fun paginateLines(
     maxLines: Int,
     offset: Int? = null,
     fromEnd: Boolean = false,
-    pattern: String? = null
+    pattern: String? = null,
+    // Global coordinates for incremental reads (e.g. session polling):
+    // baseLine = 0-based index of allLines[0] in the full stream,
+    // globalTotal = full stream size. totalLines/returnedRange/[n] prefixes
+    // are reported in global coordinates; truncation stays chunk-local.
+    baseLine: Int = 0,
+    globalTotal: Int? = null
 ): PaginationResult {
-    val totalLines = allLines.size
+    val sliceTotal = allLines.size
+    val totalLines = globalTotal ?: sliceTotal
 
     val filtered = if (!pattern.isNullOrBlank()) {
         val regex = try { Regex(pattern, RegexOption.IGNORE_CASE) } catch (_: Exception) { Regex(Regex.escape(pattern), RegexOption.IGNORE_CASE) }
@@ -37,27 +44,27 @@ fun paginateLines(
         val matchedLines = filtered.size
         val cap = if (maxLines > 0) maxLines else Int.MAX_VALUE
         val taken = if (fromEnd) filtered.takeLast(cap) else filtered.take(cap)
-        val lines = taken.map { (idx, line) -> "[${idx + 1}] $line" }
+        val lines = taken.map { (idx, line) -> "[${baseLine + idx + 1}] $line" }
         val from = taken.firstOrNull()?.first ?: 0
         val to = taken.lastOrNull()?.first ?: 0
-        return PaginationResult(lines, totalLines, from, to, taken.size < matchedLines, matchedLines)
+        return PaginationResult(lines, totalLines, baseLine + from, baseLine + to, taken.size < matchedLines, matchedLines)
     }
 
-    if (maxLines <= 0) return PaginationResult(allLines, totalLines, 0, totalLines - 1, false)
+    if (maxLines <= 0) return PaginationResult(allLines, totalLines, baseLine, baseLine + sliceTotal - 1, false)
 
     val from: Int
     val to: Int
     if (offset != null) {
-        from = offset.coerceIn(0, totalLines)
-        to = (from + maxLines).coerceAtMost(totalLines)
+        from = offset.coerceIn(0, sliceTotal)
+        to = (from + maxLines).coerceAtMost(sliceTotal)
     } else if (fromEnd) {
-        to = totalLines
-        from = (totalLines - maxLines).coerceAtLeast(0)
+        to = sliceTotal
+        from = (sliceTotal - maxLines).coerceAtLeast(0)
     } else {
         from = 0
-        to = maxLines.coerceAtMost(totalLines)
+        to = maxLines.coerceAtMost(sliceTotal)
     }
 
     val result = allLines.subList(from, to)
-    return PaginationResult(result, totalLines, from, to - 1, result.size < totalLines)
+    return PaginationResult(result, totalLines, baseLine + from, baseLine + to - 1, result.size < sliceTotal)
 }

@@ -7,10 +7,15 @@ import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
 import com.intellij.notification.Notification
 import com.intellij.notification.NotificationsManager
+import com.intellij.execution.ui.ExecutionConsole
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.readAction
+import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.toNioPathOrNull
 import com.intellij.openapi.wm.ToolWindowManager
+import com.intellij.xdebugger.XDebuggerManager
 import kotlinx.serialization.json.*
 import com.github.tropin.ridermcp.paginateLines
 import com.github.tropin.ridermcp.projectDir
@@ -63,66 +68,298 @@ class IdeStateToolset : McpToolset {
         @McpDescription("Show all tool windows, not just visible") all: Boolean = false
     ): String {
         val project = coroutineContext.project
-        val twm = ToolWindowManager.getInstance(project)
-        return buildJsonArray {
-            twm.toolWindowIds.forEach { id ->
-                val tw = twm.getToolWindow(id) ?: return@forEach
-                if (!all && !tw.isVisible) return@forEach
-                addJsonObject {
-                    put("id", id)
-                    if (all) put("visible", tw.isVisible)
-                    if (tw.isActive) put("active", true)
-                }
+        var result: String? = null
+        var failure: Throwable? = null
+        ApplicationManager.getApplication().invokeAndWait {
+            try {
+                val twm = ToolWindowManager.getInstance(project)
+                result = buildJsonArray {
+                    twm.toolWindowIds.forEach { id ->
+                        val tw = twm.getToolWindow(id) ?: return@forEach
+                        if (!all && !tw.isVisible) return@forEach
+                        addJsonObject {
+                            put("id", id)
+                            if (all) put("visible", tw.isVisible)
+                            if (tw.isActive) put("active", true)
+                        }
+                    }
+                }.toString()
+            } catch (e: Throwable) {
+                failure = e
             }
-        }.toString()
+        }
+        failure?.let { throw it }
+        return result!!
     }
 
     @McpTool
-    @McpDescription("Reads text content from any IDE tool window/panel (Build output, Problems, Debug, NuGet, Database, etc.). Supports pagination, tail reading, and regex filtering. Response always includes totalLines so you know the full size. Use fromEnd=true for last N lines (errors, recent logs). Use pattern for regex grep (case-insensitive; matched lines prefixed with [lineNo]). Use offset for random access to a specific range.")
+    @McpDescription("Lists tabs of an IDE tool window (debug sessions, run configurations, terminal tabs, etc.). Returns tab names and which one is selected. Use before rider_get_tool_window_content to choose the tab parameter.")
+    suspend fun rider_list_tabs(
+        @McpDescription("Tool window ID (from rider_list_tool_windows)") windowId: String
+    ): String {
+        val project = coroutineContext.project
+        var result: String? = null
+        var failure: Throwable? = null
+        ApplicationManager.getApplication().invokeAndWait {
+            try {
+                val tw = ToolWindowManager.getInstance(project).getToolWindow(windowId)
+                    ?: mcpFail("Tool window '$windowId' not found")
+                val cm = tw.contentManager
+                if (cm.contentCount == 0) mcpFail("Tool window '$windowId' has no tabs. Open it in Rider first (View → Tool Windows → $windowId).")
+                result = buildJsonObject {
+                    put("windowId", windowId)
+                    put("selected", cm.selectedContent?.displayName ?: "")
+                    putJsonArray("tabs") {
+                        cm.contents.forEach { add(it.displayName ?: "") }
+                    }
+                }.toString()
+            } catch (e: Throwable) {
+                failure = e
+            }
+        }
+        failure?.let { throw it }
+        return result!!
+    }
+
+    @McpTool
+    @McpDescription("Reads text content from any IDE tool window/panel (Build output, Problems, Debug, NuGet, Database, etc.). Supports pagination, tail reading, and regex filtering. Response always includes totalLines so you know the full size. Use fromEnd=true for last N lines (errors, recent logs). Use pattern for regex grep (case-insensitive; matched lines prefixed with [lineNo]). Use rider_list_tabs to discover tab names. Use section to read one sub-tab only. Debug window examples: section='Console' returns the debugged app's stdout (via the debugger API, independent of UI layout); section='Debug Output' returns only the debugger trace (Loaded Assembly / Started|Exited Thread). The response always includes availableSections so you don't have to guess section names.")
     suspend fun rider_get_tool_window_content(
         @McpDescription("Tool window ID") windowId: String,
-        @McpDescription("Tab name (omit for active)") tab: String? = null,
+        @McpDescription("Tab name (omit for active). Use rider_list_tabs to discover names") tab: String? = null,
+        @McpDescription("Sub-section name (sub-tab title substring, case-insensitive). Debug examples: 'Console' for app stdout, 'Debug Output' for debugger trace. Omit for full content. See availableSections in the response for valid values.") section: String? = null,
         @McpDescription("Max output lines (default 200, 0 = unlimited)") maxLines: Int = 200,
         @McpDescription("Start from this line (0-based). Mutually exclusive with fromEnd") offset: Int? = null,
         @McpDescription("Return last maxLines lines instead of first (default false). Best for Debug/Build logs where errors are at the end") fromEnd: Boolean = false,
         @McpDescription("Regex filter — return only matching lines (case-insensitive). E.g. 'error|exception|warn'") pattern: String? = null
     ): String {
         val project = coroutineContext.project
-        val tw = ToolWindowManager.getInstance(project).getToolWindow(windowId)
-            ?: mcpFail("Tool window '$windowId' not found")
+        var result: String? = null
+        var failure: Throwable? = null
+        ApplicationManager.getApplication().invokeAndWait {
+            try {
+                val tw = ToolWindowManager.getInstance(project).getToolWindow(windowId)
+                    ?: mcpFail("Tool window '$windowId' not found")
 
-        val cm = tw.contentManager
-        val content = if (tab != null) {
-            cm.contents.firstOrNull { it.displayName.equals(tab, ignoreCase = true) }
-                ?: mcpFail("Tab '$tab' not found. Available: ${cm.contents.map { it.displayName }}")
-        } else {
-            cm.selectedContent ?: cm.contents.firstOrNull()
-        } ?: mcpFail("Tool window '$windowId' has no content")
+                val cm = tw.contentManager
+                val content = if (tab != null) {
+                    cm.contents.firstOrNull { it.displayName.equals(tab, ignoreCase = true) }
+                        ?: mcpFail("Tab '$tab' not found. Available: ${cm.contents.map { it.displayName }}")
+                } else {
+                    cm.selectedContent ?: cm.contents.firstOrNull()
+                } ?: mcpFail("Tool window '$windowId' has no content. Open it in Rider first (View → Tool Windows → $windowId).")
 
-        val allLines = mutableListOf<String>()
-        val component = content.component
-        extractText(component, allLines, Int.MAX_VALUE)
-
-        val result = paginateLines(allLines, maxLines, offset, fromEnd, pattern)
-
-        return buildJsonObject {
-            put("windowId", windowId)
-            put("tab", content.displayName ?: "")
-            put("totalLines", result.totalLines)
-            if (result.lines.isEmpty()) {
-                put("text", "(empty)")
-            } else {
-                putJsonObject("returnedRange") {
-                    put("from", result.returnedFrom)
-                    put("to", result.returnedTo)
+                val component = content.component
+                val availableSections = mutableListOf<String>().also { collectTabTitles(component, it) }
+                if (windowId.equals("Debug", ignoreCase = true)) {
+                    // Documented Debug sub-tabs even when they are not JBTabs in the Swing tree
+                    // (the app console is fetched via the debugger API, not from Swing).
+                    if (availableSections.none { it.equals("Console", ignoreCase = true) }) availableSections.add(0, "Console")
+                    if (availableSections.none { it.equals("Debug Output", ignoreCase = true) }) availableSections.add("Debug Output")
                 }
-                put("text", result.lines.joinToString("\n"))
-                if (result.truncated) put("truncated", true)
-                result.matchedLines?.let { put("matchedLines", it) }
+
+                val sectionTitle: String?
+                val allLines = mutableListOf<String>()
+                if (!section.isNullOrBlank()) {
+                    val resolved = resolveSection(project, windowId, tab, component, section, availableSections)
+                    sectionTitle = resolved.first
+                    allLines.add("--- $sectionTitle ---")
+                    allLines.addAll(resolved.second)
+                } else {
+                    sectionTitle = null
+                    extractText(component, allLines, Int.MAX_VALUE)
+                }
+
+                val page = paginateLines(allLines, maxLines, offset, fromEnd, pattern)
+
+                result = buildJsonObject {
+                    put("windowId", windowId)
+                    put("tab", content.displayName ?: "")
+                    sectionTitle?.let { put("section", it) }
+                    putJsonArray("availableSections") { availableSections.forEach { add(it) } }
+                    put("totalLines", page.totalLines)
+                    if (page.lines.isEmpty()) {
+                        put("text", "(empty)")
+                    } else {
+                        putJsonObject("returnedRange") {
+                            put("from", page.returnedFrom)
+                            put("to", page.returnedTo)
+                        }
+                        put("text", page.lines.joinToString("\n"))
+                        if (page.truncated) put("truncated", true)
+                        page.matchedLines?.let { put("matchedLines", it) }
+                    }
+                    val tabs = cm.contents.map { it.displayName ?: "" }
+                    if (tabs.size > 1) putJsonArray("otherTabs") { tabs.filter { it != (content.displayName ?: "") }.forEach { add(it) } }
+                }.toString()
+            } catch (e: Throwable) {
+                failure = e
             }
-            val tabs = cm.contents.map { it.displayName ?: "" }
-            if (tabs.size > 1) putJsonArray("otherTabs") { tabs.filter { it != (content.displayName ?: "") }.forEach { add(it) } }
-        }.toString()
+        }
+        failure?.let { throw it }
+        return result!!
+    }
+
+    // Resolves a named sub-section (sub-tab) inside tool window content.
+    // Runs on EDT. Returns the section title and its already-extracted text lines.
+    private fun resolveSection(
+        project: Project,
+        windowId: String,
+        tab: String?,
+        component: java.awt.Component,
+        section: String,
+        availableSections: List<String>
+    ): Pair<String, List<String>> {
+        // The debugger's process console (app stdout) is not reliably a Swing sub-tab
+        // of the Debug tool window content — fetch it via the debugger API first.
+        // (RunContentManager lookup by processHandler identity can resolve to a wrong,
+        // empty descriptor, so session.consoleView is the source of truth.)
+        if (windowId.equals("Debug", ignoreCase = true) && section.contains("console", ignoreCase = true)) {
+            val lines = debugConsoleLines(project, tab)
+            if (lines.any { it.isNotBlank() }) return "Console" to lines
+            // Fall through to Swing search if the API console is empty — the real
+            // stdout may still be reachable via merged-content traversal.
+        }
+
+        findSectionComponent(component, section)?.let { (title, target) ->
+            val lines = mutableListOf<String>()
+            extractText(target, lines, Int.MAX_VALUE)
+            return title to lines
+        }
+
+        mcpFail("Section '$section' not found. Available: $availableSections")
+    }
+
+    // Depth-first search for a sub-tab whose title contains the query.
+    // Supports both JBTabs (IntelliJ tab layout) and JTabbedPane (Swing tabs).
+    private fun findSectionComponent(component: java.awt.Component, query: String): Pair<String, java.awt.Component>? {
+        if (component is com.intellij.ui.tabs.JBTabs) {
+            component.tabs.firstOrNull { it.text.contains(query, ignoreCase = true) }
+                ?.let { return it.text to it.component }
+            for (tabInfo in component.tabs) {
+                findSectionComponent(tabInfo.component, query)?.let { return it }
+            }
+            return null
+        }
+        if (component is javax.swing.JTabbedPane) {
+            for (i in 0 until component.tabCount) {
+                if (component.getTitleAt(i).contains(query, ignoreCase = true)) {
+                    return component.getTitleAt(i) to component.getComponentAt(i)
+                }
+            }
+            for (i in 0 until component.tabCount) {
+                findSectionComponent(component.getComponentAt(i), query)?.let { return it }
+            }
+            return null
+        }
+        if (component is java.awt.Container) {
+            for (i in 0 until component.componentCount) {
+                findSectionComponent(component.getComponent(i), query)?.let { return it }
+            }
+        }
+        return null
+    }
+
+    private fun collectTabTitles(component: java.awt.Component, out: MutableList<String>) {
+        when (component) {
+            is com.intellij.ui.tabs.JBTabs -> {
+                component.tabs.forEach { out.add(it.text) }
+                component.tabs.forEach { collectTabTitles(it.component, out) }
+            }
+            is javax.swing.JTabbedPane -> {
+                for (i in 0 until component.tabCount) out.add(component.getTitleAt(i))
+                for (i in 0 until component.tabCount) collectTabTitles(component.getComponentAt(i), out)
+            }
+            is java.awt.Container -> {
+                for (i in 0 until component.componentCount) collectTabTitles(component.getComponent(i), out)
+            }
+        }
+    }
+
+    // App stdout lines of a debug session, independent of UI layout.
+    // Source of truth is XDebugSession.consoleView; its document is read directly
+    // because Swing traversal of the console component can come up empty
+    // (virtualized output, custom console implementations).
+    private fun debugConsoleLines(project: Project, tab: String?): List<String> {
+        val mgr = XDebuggerManager.getInstance(project)
+        val session = if (tab != null) {
+            mgr.debugSessions.firstOrNull { it.sessionName.equals(tab, ignoreCase = true) }
+                ?: mcpFail("Debug session '$tab' not found. Active: ${mgr.debugSessions.map { it.sessionName }}")
+        } else {
+            mgr.currentSession ?: mcpFail("No active debug session")
+        }
+
+        // 1. Direct document text from the session console view.
+        try {
+            val consoleView = session.consoleView
+            if (consoleView != null) {
+                consoleTextFromConsole(consoleView)?.takeIf { it.isNotBlank() }?.let { return it.lines() }
+                val swingLines = mutableListOf<String>()
+                extractText(consoleView.component, swingLines, Int.MAX_VALUE)
+                if (swingLines.any { it.isNotBlank() }) return swingLines
+            }
+        } catch (_: Throwable) {
+            // fall through to RunContentManager lookup
+        }
+
+        // 2. Fallback: RunContentDescriptor with the same process handler.
+        val handler = session.debugProcess.processHandler
+        val descriptor = com.intellij.execution.ui.RunContentManager.getInstance(project).allDescriptors
+            .firstOrNull { it.processHandler === handler }
+            ?: mcpFail("Debug session '${session.sessionName}' has no process console. The app may use an external console window.")
+        val console = descriptor.executionConsole
+            ?: mcpFail("Debug session '${session.sessionName}' has no execution console")
+        consoleTextFromConsole(console)?.takeIf { it.isNotBlank() }?.let { return it.lines() }
+        val lines = mutableListOf<String>()
+        extractText(console.component, lines, Int.MAX_VALUE)
+        return lines
+    }
+
+    // Best-effort raw text of an ExecutionConsole without walking Swing children.
+    // Uses reflection for getEditor()/getEditors() so no dependency on impl classes.
+    private fun consoleTextFromConsole(console: ExecutionConsole): String? {
+        // DuplexConsoleView (debug console + output): concatenate both sides.
+        try {
+            if (console.javaClass.name.contains("Duplex")) {
+                val sb = StringBuilder()
+                for (name in listOf("getPrimaryConsoleView", "getSecondaryConsoleView")) {
+                    try {
+                        val m = console.javaClass.methods.firstOrNull { it.name == name && it.parameterCount == 0 }
+                            ?: continue
+                        val sub = m.invoke(console) as? ExecutionConsole ?: continue
+                        consoleTextFromConsole(sub)?.takeIf { it.isNotBlank() }?.let { sb.append(it).append('\n') }
+                    } catch (_: Throwable) {
+                    }
+                }
+                if (sb.isNotEmpty()) return sb.toString()
+            }
+        } catch (_: Throwable) {
+        }
+        try {
+            console.javaClass.methods.firstOrNull { it.name == "getEditor" && it.parameterCount == 0 }?.let { m ->
+                try {
+                    val editor = m.invoke(console) as? Editor ?: return@let
+                    return ApplicationManager.getApplication().runReadAction<String> { editor.document.text }
+                } catch (_: Throwable) {
+                }
+            }
+            console.javaClass.methods.firstOrNull { it.name == "getEditors" && it.parameterCount == 0 }?.let { m ->
+                try {
+                    @Suppress("UNCHECKED_CAST")
+                    val editors = m.invoke(console) as? Array<Editor>
+                    val parts = editors?.mapNotNull { ed ->
+                        try {
+                            ApplicationManager.getApplication().runReadAction<String> { ed.document.text }
+                        } catch (_: Throwable) {
+                            null
+                        }
+                    }?.filter { it.isNotBlank() }
+                    if (!parts.isNullOrEmpty()) return parts.joinToString("\n")
+                } catch (_: Throwable) {
+                }
+            }
+        } catch (_: Throwable) {
+        }
+        return null
     }
 
     private fun extractText(component: java.awt.Component, lines: MutableList<String>, limit: Int) {

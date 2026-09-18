@@ -43,7 +43,7 @@ class BuildToolset : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Polls output for any async session (build, test, nuget restore). Returns new log lines since last call, plus current status and exit code. Keep polling until status is not 'running'. Works with sessionId from rider_start_build, rider_run_tests, rider_nuget_restore, rider_start_debug, rider_rerun_failed_tests. Supports pagination: fromEnd=true for last N lines, pattern for regex grep, offset for random access. Pass allLines=true to read ALL accumulated lines (not just new since last poll).")
+    @McpDescription("Polls output for any async session (build, test, nuget restore). Returns new log lines since last call, plus current status and exit code. Keep polling until status is not 'running'. Works with sessionId from rider_start_build, rider_run_tests, rider_nuget_restore, rider_start_debug, rider_rerun_failed_tests. Supports pagination: fromEnd=true for last N lines, pattern for regex grep, offset for random access. Pass allLines=true to read ALL accumulated lines (not just new since last poll). totalLines and returnedRange use session-wide 0-based coordinates; [n] prefixes are session-wide 1-based line numbers.")
     suspend fun rider_get_output(
         @McpDescription("Session ID from a start operation") sessionId: String,
         @McpDescription("Max lines to return (0 = unlimited)") maxLines: Int = 0,
@@ -55,8 +55,9 @@ class BuildToolset : McpToolset {
         val session = SessionManager.get(sessionId)
             ?: mcpFail("Session '$sessionId' not found")
 
-        val rawLines = if (allLines) session.getAllLines() else session.getNewLines()
-        val result = paginateLines(rawLines, maxLines, offset, fromEnd, pattern)
+        val (base, rawLines) = if (allLines) 0 to session.getAllLines() else session.getNewLinesWithBase()
+        val result = paginateLines(rawLines, maxLines, offset, fromEnd, pattern,
+            baseLine = base, globalTotal = session.totalLineCount())
 
         return buildJsonObject {
             put("status", session.status)

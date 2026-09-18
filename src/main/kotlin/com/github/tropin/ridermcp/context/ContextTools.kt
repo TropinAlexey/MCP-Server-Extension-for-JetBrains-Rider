@@ -55,39 +55,39 @@ class ContextToolset : McpToolset {
                         put("endLine", doc.getLineNumber(editor.selectionModel.selectionEnd) + 1)
                     }
                 }
-            }
 
-            val activeVf = fem.selectedTextEditor?.virtualFile
-            val others = fem.openFiles.filter { it != activeVf }
-            if (others.isNotEmpty()) {
-                b.putJsonArray("openEditors") {
-                    others.forEach { add(it.toNioPathOrNull()?.relTo(projectDir) ?: it.path) }
-                }
-                val mod = others.filter { f ->
-                    fdm.getDocument(f)?.let { fdm.isDocumentUnsaved(it) } == true
-                }
-                if (mod.isNotEmpty()) {
-                    b.putJsonArray("modified") {
-                        mod.forEach { add(it.toNioPathOrNull()?.relTo(projectDir) ?: it.path) }
+                val activeVf = fem.selectedTextEditor?.virtualFile
+                val others = fem.openFiles.filter { it != activeVf }
+                if (others.isNotEmpty()) {
+                    b.putJsonArray("openEditors") {
+                        others.forEach { add(it.toNioPathOrNull()?.relTo(projectDir) ?: it.path) }
                     }
-                }
-            }
-
-            try {
-                val bm = BookmarksManager.getInstance(project) ?: return@buildJsonObject
-                val allBookmarks = bm.bookmarks
-                if (allBookmarks.isNotEmpty()) {
-                    b.putJsonArray("bookmarks") {
-                        allBookmarks.forEach { bookmark ->
-                            val desc = bm.getGroups(bookmark).firstOrNull()?.name
-                            addJsonObject {
-                                put("bookmark", bookmark.toString())
-                                desc?.takeIf { it.isNotEmpty() }?.let { put("group", it) }
-                            }
+                    val mod = others.filter { f ->
+                        fdm.getDocument(f)?.let { fdm.isDocumentUnsaved(it) } == true
+                    }
+                    if (mod.isNotEmpty()) {
+                        b.putJsonArray("modified") {
+                            mod.forEach { add(it.toNioPathOrNull()?.relTo(projectDir) ?: it.path) }
                         }
                     }
                 }
-            } catch (_: Exception) {}
+
+                try {
+                    val bm = BookmarksManager.getInstance(project) ?: return@runReadAction
+                    val allBookmarks = bm.bookmarks
+                    if (allBookmarks.isNotEmpty()) {
+                        b.putJsonArray("bookmarks") {
+                            allBookmarks.forEach { bookmark ->
+                                val desc = bm.getGroups(bookmark).firstOrNull()?.name
+                                addJsonObject {
+                                    put("bookmark", bookmark.toString())
+                                    desc?.takeIf { it.isNotEmpty() }?.let { put("group", it) }
+                                }
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
         }
 
         return result.toString()
@@ -98,8 +98,10 @@ class ContextToolset : McpToolset {
     suspend fun rider_get_recent_files(): String {
         val project = coroutineContext.project
         val projectDir = project.projectDir()
-        val files = EditorHistoryManager.getInstance(project).fileList.takeLast(20).reversed().map { file ->
-            file.toNioPathOrNull()?.relTo(projectDir) ?: file.path
+        val files = ApplicationManager.getApplication().runReadAction<List<String>> {
+            EditorHistoryManager.getInstance(project).fileList.takeLast(20).reversed().map { file ->
+                file.toNioPathOrNull()?.relTo(projectDir) ?: file.path
+            }
         }
         return buildJsonArray { files.forEach { add(it) } }.toString()
     }

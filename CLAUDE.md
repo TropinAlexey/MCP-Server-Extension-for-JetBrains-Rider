@@ -57,7 +57,8 @@ Task → tool map:
 - Recently opened files → `rider_get_recent_files`
 - IDE readiness (indexing, busy) → `rider_get_ide_state`
 - IDE errors and warnings → `rider_get_notifications`
-- Any panel content (Build, Problems, etc.) → `rider_list_tool_windows` + `rider_get_tool_window_content` (see **Pagination** below)
+- Any panel content (Build, Problems, etc.) → `rider_list_tool_windows` + `rider_list_tabs` + `rider_get_tool_window_content` (see **Pagination** below and **Tool window map**)
+- Debugged app stdout (NOT the debugger trace) → `rider_get_tool_window_content` with `section=console` + `fromEnd=true` (Debug window: `Console` = process stdout via debugger API; `Debug Output` = `Loaded Assembly / Pdb / Started|Exited Thread` trace)
 - TODO/FIXME/HACK in code → `rider_get_todos`
 - API endpoints → `rider_get_endpoints`
 - IDE terminal commands → `rider_list_terminals` + `rider_send_terminal_input`
@@ -118,6 +119,32 @@ Both tools share the same pagination parameters. Response always includes `total
 - Use `pattern` to search for errors without downloading the entire log
 - Check `totalLines` in the response — if the window has 10K lines, don't request all of them
 - For Problems/TODO/tree windows — default (first N lines) is usually fine, no `fromEnd` needed
+
+### Tool window map
+
+Model: **window → tabs → Swing component tree**. Navigate: `rider_list_tool_windows` → `rider_list_tabs {windowId}` → `rider_get_tool_window_content {windowId, tab?, section?}`.
+
+| Window | Tabs | Sections inside |
+|---|---|---|
+| `Debug` | One per debug session (tab = session name) | `Threads & Variables`, `Console` (app stdout, via debugger API), `Debug Output` (assembly/thread trace) |
+| `Run` | One per execution (tab = descriptor name) | Process stdout/stderr console |
+| `Build` | Build sessions | Compiler output (structured errors also in `Problems`) |
+| `Problems` | Scope | Errors/warnings tree |
+| `Terminal` | One per terminal | Shell console |
+| `TODO` | Scope filter | TODO/FIXME/HACK tree |
+| `Endpoints` | — | HTTP routes tree/list |
+| `Services` | Dashboard entries | May be `has no content` until opened once in UI |
+| Others | Varies | Generic extraction: sub-tabs marked `--- <title> ---`, editors as text, trees flattened with indent |
+
+Recipes:
+```jsonc
+// App stdout of the active debug session, last 50 lines (NOT the debugger trace)
+{ "windowId": "Debug", "section": "console", "maxLines": 50, "fromEnd": true }
+// Debugger trace tail
+{ "windowId": "Debug", "section": "output", "maxLines": 30, "fromEnd": true }
+// Finished run output (tab name from rider_list_tabs("Run"))
+{ "windowId": "Run", "tab": "e2e tests", "maxLines": 30, "fromEnd": true }
+```
 
 ## Language
 
