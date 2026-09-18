@@ -9,6 +9,7 @@ dependencies {
             useInstaller = false
         }
         bundledPlugin("com.intellij.mcpServer")
+        bundledPlugin("com.intellij.database")
         testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
     }
     compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")

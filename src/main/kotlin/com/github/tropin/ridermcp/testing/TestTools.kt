@@ -22,6 +22,8 @@ import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.util.Key
+import com.github.tropin.ridermcp.OutputSession
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.*
 import com.github.tropin.ridermcp.SessionManager
 import kotlin.coroutines.coroutineContext
@@ -29,7 +31,7 @@ import kotlin.coroutines.coroutineContext
 class TestToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Runs unit/integration tests. Filter by className (\"MyTestClass\"), methodName (\"ShouldWork\"), or raw dotnet test filter expression (\"FullyQualifiedName~Namespace.Class\"). Omit all filters to run all tests. Poll progress with rider_get_output, then get structured pass/fail results with rider_get_test_results.")
+    @McpDescription("Runs unit/integration tests via the IDE (preferred over shell 'dotnet test' — you keep the structured result tree). Typical chain: rider_run_tests → poll rider_get_output(sessionId) until status is not 'running' → rider_get_test_results(sessionId) for the pass/fail tree. Shortcut: rider_run_tests_and_wait runs the same chain in one call. Filter by className (\"MyTestClass\"), methodName (\"ShouldWork\"), or raw dotnet test filter expression (\"FullyQualifiedName~Namespace.Class\"). Omit all filters to run all tests. If the IDE is busy (indexing, build, active debug), check rider_get_ide_state first.")
     suspend fun rider_run_tests(
         @McpDescription("Run configuration name") configName: String? = null,
         @McpDescription("dotnet test --filter expression") filter: String? = null,
@@ -37,6 +39,52 @@ class TestToolset : McpToolset {
         @McpDescription("Test method name") methodName: String? = null
     ): String {
         val project = coroutineContext.project
+        val launch = launchTests(project, configName, filter, className, methodName)
+        if (launch.errorJson != null) return launch.errorJson
+        return buildJsonObject { put("sessionId", launch.session!!.id) }.toString()
+    }
+
+    @McpTool
+    @McpDescription("Runs tests and waits for completion in one call (run + wait). Returns the final status, exit code, last output lines, and a sessionId for rider_get_test_results (structured pass/fail tree). Prefer this over shell 'dotnet test'. If the timeout expires first, returns status 'running' with the sessionId — continue with rider_get_output, then rider_get_test_results. If the IDE is busy (indexing, build, active debug), check rider_get_ide_state first.")
+    suspend fun rider_run_tests_and_wait(
+        @McpDescription("Run configuration name") configName: String? = null,
+        @McpDescription("dotnet test --filter expression") filter: String? = null,
+        @McpDescription("Test class name") className: String? = null,
+        @McpDescription("Test method name") methodName: String? = null,
+        @McpDescription("Max wait in milliseconds (1000-1800000, default 300000)") timeoutMs: Int = 300000
+    ): String {
+        val project = coroutineContext.project
+        val launch = launchTests(project, configName, filter, className, methodName)
+        if (launch.errorJson != null) return launch.errorJson
+        val session = launch.session!!
+
+        val deadline = System.currentTimeMillis() + timeoutMs.coerceIn(1000, 1800000)
+        while (session.status == "running" && System.currentTimeMillis() < deadline) {
+            delay(1000)
+        }
+
+        return buildJsonObject {
+            put("status", session.status)
+            put("sessionId", session.id)
+            session.exitCode?.let { put("exitCode", it) }
+            putJsonArray("tail") { session.getAllLines().takeLast(30).forEach { add(it) } }
+            if (session.status == "running") {
+                put("note", "Timeout expired, tests still running. Continue with rider_get_output, then rider_get_test_results.")
+            } else {
+                put("note", "Finished. Call rider_get_test_results with this sessionId for the structured tree.")
+            }
+        }.toString()
+    }
+
+    private data class TestLaunch(val session: OutputSession?, val errorJson: String?)
+
+    private fun launchTests(
+        project: com.intellij.openapi.project.Project,
+        configName: String?,
+        filter: String?,
+        className: String?,
+        methodName: String?
+    ): TestLaunch {
         val runManager = RunManager.getInstance(project)
 
         val testConfigs = runManager.allSettings.filter { config ->
@@ -52,11 +100,13 @@ class TestToolset : McpToolset {
             testConfigs.isEmpty() -> mcpFail("No test configurations found. Create one in Rider first.")
             testConfigs.size == 1 -> testConfigs.first()
             else -> {
-                val result = buildJsonObject {
-                    put("error", "Multiple test configs found, specify configName")
-                    putJsonArray("configs") { testConfigs.forEach { add(it.name) } }
-                }
-                return result.toString()
+                return TestLaunch(
+                    null,
+                    buildJsonObject {
+                        put("error", "Multiple test configs found, specify configName")
+                        putJsonArray("configs") { testConfigs.forEach { add(it.name) } }
+                    }.toString()
+                )
             }
         }
 
@@ -69,8 +119,14 @@ class TestToolset : McpToolset {
             else -> null
         }
 
-        if (filterExpr != null) return runFilteredTests(project, filterExpr)
+        if (filterExpr != null) return TestLaunch(startFilteredTests(project, filterExpr), null)
+        return TestLaunch(startIdeTests(project, settings), null)
+    }
 
+    private fun startIdeTests(
+        project: com.intellij.openapi.project.Project,
+        settings: com.intellij.execution.RunnerAndConfigurationSettings
+    ): OutputSession {
         val session = SessionManager.create("test")
         session.appendLine("Running: ${settings.name}")
         val cfgName = settings.name
@@ -98,10 +154,10 @@ class TestToolset : McpToolset {
             ProgramRunnerUtil.executeConfiguration(settings, DefaultRunExecutor.getRunExecutorInstance())
         }
 
-        return buildJsonObject { put("sessionId", session.id) }.toString()
+        return session
     }
 
-    private fun runFilteredTests(project: com.intellij.openapi.project.Project, filter: String): String {
+    private fun startFilteredTests(project: com.intellij.openapi.project.Project, filter: String): OutputSession {
         val session = SessionManager.create("test")
         session.appendLine("Running: dotnet test --filter $filter")
         try {
@@ -124,7 +180,7 @@ class TestToolset : McpToolset {
             session.status = "failed"
             session.appendLine("Error: ${e.message}")
         }
-        return buildJsonObject { put("sessionId", session.id) }.toString()
+        return session
     }
 
     @McpTool

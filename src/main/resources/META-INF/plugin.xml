@@ -10,6 +10,7 @@
 
     <depends>com.intellij.modules.rider</depends>
     <depends>com.intellij.mcpServer</depends>
+    <depends>com.intellij.database</depends>
 
     <dependencies>
         <plugin id="intellij.testRunner.plugin" />
@@ -22,6 +23,7 @@
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.ide.TerminalToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.ide.TodoToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.ide.EndpointsToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.ide.DbConsolesToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.context.ContextToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.testing.TestToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.debugger.DebugToolset"/>

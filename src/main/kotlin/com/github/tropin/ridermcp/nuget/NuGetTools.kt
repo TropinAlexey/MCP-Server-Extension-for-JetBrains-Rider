@@ -83,7 +83,7 @@ class NuGetToolset : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Runs NuGet package restore (dotnet restore) to download missing dependencies. Returns sessionId — poll with rider_get_output until complete. Use after adding packages or when dependencies are missing.")
+    @McpDescription("Runs NuGet package restore (dotnet restore) to download missing dependencies. Returns sessionId — poll with rider_get_output until complete. Use after adding packages or when dependencies are missing. If the IDE is busy (indexing, build), check rider_get_ide_state first.")
     suspend fun rider_nuget_restore(): String {
         val project = coroutineContext.project
         val session = SessionManager.create("nuget")

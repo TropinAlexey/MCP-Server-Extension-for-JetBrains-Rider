@@ -19,7 +19,7 @@ import kotlin.coroutines.coroutineContext
 class ContextToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Returns programmer's current focus: active file path, cursor/caret position (line + column), selected text with line range, surrounding code context (±5 lines), list of other open editors, unsaved/modified files, and bookmarks. Use this to see what the user is looking at, what text they have selected, or where their cursor is.")
+    @McpDescription("Returns programmer's current focus: active file path, cursor/caret position (line + column), selected text with line range, surrounding code context (±5 lines), list of other open editors, unsaved/modified files, and bookmarks. Use this to see what the user is looking at, what text they have selected, or where their cursor is. For open database consoles with their data sources (name + id for the database tools), use rider_list_db_consoles.")
     suspend fun rider_get_context(): String {
         val project = coroutineContext.project
         val projectDir = project.projectDir()

@@ -128,7 +128,7 @@ class DebugToolset : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Returns current debug session state: status (running/paused/stopped), current file and line when paused at breakpoint, full stack trace with file locations. Use to check where the debugger stopped or whether it's still running.")
+    @McpDescription("Returns current debug session state: status (running/paused/stopped), current file and line when paused at breakpoint, full stack trace with file locations. Use to check where the debugger stopped or whether it's still running. Live-debug loop for a running process: rider_list_processes → attach with xdebug_attach_to_process → rider_set_breakpoint → poll this tool until paused → rider_debug_evaluate.")
     suspend fun rider_debug_state(): String {
         val project = coroutineContext.project
         val session = XDebuggerManager.getInstance(project).currentSession
@@ -193,7 +193,7 @@ class DebugToolset : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Evaluates an expression in the current debug frame (watch expression). Use to inspect variable values, call methods, check object state, or compute values while paused at a breakpoint. Debugger must be paused.")
+    @McpDescription("Evaluates an expression in the current debug frame (watch expression). Use to inspect variable values, call methods, check object state, or compute values while paused at a breakpoint. Debugger must be paused. Live-debug recipe for a running process: 1) rider_list_processes to find the PID, 2) attach with xdebug_attach_to_process, 3) rider_set_breakpoint at the place of interest, 4) rider_debug_state until status is paused, 5) evaluate here.")
     suspend fun rider_debug_evaluate(
         @McpDescription("Expression to evaluate") expression: String
     ): String {

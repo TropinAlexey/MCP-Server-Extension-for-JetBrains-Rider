@@ -17,7 +17,7 @@ import com.intellij.mcpserver.project
 class BuildToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Starts building the solution (compile/build). Returns sessionId for polling. Use rider_get_output to poll build progress and get build logs until status is not 'running'.")
+    @McpDescription("Starts building the solution (compile/build). Returns sessionId for polling. Use rider_get_output to poll build progress and get build logs until status is not 'running'. If the IDE is busy (indexing, another build, active debug), check rider_get_ide_state first.")
     suspend fun rider_start_build(): String {
         val project = coroutineContext.project
         val session = SessionManager.create("build")
