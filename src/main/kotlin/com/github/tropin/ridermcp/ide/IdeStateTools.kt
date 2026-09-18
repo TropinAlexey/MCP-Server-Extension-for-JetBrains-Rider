@@ -7,6 +7,7 @@ import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
 import com.intellij.notification.Notification
 import com.intellij.notification.NotificationsManager
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.vfs.toNioPathOrNull
@@ -63,18 +64,28 @@ class IdeStateToolset : McpToolset {
         @McpDescription("Show all tool windows, not just visible") all: Boolean = false
     ): String {
         val project = coroutineContext.project
-        val twm = ToolWindowManager.getInstance(project)
-        return buildJsonArray {
-            twm.toolWindowIds.forEach { id ->
-                val tw = twm.getToolWindow(id) ?: return@forEach
-                if (!all && !tw.isVisible) return@forEach
-                addJsonObject {
-                    put("id", id)
-                    if (all) put("visible", tw.isVisible)
-                    if (tw.isActive) put("active", true)
-                }
+        var result: String? = null
+        var failure: Throwable? = null
+        ApplicationManager.getApplication().invokeAndWait {
+            try {
+                val twm = ToolWindowManager.getInstance(project)
+                result = buildJsonArray {
+                    twm.toolWindowIds.forEach { id ->
+                        val tw = twm.getToolWindow(id) ?: return@forEach
+                        if (!all && !tw.isVisible) return@forEach
+                        addJsonObject {
+                            put("id", id)
+                            if (all) put("visible", tw.isVisible)
+                            if (tw.isActive) put("active", true)
+                        }
+                    }
+                }.toString()
+            } catch (e: Throwable) {
+                failure = e
             }
-        }.toString()
+        }
+        failure?.let { throw it }
+        return result!!
     }
 
     @McpTool
@@ -88,41 +99,51 @@ class IdeStateToolset : McpToolset {
         @McpDescription("Regex filter — return only matching lines (case-insensitive). E.g. 'error|exception|warn'") pattern: String? = null
     ): String {
         val project = coroutineContext.project
-        val tw = ToolWindowManager.getInstance(project).getToolWindow(windowId)
-            ?: mcpFail("Tool window '$windowId' not found")
+        var result: String? = null
+        var failure: Throwable? = null
+        ApplicationManager.getApplication().invokeAndWait {
+            try {
+                val tw = ToolWindowManager.getInstance(project).getToolWindow(windowId)
+                    ?: mcpFail("Tool window '$windowId' not found")
 
-        val cm = tw.contentManager
-        val content = if (tab != null) {
-            cm.contents.firstOrNull { it.displayName.equals(tab, ignoreCase = true) }
-                ?: mcpFail("Tab '$tab' not found. Available: ${cm.contents.map { it.displayName }}")
-        } else {
-            cm.selectedContent ?: cm.contents.firstOrNull()
-        } ?: mcpFail("Tool window '$windowId' has no content")
+                val cm = tw.contentManager
+                val content = if (tab != null) {
+                    cm.contents.firstOrNull { it.displayName.equals(tab, ignoreCase = true) }
+                        ?: mcpFail("Tab '$tab' not found. Available: ${cm.contents.map { it.displayName }}")
+                } else {
+                    cm.selectedContent ?: cm.contents.firstOrNull()
+                } ?: mcpFail("Tool window '$windowId' has no content")
 
-        val allLines = mutableListOf<String>()
-        val component = content.component
-        extractText(component, allLines, Int.MAX_VALUE)
+                val allLines = mutableListOf<String>()
+                val component = content.component
+                extractText(component, allLines, Int.MAX_VALUE)
 
-        val result = paginateLines(allLines, maxLines, offset, fromEnd, pattern)
+                val page = paginateLines(allLines, maxLines, offset, fromEnd, pattern)
 
-        return buildJsonObject {
-            put("windowId", windowId)
-            put("tab", content.displayName ?: "")
-            put("totalLines", result.totalLines)
-            if (result.lines.isEmpty()) {
-                put("text", "(empty)")
-            } else {
-                putJsonObject("returnedRange") {
-                    put("from", result.returnedFrom)
-                    put("to", result.returnedTo)
-                }
-                put("text", result.lines.joinToString("\n"))
-                if (result.truncated) put("truncated", true)
-                result.matchedLines?.let { put("matchedLines", it) }
+                result = buildJsonObject {
+                    put("windowId", windowId)
+                    put("tab", content.displayName ?: "")
+                    put("totalLines", page.totalLines)
+                    if (page.lines.isEmpty()) {
+                        put("text", "(empty)")
+                    } else {
+                        putJsonObject("returnedRange") {
+                            put("from", page.returnedFrom)
+                            put("to", page.returnedTo)
+                        }
+                        put("text", page.lines.joinToString("\n"))
+                        if (page.truncated) put("truncated", true)
+                        page.matchedLines?.let { put("matchedLines", it) }
+                    }
+                    val tabs = cm.contents.map { it.displayName ?: "" }
+                    if (tabs.size > 1) putJsonArray("otherTabs") { tabs.filter { it != (content.displayName ?: "") }.forEach { add(it) } }
+                }.toString()
+            } catch (e: Throwable) {
+                failure = e
             }
-            val tabs = cm.contents.map { it.displayName ?: "" }
-            if (tabs.size > 1) putJsonArray("otherTabs") { tabs.filter { it != (content.displayName ?: "") }.forEach { add(it) } }
-        }.toString()
+        }
+        failure?.let { throw it }
+        return result!!
     }
 
     private fun extractText(component: java.awt.Component, lines: MutableList<String>, limit: Int) {

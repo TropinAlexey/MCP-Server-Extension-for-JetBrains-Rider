@@ -107,9 +107,12 @@ class RunConfigToolset : McpToolset {
         return buildJsonObject { put("deleted", name) }.toString()
     }
 
-    private fun parseEnvString(env: String): Map<String, String> =
-        env.split(",").associate { pair ->
-            val (k, v) = pair.split("=", limit = 2)
-            k.trim() to v.trim()
+    private fun parseEnvString(env: String): Map<String, String> {
+        if (env.isBlank()) return emptyMap()
+        return env.split(",").associate { pair ->
+            val idx = pair.indexOf('=')
+            if (idx <= 0) mcpFail("Invalid env entry '${pair.trim()}', expected key=value")
+            pair.substring(0, idx).trim() to pair.substring(idx + 1).trim()
         }
+    }
 }

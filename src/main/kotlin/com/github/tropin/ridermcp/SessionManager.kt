@@ -26,6 +26,15 @@ class OutputSession(
         return result
     }
 
+    @Synchronized fun getNewLinesWithBase(): Pair<Int, List<String>> {
+        val base = readCursor
+        val result = lines.subList(readCursor, lines.size).toList()
+        readCursor = lines.size
+        return base to result
+    }
+
+    @Synchronized fun totalLineCount(): Int = lines.size
+
     @Synchronized fun getAllLines(): List<String> = lines.toList()
 }
 
