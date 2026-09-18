@@ -267,30 +267,16 @@ gradlew.bat runIde
 
 ## What's New
 
-### v1.0.5
+### v1.0.6
 
+- Long outputs can be read in pages — tool windows and build/test sessions: jump to the last lines, search with a pattern, or navigate page by page
 - Read a single sub-tab of any tool window with the new `section` parameter — e.g. just the application output, without the surrounding debugger noise
 - Debug window now clearly separates two views: `Console` (your application's own output) and `Debug Output` (the debugger trace)
-- New `rider_list_tabs` tool: see tab names and the selected tab of any tool window (36 tools in total)
-- More reliable reading of tool windows and IDE panels: no more freezes or silently missed content
-- Output polling reports consistent line numbers and ranges, so long logs are easier to navigate
+- New `rider_list_tabs` tool: see tab names and the selected tab of any tool window (38 tools in total)
 - New `rider_list_db_consoles`: open DB consoles with their data sources — the agent finds the right database in one call
 - New `rider_run_tests_and_wait`: run tests and wait in a single call instead of manual polling
+- More reliable reading of tool windows and IDE panels: no more freezes or silently missed content
 - Heavy tools (build, tests, restore) point at `rider_get_ide_state` first, so the agent doesn't pile onto a busy IDE
-- Full tool window map (window → tabs → sections) with ready-to-use Debug/Run recipes
-
-### v1.0.4
-
-- Long outputs can be read in pages — for both tool window content and build/test sessions
-- Jump straight to the last lines, search with a pattern, or navigate page by page
-
-### v1.0.3
-
-- First version of output truncation options (superseded by full pagination in v1.0.4)
-
-### v1.0.2
-
-- Maintenance release, no user-facing changes
 
 ### v1.0.1
 
