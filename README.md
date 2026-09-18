@@ -287,6 +287,9 @@ gradlew.bat runIde
 - New logo
 - 35 tools, Rider 2026.1+
 
+<details>
+<summary>Older releases</summary>
+
 ### v0.2.2
 
 - Minimum version raised to Rider 2026.1+ — `intellij.testRunner.plugin` requires 2026+ (not available in 2025.3)
@@ -303,9 +306,6 @@ gradlew.bat runIde
 - Canonical project structure per JetBrains template: `settings.gradle.kts` with `pluginManagement`/`dependencyResolutionManagement`, JDK toolchain, Gradle configuration & build cache
 - Added V2 `<dependencies>` block for `intellij.testRunner.plugin` — resolves smRunner class verification on 2026.x
 - Plugin Verifier: **Compatible** on Rider 2026.2, zero compatibility problems, zero deprecated API usages
-
-<details>
-<summary>Older releases</summary>
 
 ### v0.11.0 — dotTrace Profiling
 - `rider_profiling_state` / `rider_profiling_control` — dotTrace session management
