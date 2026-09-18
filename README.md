@@ -187,13 +187,14 @@ Navigate it in three steps: `rider_list_tool_windows` → `rider_list_tabs` → 
 | `NuGet`, `Database`, others | Varies | Generic text/tree extraction (see rules below) |
 
 Text extraction rules (`rider_get_tool_window_content`):
-- Sub-tabs (`JBTabs`) are all visited and marked with `--- <title> ---` headers — read the headers to see which sections exist.
+- Sub-tabs (`JBTabs` and `JTabbedPane`) are all visited and marked with `--- <title> ---` headers — read the headers to see which sections exist.
+- Every response includes `availableSections` so you don't have to guess section names.
 - Editor-based consoles (run/debug output) are read as plain text.
 - Trees (`JTree`) are flattened with indent; lists (`JList`) item by item.
 - `section` reads a single sub-tab by title substring (case-insensitive), e.g. `section=console`.
-  Exception: the Debug `Console` is not always a Swing sub-tab, so for `windowId=Debug` + `section=console`
-  the text is fetched via the debugger API (process console of the session) instead of the component tree.
-- If `section` is not found, the error lists the actually available sub-tab titles.
+  Exception: the Debug `Console` is not reliably a Swing sub-tab, so for `windowId=Debug` + `section=console`
+  the text is fetched via the debugger API (source of truth is the session `consoleView` document) instead of the component tree.
+- If `section` is not found, the error lists the actually available sub-tab titles (same as `availableSections`).
 
 Recipes:
 ```jsonc
@@ -251,7 +252,7 @@ gradlew.bat runIde
 
 ### v1.0.5
 
-- Feature: `rider_get_tool_window_content` — `section` parameter reads one sub-tab only. `section=console` on the Debug window returns the debugged app's stdout via the debugger API (previously only the `Debug Output` trace was reachable)
+- Feature: `rider_get_tool_window_content` — `section` parameter reads one sub-tab only. `section=console` on the Debug window returns the debugged app's stdout via the debugger API (source of truth is the session `consoleView` document, previously only the `Debug Output` trace was reachable). Every response includes `availableSections`; sub-tab search covers both `JBTabs` and `JTabbedPane`
 - Feature: new `rider_list_tabs` tool — list tab names + selected tab of any tool window (36 tools now)
 - Fix: EDT violations in Terminal/TODO/Endpoints/IDE-state reads (`invokeAndWait`); `Services` no longer crashes, reports `has no content` with a hint until opened in UI
 - Fix: `rider_get_output` reports `totalLines`/`returnedRange` in session-wide coordinates

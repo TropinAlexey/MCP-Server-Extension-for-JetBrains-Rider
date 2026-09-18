@@ -94,6 +94,7 @@ Both tools share the same pagination parameters. Response always includes `total
 - `returnedRange` — `{ from, to }` — which lines were returned (0-based)
 - `truncated` — `true` when more lines exist beyond what was returned
 - `matchedLines` — number of lines matching `pattern` (only when `pattern` used)
+- `availableSections` — sub-tab titles in the window content (`rider_get_tool_window_content` only, always present — use for the `section` param instead of guessing)
 
 **Recipes:**
 
