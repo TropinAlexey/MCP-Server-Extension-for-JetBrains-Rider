@@ -31,5 +31,6 @@
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.settings.SettingsToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.admin.AdminToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.profiling.ProfilingToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.profiling.MemoryToolset"/>
     </extensions>
 </idea-plugin>
