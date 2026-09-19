@@ -264,6 +264,8 @@ gradlew.bat runIde
 | Terminal "not ready" | The tab has no attached process yet — open a terminal in Rider and retry |
 | "Configuration '…' not found" | Names must match exactly — list them with the built-in `get_run_configurations` |
 | `rider_list_db_consoles` returns `[]` | Open the console in an editor tab first (double-click it in the Database tool window) |
+| A tool returns a file path you cannot read | Read only paths from `rider_get_context` (project-relative, always readable); absolute local path as fallback. Never feed one tool's path into another tool blindly |
+| Target database missing from the schema list | The list is the introspected subset, not the truth. Run the query through any introspected database with three-part names (`db.schema.table`) and confirm via `SELECT name FROM sys.databases` |
 
 ## Limitations & Privacy
 

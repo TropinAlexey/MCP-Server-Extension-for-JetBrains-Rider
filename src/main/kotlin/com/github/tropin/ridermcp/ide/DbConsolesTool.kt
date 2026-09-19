@@ -14,7 +14,7 @@ import kotlin.coroutines.coroutineContext
 class DbConsolesToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Lists database consoles (SQL query consoles) currently open in the IDE, each bound to its data source. Call this FIRST when the user says a DB console is open, or before scanning servers with list_schemas — the open console already identifies the right database. Returns console file name plus data source name, uniqueId (pass it as connectionId to the database tools like execute_sql_query), DBMS, and connection URL.")
+    @McpDescription("Lists database consoles (SQL query consoles) currently open in the IDE, each bound to its data source. Call this FIRST when the user says a DB console is open, or before scanning servers with list_schemas — the open console already identifies the right database. Returns console file name plus data source name, uniqueId (pass it as connectionId to the database tools like execute_sql_query), DBMS, and connection URL. If the target database is not introspected in the IDE model, use any introspected database as the execution context and address tables with three-part names (db.schema.table); confirm the real database list with SELECT name FROM sys.databases — never trust a filtered schema list. Always confirm the database context BEFORE running expensive queries.")
     suspend fun rider_list_db_consoles(): String {
         val project = coroutineContext.project
         return runOnEdt {
