@@ -147,6 +147,18 @@ Recipes:
 { "windowId": "Run", "tab": "e2e tests", "maxLines": 30, "fromEnd": true }
 ```
 
+## Tool Design Rules
+
+Recipes over tools (see CONTRACT.md): do not add a new `rider_*` tool when
+a cookbook description on an existing one covers the scenario. A new tool
+requires all three: (1) recipe cannot cover it, (2) reason recorded in the
+commit message, (3) eval delta in `notes/evals` does not regress.
+
+## Notes
+
+`notes/` (git-ignored) holds internal working notes: analysis, plans, session logs.
+When the developer asks to "create a note" (создать заметку), write it there.
+
 ## Language
 
 Code and comments — in English. Communication with the developer — in Russian.
