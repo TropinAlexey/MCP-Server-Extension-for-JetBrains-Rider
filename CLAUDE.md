@@ -159,6 +159,13 @@ commit message, (3) eval delta in `notes/evals` does not regress.
 `notes/` (git-ignored) holds internal working notes: analysis, plans, session logs.
 When the developer asks to "create a note" (создать заметку), write it there.
 
+## Feedback
+
+`feedback/` (git-ignored) holds usage feedback and improvement proposals
+for this plugin's tools. Collect real session friction there: what the agent
+tried, what misrouted, what was missing. Feed confirmed items back into
+`notes/evals` scenarios and cookbook descriptions.
+
 ## Language
 
 Code and comments — in English. Communication with the developer — in Russian.
