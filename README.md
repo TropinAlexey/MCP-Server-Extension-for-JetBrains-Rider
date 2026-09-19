@@ -65,7 +65,7 @@ MCP tools are synchronous (request → response). Long-running operations — bu
 2. `rider_get_output("build_1")` → returns new lines since the last call, plus current status
 3. Repeat until `status` is no longer `"running"`
 
-## Available Tools (38)
+## Available Tools (40)
 
 ### Build
 | Tool | Description |
@@ -149,6 +149,12 @@ MCP tools are synchronous (request → response). Long-running operations — bu
 |---|---|---|
 | `rider_profiling_state` | — | dotTrace state: active session info (processes, snapshots, errors), opened snapshots, profiling availability |
 | `rider_profiling_control` | `command`, `pid?` | Control active session. Commands: `start`, `stop` (save snapshot), `drop` (discard data), `detach`, `close`. Optional `pid` for multi-process |
+
+### dotMemory Profiling
+| Tool | Args | Description |
+|---|---|---|
+| `rider_memory_state` | — | dotMemory availability and active memory session status |
+| `rider_memory_control` | `command`, `pid?`, `path?` | Control memory profiling. Commands: `snapshot` (collect, requires `pid`), `open` (open a `.dmw` workspace, requires `path`), `detach`, `kill` (kill the profiled process — destructive) |
 
 ### Admin
 | Tool | Args | Description |
@@ -267,6 +273,10 @@ gradlew.bat runIde
 
 ## What's New
 
+### Unreleased
+
+- New `rider_memory_state` / `rider_memory_control`: live dotMemory sessions — status, snapshots, detach/kill (snapshot analysis stays with the stock tools)
+
 ### v1.0.6
 
 - Long outputs can be read in pages — tool windows and build/test sessions: jump to the last lines, search with a pattern, or navigate page by page
@@ -339,6 +349,8 @@ gradlew.bat runIde
 ## Contributing
 
 Bug reports and feature requests are welcome in [GitHub Issues](https://github.com/TropinAlexey/MCP-Server-Extension-for-JetBrains-Rider/issues).
+
+Tool response compatibility is covered by [CONTRACT.md](CONTRACT.md): response fields are additive-only.
 
 ## License
 

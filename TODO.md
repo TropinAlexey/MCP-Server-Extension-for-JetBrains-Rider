@@ -1,95 +1,95 @@
 # MCP Server Extension — Roadmap
 
-## P0 — Критически нужно
+## Выполнено (архив)
 
-### Build & Publish наблюдаемость
-- [x] `rider_start_build` — запуск сборки с session ID
-- [x] `rider_get_build_output` — polling вывода сборки
-- [x] `rider_cancel_build` — отмена текущей сборки
-- [~] ~~CompilerMessageHandler~~ — покрывается `rider_get_tool_window_content("Build")`
-- [~] ~~Publish / MSBuild verbosity~~ — Rider не имеет VS-style publish; `dotnet publish` через терминал
+P0–P3 закрыты полностью, релиз v1.0.6 в маркете. Что есть: 38 тулов
+`rider_*` — сборка с polling, процессы, IDE-state/нотификации, чтение
+любых tool windows (табы, секции, пагинация), контекст программиста,
+тесты (run/wait/дерево/rerun/filter), run-конфиги CRUD, .NET-отладчик,
+NuGet, инспекции, терминалы, TODO/Endpoints/DB-консоли, dotTrace,
+invalidate caches. Плюс: CI, Marketplace, README в пользовательском
+виде, troubleshooting, verifyPlugin без ошибок.
 
-### Process management
-- [x] `rider_list_processes` — список процессов Rider
-- [x] `rider_kill_process` — убить процесс по имени
-- [x] Показывать PID и command line процессов
-- [x] Фильтрация по типу (build, test, run) через параметр `type`
+Отдельные исторические решения (не reopen без веса):
+- Publish/MSBuild verbosity — нет VS-style publish в Rider
+- Подписка на уведомления — покрыта polling `rider_get_notifications`
+- Generic settings API — инспекции покрывают use case
+- `rider_manage_plugin` — удалён (API `@Internal`)
+- `rider_start_profiling` — RD-модель не даёт программного запуска
+- Анализ снапшотов — покрывает stock dotTrace-инструментарий
+- Polling вывода терминалов — покрывает stock `execute_terminal_command`
 
-### IDE State
-- [x] `rider_get_ide_state` — прогресс-индикаторы, активный файл, tool windows
-- [x] `rider_get_notifications` — balloon уведомления и event log
-- [x] `rider_list_tool_windows` — список tool windows с состоянием
-- [x] `rider_get_tool_window_content` — содержимое tool window (базовое)
-- [x] Глубокая экстракция контента для Build Output, Problems, Event Log
-- [~] ~~Подписка на уведомления~~ — `rider_get_notifications` покрывает через периодический вызов
+## Активно: P4 — Стратегия (из разбора mcp-steroid, 09.2026)
 
-## P1 — Основной рабочий flow
+Принцип: глубина в нише Rider/.NET + их дисциплина, без их затрат.
+Детали — `notes/rider-mcp-vs-mcp-steroid.md`.
 
-### Programmer Context
-- [x] `rider_get_context` — объединённый: файл + курсор + код + выделение + вкладки + закладки
-- [x] `rider_get_recent_files` — последние открытые файлы
+### Дисциплина поверхности (рецепты > тулы)
+- [x] Мораторий формализован: `CONTRACT.md` + правила в `CLAUDE.md`
+  (новый тул — только если рецепт не покрывает + причина в коммите +
+  дельта эвалов не регрессирует)
+- [x] Аудит слияния первой пары: `rider_run_tests` / `rider_run_tests_and_wait`
+  — KEEP BOTH, rationale в `CONTRACT.md` (разные нужды: poll vs один вызов)
+- [ ] Продолжать cookbook-описания: цепочки и рецепты в `McpDescription`
+  (тесты, live-debug, Console-секции — уже есть, расширять по затыкам)
 
-### Test Runner
-- [x] `rider_run_tests` — запуск тестов (auto-detect config или по имени)
-- [x] `rider_get_output` — единый polling tool для build/test/любых сессий
-- [x] `rider_rerun_failed_tests` — перезапуск упавших через IDE action
-- [x] Дерево результатов с stack traces (извлечение из SMTestProxy)
-- [x] Фильтрация: запуск тестов по className/methodName/filter (через `dotnet test --filter`)
+### Замеры вместо вкуса (мини-эвалы)
+- [x] Фиксированный набор сценариев — `notes/evals/scenarios.md` (S1–S9)
+- [x] Метрики прогона — `notes/evals/methodology.md` (только machine-checkable)
+- [ ] Снять baseline-раунд в живой связке Rider+агент, лог — `notes/evals/results-log.md`
+- [ ] Прогонять до/после каждого изменения тулов; решения — по дельте
 
-### Run/Debug Configuration Management
-- [x] `rider_create_run_config` — создание новой конфигурации
-- [x] `rider_update_run_config` — изменение параметров (env, args, rename)
-- [x] `rider_delete_run_config` — удаление
+### Стабильность контракта
+- [x] Additive-only зафиксирован: `CONTRACT.md` (поля только добавляются;
+  новый тул предпочтительнее смены shape; breaking — только с мажором)
+- [ ] Держать: сверять ответы тулов с `CONTRACT.md` перед каждым релизом
 
-## P2 — Расширенные возможности
+### Ниша Rider/.NET (углублять, не шириться)
+- [x] dotMemory: `rider_memory_state` / `rider_memory_control` по образцу
+  dotTrace-тулов (реализовано, сборка+verify зелёные; живая проверка и
+  бамп версии — при релизе). Сток покрывает только анализ
+  dotTrace-снапшотов — дубля нет. Нюанс: сгенерированного
+  `solution.dotMemoryHost` нет в модели 2026.1, хост резолвится вручную
+  через `getOrCreateExtension` с graceful-деградацией
+- [ ] Сценарии поверх .NET-специфики: docker/Services-панель,
+  Publish-профили, покрытие кода (dotCover)
+- [ ] НЕ делать: свой сервер/CLI, execute_code-аналог, UI-автоматизацию,
+  поддержку других IDE
 
-### .NET Debugger
-- [x] `rider_set_breakpoint` / `rider_remove_breakpoint` — line breakpoints по file:line
-- [x] `rider_start_debug` — запуск debugging session с polling
-- [x] `rider_debug_evaluate` — evaluate expression в текущем фрейме
-- [x] `rider_debug_state` — статус сессии, stack trace с позициями
-- [x] `rider_debug_step` — stepOver / stepInto / stepOut / resume / pause / stop
+### Видимость (bus factor и спрос)
+- [ ] Junie: проверить связку Rider + Junie + MCP-сервер — протокол
+  `notes/evals/junie-check.md`, сценарий S9. Отдельной разработки не надо,
+  только верификация + 3 строки в README со ссылкой на доки JetBrains
+- [ ] Скриншоты/демо в README и на маркет (пусто до сих пор)
+- [ ] Ответить на вопрос «где пользователи»: issues-шаблоны, ссылки из
+  README на Discussions, 0 открытых issues — нормально или никто не ставит?
+- [ ] Сверить счётчики в README с кодом перед каждым релизом
+  (38 тулов, Rider 2026.1+)
 
-### NuGet
-- [x] `rider_list_packages` — пакеты с версиями (dotnet list package), --outdated
-- [x] `rider_manage_package` — add/remove через dotnet CLI
-- [x] `rider_nuget_restore` — restore с polling
+## P5 — Цикл и рецепты (по мотивам steroid-стратегии, 09.2026)
 
-### IDE Settings
-- [x] `rider_list_inspections` — поиск инспекций по keyword, фильтр enabled
-- [x] `rider_toggle_inspection` — вкл/выкл по shortName
-- [~] ~~Generic get/set/list settings~~ — слишком broad, инспекции покрывают основной use case
+Контрпозиция: лучший attended-Phase-1 для Rider, не headless-рантайм.
+Сильные стороны забираем, затраты — нет. Разбор — в обсуждении
+стратегии devrig (strategy-page, three-phase arc).
 
-## P3 — Nice to have
+### Skill Factory в миниатюре
+- [ ] Рецепты — версионируемые ассеты, а не строки в `McpDescription`:
+  отдельное место, ревью, тесты на дрейф (сейчас потолок — описания)
+- [ ] Цикл «агент фиксирует затык → предлагает рецепт → рецепт ложится
+  в тул и в мини-эвал» — self-improvement loop на наших сессиях
+- [ ] Затыки собирать локально и приватно (сессии не покидают машину —
+  в пику их `~/.mcp-steroid/runs`)
 
-### Terminal Streaming
-- [x] Список открытых терминалов (`rider_list_terminals`)
-- [x] Отправка input в работающий терминал (`rider_send_terminal_input`)
-- [~] ~~Polling session для вывода~~ — stock `execute_terminal_command` покрывает
+### Честные замеры
+- [ ] Метрики только machine-checkable (вызовы, токены, wall time,
+  успех с 1-й попытки) — без «агент сказал, что всё хорошо»
+- [ ] Публиковать и проигрыши IDE-трека: где shell оказался лучше,
+  фиксировать как known limits, а не прятать
 
-### Tool Windows — глубокая интеграция
-- [x] TODO: все TODO/FIXME/HACK (`rider_get_todos`)
-- [x] Endpoints: API маршруты (`rider_get_endpoints`)
-- [~] ~~Database~~ — MCP клиент работает с БД нативно
-- [~] ~~Services~~ — docker/servers управляются через CLI
-- [~] ~~Git Log~~ — `git log` через терминал
-
-### dotTrace Profiling
-- [x] `rider_profiling_state` — состояние dotTrace: active session, processes, snapshots, errors
-- [x] `rider_profiling_control` — управление сессией: start/stop/drop/detach/close
-- [~] ~~`rider_start_profiling`~~ — запуск через Run → Profile в Rider (RD-модель не поддерживает программный запуск без UI)
-- [~] ~~Анализ снапшотов~~ — stock `dotTraceGetCallTree/GetTimeline/GetSnapshotInfo` покрывают
-
-### Plugin/Action Management
-- [~] ~~`rider_manage_plugin`~~ — удалён в v0.2.1 (все Plugin Management API `@Internal`)
-- [x] `rider_invalidate_caches` — Invalidate Caches & Restart
-- [~] ~~`rider_manage_file_watcher`~~ — опциональный плагин, CRUD через CLI/settings файлы
-
-## Технические задачи
-
-- [x] Настроить CI (GitHub Actions) для сборки плагина
-- [x] Опубликовать в JetBrains Marketplace
-- [x] Протестировать совместимость с Rider 2025.1
-- [x] Написать README.md с инструкцией по установке
-- [x] Проверить что `build.gradle.kts` собирает с Rider (RD) а не IntelliJ Community (IC)
-- [x] Код-ревью + оптимизация токенов (15→12 tools, compact JSON)
+### Enterprise-дружелюбие как дифференциатор
+- [ ] Держать поверхность фиксированной: никакого execute_code-аналога
+  (RCE в IDE энтерпрайз не пустит — нас пустит)
+- [ ] Privacy-гарантии явно в README: что тулзы читают/меняют, что никуда
+  не отправляется (уже частично в Limitations — расширить и держать)
+- [ ] Brave mode выключен по умолчанию — так и оставить, задокументировать
+  как фичу безопасности, а не как неудобство
