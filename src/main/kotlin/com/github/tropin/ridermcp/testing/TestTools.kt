@@ -93,11 +93,24 @@ class TestToolset : McpToolset {
             id.contains("test") || displayName.contains("test")
         }
 
+        val filterExpr = when {
+            filter != null -> filter
+            className != null && methodName != null ->
+                "FullyQualifiedName~${className}.${methodName}"
+            className != null -> "FullyQualifiedName~${className}"
+            methodName != null -> "FullyQualifiedName~${methodName}"
+            else -> null
+        }
+
+        // Filtered runs go through 'dotnet test --filter' directly and do not
+        // need a pre-created run configuration — don't block them on configs.
+        if (filterExpr != null) return TestLaunch(startFilteredTests(project, filterExpr), null)
+
         val settings = if (configName != null) {
             runManager.allSettings.find { it.name == configName }
                 ?: mcpFail("Configuration '$configName' not found")
         } else when {
-            testConfigs.isEmpty() -> mcpFail("No test configurations found. Create one in Rider first.")
+            testConfigs.isEmpty() -> mcpFail("No test configurations found. Create one in Rider via Run → Edit Configurations → + ('.NET Test' / xUnit / NUnit), or bypass configs by passing filter/className/methodName (runs 'dotnet test --filter <expr>' directly without a configuration). If the solution has no test project at all, shell 'dotnet test' is the fallback.")
             testConfigs.size == 1 -> testConfigs.first()
             else -> {
                 return TestLaunch(
@@ -110,16 +123,6 @@ class TestToolset : McpToolset {
             }
         }
 
-        val filterExpr = when {
-            filter != null -> filter
-            className != null && methodName != null ->
-                "FullyQualifiedName~${className}.${methodName}"
-            className != null -> "FullyQualifiedName~${className}"
-            methodName != null -> "FullyQualifiedName~${methodName}"
-            else -> null
-        }
-
-        if (filterExpr != null) return TestLaunch(startFilteredTests(project, filterExpr), null)
         return TestLaunch(startIdeTests(project, settings), null)
     }
 
@@ -127,12 +130,23 @@ class TestToolset : McpToolset {
         project: com.intellij.openapi.project.Project,
         settings: com.intellij.execution.RunnerAndConfigurationSettings
     ): OutputSession {
+        // Same guard as rider_start_debug: non-runnable profiles (Publish/...)
+        // have no run runner — fail fast instead of throwing on the EDT and
+        // leaving a hung "running" session.
+        val runRunner = try {
+            ProgramRunnerUtil.getRunner(DefaultRunExecutor.EXECUTOR_ID, settings)
+        } catch (_: Exception) {
+            null
+        }
+        if (runRunner == null) mcpFail("Configuration '${settings.name}' cannot be run (no run runner — Publish/MSBuild profiles aren't runnable). Pick a run/test configuration instead.")
+
         val session = SessionManager.create("test")
         session.appendLine("Running: ${settings.name}")
         val cfgName = settings.name
 
         ApplicationManager.getApplication().invokeLater {
             val connection = project.messageBus.connect()
+            try {
             connection.subscribe(ExecutionManager.EXECUTION_TOPIC, object : ExecutionListener {
                 override fun processStarted(executorId: String, env: ExecutionEnvironment, handler: ProcessHandler) {
                     if (env.runProfile.name != cfgName) return
@@ -152,6 +166,11 @@ class TestToolset : McpToolset {
             })
 
             ProgramRunnerUtil.executeConfiguration(settings, DefaultRunExecutor.getRunExecutorInstance())
+            } catch (e: Exception) {
+                try { connection.disconnect() } catch (_: Exception) {}
+                session.status = "failed"
+                session.appendLine("Error starting test run: ${e.message ?: e.javaClass.simpleName}")
+            }
         }
 
         return session
@@ -159,10 +178,21 @@ class TestToolset : McpToolset {
 
     private fun startFilteredTests(project: com.intellij.openapi.project.Project, filter: String): OutputSession {
         val session = SessionManager.create("test")
-        session.appendLine("Running: dotnet test --filter $filter")
-        try {
-            val cmd = GeneralCommandLine("dotnet", "test", "--filter", filter)
+        // Config-less runs must not depend on the working directory: when the
+        // folder holds several projects dotnet answers MSB1011, so resolve an
+        // explicit target (.sln/.slnx, else a test-like .csproj) and run from
+        // its own directory. Null target = old behavior, dotnet reports the
+        // real error into the session output.
+        val target = resolveDotnetTestTarget(project)
+        val cmd = if (target != null) {
+            GeneralCommandLine("dotnet", "test", target.toString(), "--filter", filter)
+                .withWorkDirectory(target.parent.toString())
+        } else {
+            GeneralCommandLine("dotnet", "test", "--filter", filter)
                 .withWorkDirectory(project.basePath)
+        }
+        session.appendLine("Running: ${cmd.commandLineString}")
+        try {
             val handler = OSProcessHandler(cmd)
             session.tag = handler
             handler.addProcessListener(object : ProcessListener {
@@ -183,8 +213,51 @@ class TestToolset : McpToolset {
         return session
     }
 
+    // Resolves an explicit `dotnet test` target under the project root so
+    // config-less runs don't depend on the working directory: exactly one
+    // .sln/.slnx (depth ≤ 3), else exactly one test-like .csproj (depth ≤ 4),
+    // else null (caller falls back to basePath and dotnet reports MSB1011
+    // itself). Skips build output and VCS dirs.
+    private fun resolveDotnetTestTarget(project: com.intellij.openapi.project.Project): java.nio.file.Path? {
+        val basePath = project.basePath ?: return null
+        val base = try { java.nio.file.Paths.get(basePath) } catch (_: Exception) { return null }
+        if (!java.nio.file.Files.isDirectory(base)) return null
+        val skipped = setOf(".git", ".idea", ".vs", "bin", "obj", "TestResults")
+        fun collect(match: (String) -> Boolean, maxDepth: Int, limit: Int): List<java.nio.file.Path> {
+            val out = mutableListOf<java.nio.file.Path>()
+            val stream = try {
+                java.nio.file.Files.walk(base, maxDepth)
+            } catch (_: Exception) {
+                return out
+            }
+            try {
+                stream.forEach { p ->
+                    if (out.size >= limit) return@forEach
+                    if (!java.nio.file.Files.isRegularFile(p)) return@forEach
+                    if (p.any { it.fileName.toString() in skipped }) return@forEach
+                    if (match(p.fileName.toString())) out.add(p)
+                }
+            } catch (_: Exception) {
+            } finally {
+                try { stream.close() } catch (_: Exception) {}
+            }
+            return out
+        }
+        val solutions = collect(
+            { n -> n.endsWith(".sln", ignoreCase = true) || n.endsWith(".slnx", ignoreCase = true) },
+            3, 2
+        )
+        if (solutions.size == 1) return solutions.first()
+        val testProjects = collect(
+            { n -> n.endsWith(".csproj", ignoreCase = true) && n.contains("test", ignoreCase = true) },
+            4, 2
+        )
+        if (testProjects.size == 1) return testProjects.first()
+        return null
+    }
+
     @McpTool
-    @McpDescription("Returns structured test results tree after tests finish: pass/fail status per test, duration, error messages, and stack traces for failures. Call after rider_get_output shows status is not 'running'. Use to analyze which tests passed or failed and why.")
+    @McpDescription("Returns structured test results tree after tests finish: pass/fail status per test, duration, error messages, and stack traces for failures. Call after rider_get_output shows status is not 'running'. Use to analyze which tests passed or failed and why. Note: filter/className runs ('dotnet test --filter' as a plain process) have no IDE test tree — parse failures with stack traces from the session output text instead; the tree only exists for run-configuration launches.")
     suspend fun rider_get_test_results(
         @McpDescription("Session ID from rider_run_tests") sessionId: String
     ): String {
@@ -199,7 +272,7 @@ class TestToolset : McpToolset {
 
         val descriptors = RunContentManager.getInstance(project).allDescriptors
         val descriptor = descriptors.find { it.processHandler === handler }
-            ?: mcpFail("Execution descriptor not found (tab may have been closed)")
+            ?: mcpFail("Execution descriptor not found (tab may have been closed; filter/className runs have no IDE test tree — read failures with stack traces from the session output text instead)")
 
         val console = descriptor.executionConsole ?: mcpFail("No console available")
 
