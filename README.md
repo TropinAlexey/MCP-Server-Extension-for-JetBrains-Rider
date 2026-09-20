@@ -278,10 +278,10 @@ gradlew.bat runIde
 
 ## What's New
 
-### Unreleased
+### v1.1.0
 
-- New `rider_memory_state` / `rider_memory_control`: live dotMemory sessions — status, snapshots, detach/kill (snapshot analysis stays with the stock tools)
 - New `rider_execute_console`: run SQL in an open console's data source without IDE introspection
+- New `rider_memory_state` / `rider_memory_control`: live dotMemory sessions — status, snapshots, detach/kill (snapshot analysis stays with the stock tools)
 
 ### v1.0.6
 
