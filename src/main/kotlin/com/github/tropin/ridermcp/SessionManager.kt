@@ -58,6 +58,9 @@ object SessionManager {
     fun listByType(type: String): List<OutputSession> =
         sessions.values.filter { it.type == type }
 
+    fun running(): List<OutputSession> =
+        sessions.values.filter { it.status == "running" }
+
     private fun cleanupStale() {
         val cutoff = System.currentTimeMillis() - STALE_TTL_MS
         sessions.entries.removeIf { it.value.status != "running" && it.value.createdAt < cutoff }

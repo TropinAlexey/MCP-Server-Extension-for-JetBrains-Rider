@@ -28,7 +28,7 @@ class EndpointsToolset : McpToolset {
             val lines = mutableListOf<String>()
             extractEndpointText(content.component, lines, 500)
 
-            if (lines.isEmpty()) mcpFail("No endpoints found. Make sure the project is indexed.")
+            if (lines.isEmpty()) mcpFail("No endpoints found. Check rider_get_ide_state for indexing/build progress and retry when idle; if idle and still empty, the Endpoints panel has no detected HTTP routes (verify in Rider via View → Tool Windows → Endpoints). Fallback is text search for route attributes ([HttpGet]/[Route]/MapGet etc.).")
 
             buildJsonObject {
                 put("count", lines.size)

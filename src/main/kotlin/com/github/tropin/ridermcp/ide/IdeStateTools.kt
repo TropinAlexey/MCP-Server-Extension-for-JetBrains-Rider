@@ -11,6 +11,7 @@ import com.intellij.execution.ui.ExecutionConsole
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.toNioPathOrNull
 import com.intellij.openapi.wm.ToolWindowManager
@@ -25,7 +26,7 @@ import kotlin.coroutines.coroutineContext
 class IdeStateToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Returns IDE activity status: progress indicators (indexing, building, analyzing), currently active/focused file, whether IDE is busy or idle. Use to check if IDE is ready before starting builds, tests, or refactoring.")
+    @McpDescription("Returns IDE activity status: progress indicators (indexing, building, analyzing), currently active/focused file, whether IDE is busy or idle. Use to check if IDE is ready before starting builds, tests, or refactoring. Fields: activeFile, indexing (dumb mode — project is being indexed), busy (indexing OR own async sessions still running), runningSessions (build/test/restore/debug sessions launched via rider_* tools). Note: user-driven IDE work outside rider_* tools (manual builds) is not tracked — only indexing (dumb mode) is visible globally.")
     suspend fun rider_get_ide_state(): String {
         val project = coroutineContext.project
         // FileEditorManager model reads require the EDT.
@@ -35,9 +36,17 @@ class IdeStateToolset : McpToolset {
                 editor.virtualFile?.toNioPathOrNull()?.relTo(projectDir) ?: editor.virtualFile?.path
             }
         }
+        // DumbService.isDumb is a cheap volatile read, safe off the EDT.
+        val indexing = DumbService.getInstance(project).isDumb
+        val running = com.github.tropin.ridermcp.SessionManager.running()
 
         return buildJsonObject {
             put("activeFile", activeFile ?: "none")
+            put("indexing", indexing)
+            put("busy", indexing || running.isNotEmpty())
+            putJsonArray("runningSessions") {
+                running.forEach { addJsonObject { put("id", it.id); put("type", it.type) } }
+            }
         }.toString()
     }
 
