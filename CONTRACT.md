@@ -26,3 +26,11 @@ a new tool. A new `rider_*` tool is justified only when all of these hold:
 - `rider_run_tests` vs `rider_run_tests_and_wait` (09.2026): KEEP BOTH.
   Different needs — fire-and-poll for long runs where the agent does other
   work vs single-call run+wait. Revisit on eval data, not on taste.
+
+## Response audit log
+
+- Empty-list convention (09.2026): tools returning collections answer `[]`
+  (bare array) when empty and `{count, items}` envelope when not
+  (`rider_list_db_consoles`, `rider_get_todos`). Consumers must handle both
+  shapes. New tools follow the same convention; changing it would break
+  released clients, so it stays.

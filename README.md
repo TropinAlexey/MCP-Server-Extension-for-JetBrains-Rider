@@ -65,7 +65,7 @@ MCP tools are synchronous (request → response). Long-running operations — bu
 2. `rider_get_output("build_1")` → returns new lines since the last call, plus current status
 3. Repeat until `status` is no longer `"running"`
 
-## Available Tools (40)
+## Available Tools (41)
 
 ### Build
 | Tool | Description |
@@ -143,6 +143,7 @@ MCP tools are synchronous (request → response). Long-running operations — bu
 | `rider_get_todos` | `limit?` | TODO/FIXME/HACK items from the TODO tool window (default limit 100) |
 | `rider_get_endpoints` | — | API endpoints from the Endpoints tool window (HTTP method, URL, handler) |
 | `rider_list_db_consoles` | — | Open database consoles with their data sources (name, id for the database tools, DBMS, URL). Ask this first when a DB console is open — no need to scan servers |
+| `rider_execute_console` | `sql`, `console?`, `pageSize?`, `database?` | Execute SQL in an open console's data source, returns CSV. No IDE introspection required — use three-part names for other databases. Execution DB: console's current one by default, or pin it with `database` |
 
 ### dotTrace Profiling
 | Tool | Args | Description |
@@ -255,11 +256,11 @@ gradlew.bat runIde
 | Symptom | What to do |
 |---|---|
 | Agent says a tool window "has no content/tabs" | Open that window once in Rider (**View → Tool Windows → …**) — unopened windows have nothing to read |
-| "No endpoints found. Make sure the project is indexed" | Wait for indexing to finish (check `rider_get_ide_state`) |
-| "No test configurations found" | Create a test run configuration in Rider first |
+| "No endpoints found..." | Check `rider_get_ide_state` for indexing/build progress and retry when idle; if idle and still empty, verify in Rider via View → Tool Windows → Endpoints (panel has no detected routes). Fallback: text search for route attributes |
+| "No test configurations found" | Create a test run configuration (Run → Edit Configurations → +), or bypass configs by passing `filter`/`className`/`methodName` to run `dotnet test --filter` directly |
 | "Multiple test configs found" | Pass `configName` to pick one |
 | "No active debug session" | Start one with `rider_start_debug` |
-| "Debugger is not paused" / "Not paused" | Pause the session first — evaluating and stepping require a paused debugger |
+| "Debugger is not paused..." | Pause first — evaluating/stepping require a paused debugger (pausing freezes the live process; prefer a dev/test instance) |
 | Debug console is empty | The session produced no application output (the debugger trace is still in `Debug Output`) |
 | Terminal "not ready" | The tab has no attached process yet — open a terminal in Rider and retry |
 | "Configuration '…' not found" | Names must match exactly — list them with the built-in `get_run_configurations` |
@@ -271,13 +272,16 @@ gradlew.bat runIde
 
 - Rider must be running with a project open — the tools observe and control the current project.
 - Enabling the MCP server grants external applications access to your open projects (you confirm this in the dialog at enable time). Review which tools are exposed under **Settings → Tools → MCP Server → Exposed Tools**.
-- Some tools change state rather than just observe: sending terminal input, killing processes, restarting the IDE after cache invalidation. Running commands without confirmation is opt-in ("brave mode" in the MCP server settings) — keep it off unless you trust the agent.
+- What the tools can see: file contents, cursor and selection, open editors, tool window text (including consoles and outputs), notifications, database console bindings and query results. What they never do: nothing leaves your machine through this plugin — it only serves the local MCP server; network calls happen only where you ask (NuGet restore, package checks).
+- What the tools can change: sending terminal input, killing processes, editing run configs, toggling inspections, executing SQL, profiling sessions, restarting the IDE after cache invalidation. Read-only tools (state, content, lists, context) never change anything.
+- Running commands without confirmation is opt-in ("brave mode" in the MCP server settings) and stays off by default — keep it off unless you trust the agent. This is a security feature, not an inconvenience.
 
 ## What's New
 
 ### Unreleased
 
 - New `rider_memory_state` / `rider_memory_control`: live dotMemory sessions — status, snapshots, detach/kill (snapshot analysis stays with the stock tools)
+- New `rider_execute_console`: run SQL in an open console's data source without IDE introspection
 
 ### v1.0.6
 

@@ -161,10 +161,13 @@ When the developer asks to "create a note" (создать заметку), writ
 
 ## Feedback
 
-`feedback/` (git-ignored) holds usage feedback and improvement proposals
-for this plugin's tools. Collect real session friction there: what the agent
-tried, what misrouted, what was missing. Feed confirmed items back into
-`notes/evals` scenarios and cookbook descriptions.
+`feedback/` (git-ignored, private) holds usage feedback and improvement proposals
+for this plugin's tools. ANY agent using these tools must drop a note here after
+a session with real friction — one file per session/issue, name `YYYY-MM-DD-short-topic.md`.
+Template: context (1 line: what you tried) → what helped → what misrouted/missing
+(tool names, error texts) → proposals by priority. Unprocessed files have no
+`## Статус обработки` section; the maintainer adds it when triaging.
+Feed confirmed items back into `notes/evals` scenarios and cookbook descriptions.
 
 ## Language
 
