@@ -98,12 +98,23 @@ class DebugToolset : McpToolset {
                 ?: mcpFail("No active run configuration. Specify configName.")
         }
 
+        // Publish/MSBuild-style profiles exist as configurations but have no debug
+        // runner — fail fast with a readable error instead of throwing
+        // ExecutionException on the EDT and leaving a hung "running" session.
+        val debugRunner = try {
+            ProgramRunnerUtil.getRunner(DefaultDebugExecutor.EXECUTOR_ID, settings)
+        } catch (_: Exception) {
+            null
+        }
+        if (debugRunner == null) mcpFail("Configuration '${settings.name}' cannot be debugged (no debug runner — Publish/MSBuild profiles aren't debuggable). Pick a run configuration instead: list them with get_run_configurations and pass its name as configName.")
+
         val session = SessionManager.create("debug")
         session.appendLine("Debugging: ${settings.name}")
         val cfgName = settings.name
 
         ApplicationManager.getApplication().invokeLater {
             val connection = project.messageBus.connect()
+            try {
             connection.subscribe(ExecutionManager.EXECUTION_TOPIC, object : ExecutionListener {
                 override fun processStarted(executorId: String, env: ExecutionEnvironment, handler: ProcessHandler) {
                     if (env.runProfile.name != cfgName) return
@@ -122,6 +133,11 @@ class DebugToolset : McpToolset {
                 }
             })
             ProgramRunnerUtil.executeConfiguration(settings, DefaultDebugExecutor.getDebugExecutorInstance())
+            } catch (e: Exception) {
+                try { connection.disconnect() } catch (_: Exception) {}
+                session.status = "failed"
+                session.appendLine("Error starting debug session: ${e.message ?: e.javaClass.simpleName}")
+            }
         }
 
         return buildJsonObject { put("sessionId", session.id) }.toString()
@@ -200,7 +216,7 @@ class DebugToolset : McpToolset {
         val project = coroutineContext.project
         val session = XDebuggerManager.getInstance(project).currentSession
             ?: mcpFail("No active debug session")
-        if (!session.isPaused) mcpFail("Debugger is not paused")
+        if (!session.isPaused) mcpFail("Debugger is not paused (session running). Pause it first (rider_debug_step pause / xdebug_control_session PAUSE), or set a breakpoint (rider_set_breakpoint) + resume and wait (WAIT_FOR_PAUSE) until rider_debug_state shows paused, then evaluate. Note: pausing freezes the live process — prefer a dev/test instance over a user-facing API.")
 
         val frame = session.currentStackFrame
             ?: mcpFail("No current stack frame")
