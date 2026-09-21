@@ -9,6 +9,7 @@ import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.process.ProcessListener
 import com.intellij.execution.runners.ExecutionEnvironment
+import com.intellij.execution.runners.ProgramRunner
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
@@ -102,7 +103,7 @@ class DebugToolset : McpToolset {
         // runner — fail fast with a readable error instead of throwing
         // ExecutionException on the EDT and leaving a hung "running" session.
         val debugRunner = try {
-            ProgramRunnerUtil.getRunner(DefaultDebugExecutor.EXECUTOR_ID, settings)
+            ProgramRunner.getRunner(DefaultDebugExecutor.EXECUTOR_ID, settings.configuration)
         } catch (_: Exception) {
             null
         }

@@ -7,6 +7,7 @@ import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
 import com.jetbrains.rider.model.DotMemoryHost
 import com.jetbrains.rider.model.DotMemoryHostSessionCommandType
+import com.jetbrains.rd.util.lifetime.Lifetime
 import com.jetbrains.rider.projectView.solution
 import kotlinx.serialization.json.*
 import kotlin.coroutines.coroutineContext
@@ -60,7 +61,9 @@ class MemoryToolset : McpToolset {
             "snapshot" -> {
                 if (pid == 0) mcpFail("snapshot requires pid. Use rider_memory_state or rider_list_processes to find it.")
                 try {
-                    host.getSnapshot.start(pid)
+                    // start(TReq) is deprecated in favor of the lifetime overload;
+                    // Eternal matches the old default (fire-and-forget snapshot request).
+                    host.getSnapshot.start(Lifetime.Eternal, pid)
                 } catch (e: Exception) {
                     mcpFail("Failed to request snapshot: ${e.message}")
                 }

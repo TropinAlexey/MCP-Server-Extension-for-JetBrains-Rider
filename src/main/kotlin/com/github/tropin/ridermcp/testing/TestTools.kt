@@ -11,6 +11,7 @@ import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.process.ProcessListener
 import com.intellij.execution.runners.ExecutionEnvironment
+import com.intellij.execution.runners.ProgramRunner
 import com.intellij.execution.ui.RunContentManager
 import com.intellij.execution.testframework.AbstractTestProxy
 import com.intellij.execution.testframework.sm.runner.SMTestProxy
@@ -31,7 +32,7 @@ import kotlin.coroutines.coroutineContext
 class TestToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Runs unit/integration tests via the IDE (preferred over shell 'dotnet test' — you keep the structured result tree). Typical chain: rider_run_tests → poll rider_get_output(sessionId) until status is not 'running' → rider_get_test_results(sessionId) for the pass/fail tree. Shortcut: rider_run_tests_and_wait runs the same chain in one call. Filter by className (\"MyTestClass\"), methodName (\"ShouldWork\"), or raw dotnet test filter expression (\"FullyQualifiedName~Namespace.Class\"). Omit all filters to run all tests. If the IDE is busy (indexing, build, active debug), check rider_get_ide_state first.")
+    @McpDescription("Runs unit/integration tests via the IDE (preferred over shell 'dotnet test' — you keep the structured result tree). Typical chain: rider_run_tests → poll rider_get_output(sessionId) until status is not 'running' → rider_get_test_results(sessionId) for the pass/fail tree. Shortcut: rider_run_tests_and_wait runs the same chain in one call. Filter by className (\"MyTestClass\"), methodName (\"ShouldWork\"), or raw dotnet test filter expression (\"FullyQualifiedName~Namespace.Class\"). Omit all filters to run all tests. configName alone runs the whole configuration (can be thousands of tests) — add filter/className/methodName to scope it. If the IDE is busy (indexing, build, active debug), check rider_get_ide_state first.")
     suspend fun rider_run_tests(
         @McpDescription("Run configuration name") configName: String? = null,
         @McpDescription("dotnet test --filter expression") filter: String? = null,
@@ -45,7 +46,7 @@ class TestToolset : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Runs tests and waits for completion in one call (run + wait). Returns the final status, exit code, last output lines, and a sessionId for rider_get_test_results (structured pass/fail tree). Prefer this over shell 'dotnet test'. If the timeout expires first, returns status 'running' with the sessionId — continue with rider_get_output, then rider_get_test_results. If the IDE is busy (indexing, build, active debug), check rider_get_ide_state first.")
+    @McpDescription("Runs tests and waits for completion in one call (run + wait). Returns the final status, exit code, last output lines, and a sessionId for rider_get_test_results (structured pass/fail tree). Prefer this over shell 'dotnet test'. If the timeout expires first, returns status 'running' with the sessionId — continue with rider_get_output, then rider_get_test_results. configName alone runs the whole configuration — scope with filter/className/methodName. If the IDE is busy (indexing, build, active debug), check rider_get_ide_state first.")
     suspend fun rider_run_tests_and_wait(
         @McpDescription("Run configuration name") configName: String? = null,
         @McpDescription("dotnet test --filter expression") filter: String? = null,
@@ -134,7 +135,7 @@ class TestToolset : McpToolset {
         // have no run runner — fail fast instead of throwing on the EDT and
         // leaving a hung "running" session.
         val runRunner = try {
-            ProgramRunnerUtil.getRunner(DefaultRunExecutor.EXECUTOR_ID, settings)
+            ProgramRunner.getRunner(DefaultRunExecutor.EXECUTOR_ID, settings.configuration)
         } catch (_: Exception) {
             null
         }
