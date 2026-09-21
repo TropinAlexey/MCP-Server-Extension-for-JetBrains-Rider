@@ -279,6 +279,12 @@ gradlew.bat runIde
 
 ## What's New
 
+### v1.1.1
+
+- `rider_run_tests` / `rider_run_tests_and_wait`: hardened descriptions steer a vague «run tests» prompt to a scoped run instead of silently running the whole solution (eval-proven, see `notes/evals/results-log.md` R6g)
+- Compat: current runner and snapshot APIs
+- Docs: actualized roadmap, README and agent guide
+
 ### v1.1.0
 
 - New `rider_execute_console`: run SQL in an open console's data source without IDE introspection
