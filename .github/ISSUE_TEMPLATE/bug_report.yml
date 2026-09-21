@@ -1,0 +1,25 @@
+name: Bug report
+description: A rider_* tool misbehaved or misled the agent
+labels: [bug]
+body:
+  - type: input
+    id: tool
+    attributes:
+      label: Tool
+      description: Which rider_* tool? (e.g. rider_run_tests)
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Plugin version, Rider version (e.g. 1.1.0, Rider 2026.1)
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: What happened
+      description: Call arguments, verbatim error/output, what you expected instead
+    validations:
+      required: true

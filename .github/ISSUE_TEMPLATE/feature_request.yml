@@ -1,0 +1,18 @@
+name: Feature request
+description: A scenario no recipe covers (read CONTRACT.md first)
+labels: [enhancement]
+body:
+  - type: textarea
+    id: scenario
+    attributes:
+      label: Scenario
+      description: What the agent tried to do, step by step
+    validations:
+      required: true
+  - type: textarea
+    id: why-recipe-fails
+    attributes:
+      label: Why a recipe can't cover it
+      description: New tools are accepted only when an McpDescription recipe on an existing tool cannot meet the need (see CONTRACT.md)
+    validations:
+      required: true

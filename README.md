@@ -58,7 +58,6 @@ This plugin bridges that gap. It gives any MCP-compatible client (Claude Code, C
 This is a companion to the built-in MCP server — not a replacement and not a fork. Install it, and your MCP client sees all of their tools as one unified set. Everything this plugin adds is prefixed with `rider_`, so there are no naming conflicts.
 
 ### Polling Pattern for Async Operations
-
 MCP tools are synchronous (request → response). Long-running operations — builds, test runs, package restores, debug sessions — use a polling pattern instead of blocking:
 
 1. `rider_start_build` / `rider_run_tests` / `rider_nuget_restore` / `rider_start_debug` → returns `{"sessionId": "build_1"}`
@@ -76,7 +75,7 @@ MCP tools are synchronous (request → response). Long-running operations — bu
 ### Test Runner
 | Tool | Args | Description |
 |---|---|---|
-| `rider_run_tests` | `configName?`, `filter?`, `className?`, `methodName?` | Run tests. Filter by class/method or a raw `dotnet test --filter` expression. Omit everything to run all tests. If several test configurations exist, pass `configName` |
+| `rider_run_tests` | `configName?`, `filter?`, `className?`, `methodName?` | Run tests. Filter by class/method or a raw `dotnet test --filter` expression. Omit everything to run all tests. If several test configurations exist, pass `configName` to pick one — but it runs the whole configuration (can be thousands of tests), so add a filter to scope it |
 | `rider_run_tests_and_wait` | same filters + `timeoutMs?` | Run tests and wait in one call. Returns status, exit code, last lines, and a sessionId for `rider_get_test_results`. On timeout returns `running` — continue polling |
 | `rider_get_test_results` | `sessionId` | Structured test results tree with statuses, durations, errors, stack traces |
 | `rider_rerun_failed_tests` | — | Rerun previously failed tests |
@@ -267,6 +266,8 @@ gradlew.bat runIde
 | `rider_list_db_consoles` returns `[]` | Open the console in an editor tab first (double-click it in the Database tool window) |
 | A tool returns a file path you cannot read | Read only paths from `rider_get_context` (project-relative, always readable); absolute local path as fallback. Never feed one tool's path into another tool blindly |
 | Target database missing from the schema list | The list is the introspected subset, not the truth. Run the query through any introspected database with three-part names (`db.schema.table`) and confirm via `SELECT name FROM sys.databases` |
+| Heavy SQL (`COUNT LIKE` over `CAST`, full-table scans) | Confirm the database context first, then slice: `TOP`, date/id ranges, `EXISTS` instead of `COUNT LIKE`, `pageSize` for paging. Deliberate cancel is normal practice, not a failure |
+| Tempted by generic `execute_tool` | Don't — it has no action listing and can't reach DB consoles or run profiles. Use the `rider_*` tool for the job |
 
 ## Limitations & Privacy
 
@@ -282,6 +283,9 @@ gradlew.bat runIde
 
 - New `rider_execute_console`: run SQL in an open console's data source without IDE introspection
 - New `rider_memory_state` / `rider_memory_control`: live dotMemory sessions — status, snapshots, detach/kill (snapshot analysis stays with the stock tools)
+- Config-less test runs: `filter`/`className`/`methodName` resolve the `.sln` automatically (no more MSB1011); non-runnable profiles (Publish/MSBuild) fail fast instead of hanging
+- `rider_get_ide_state` reports `indexing`/`busy`/`runningSessions` — check before piling onto a busy IDE
+- Honest, actionable error texts across debug, tests, endpoints and DB tools
 
 ### v1.0.6
 

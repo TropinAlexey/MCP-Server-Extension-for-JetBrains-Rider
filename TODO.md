@@ -2,13 +2,14 @@
 
 ## Выполнено (архив)
 
-P0–P3 закрыты полностью, релиз v1.0.6 в маркете. Что есть: 41 тул
+P0–P3 закрыты полностью, релизы v1.0.6–v1.1.0 в маркете. Что есть: 41 тул
 `rider_*` — сборка с polling, процессы, IDE-state/нотификации, чтение
 любых tool windows (табы, секции, пагинация), контекст программиста,
-тесты (run/wait/дерево/rerun/filter), run-конфиги CRUD, .NET-отладчик,
-NuGet, инспекции, терминалы, TODO/Endpoints/DB-консоли, dotTrace,
-invalidate caches. Плюс: CI, Marketplace, README в пользовательском
-виде, troubleshooting, verifyPlugin без ошибок.
+тесты (run/wait/дерево/rerun/filter, запуск без конфигов), run-конфиги CRUD,
+.NET-отладчик, NuGet, инспекции, терминалы, TODO/Endpoints/DB-консоли
+(включая выполнение SQL), dotTrace/dotMemory, invalidate caches.
+Плюс: CI, Marketplace, README в пользовательском виде, troubleshooting,
+issues-шаблоны, verifyPlugin без ошибок.
 
 Отдельные исторические решения (не reopen без веса):
 - Publish/MSBuild verbosity — нет VS-style publish в Rider
@@ -34,7 +35,7 @@ invalidate caches. Плюс: CI, Marketplace, README в пользователь
   (тесты, live-debug, Console-секции — уже есть, расширять по затыкам)
 
 ### Замеры вместо вкуса (мини-эвалы)
-- [x] Фиксированный набор сценариев — `notes/evals/scenarios.md` (S1–S9)
+- [x] Фиксированный набор сценариев — `notes/evals/scenarios.md` (S1–S11)
 - [x] Метрики прогона — `notes/evals/methodology.md` (только machine-checkable)
 - [x] Снять baseline-раунд в живой связке Rider+агент, лог — `notes/evals/results-log.md`
   (снято дважды: R1 в одном чате + R2 10 холодных сессий; дальше — дельты по правилу)
@@ -71,8 +72,12 @@ invalidate caches. Плюс: CI, Marketplace, README в пользователь
   `notes/evals/junie-check.md`, сценарий S9. Отдельной разработки не надо,
   только верификация + 3 строки в README со ссылкой на доки JetBrains
 - [ ] Скриншоты/демо в README и на маркет (пусто до сих пор)
-- [ ] Ответить на вопрос «где пользователи»: issues-шаблоны, ссылки из
-  README на Discussions, 0 открытых issues — нормально или никто не ставит?
+- [x] Issues-шаблоны заведены: `.github/ISSUE_TEMPLATE/` (bug + feature
+  с полем «почему не покрывается рецептом», отсылка к CONTRACT.md)
+- [ ] Ответить на вопрос «где пользователи»: Discussions выключены
+  (`has_discussions: false`, проверено 21.09 через API) — включить
+  в Settings и дать ссылку из README или вычеркнуть пункт;
+  0 открытых issues — нормально или никто не ставит?
 - [ ] Сверить счётчики в README с кодом перед каждым релизом
   (41 тул, Rider 2026.1+)
 

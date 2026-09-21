@@ -13,10 +13,10 @@ IntelliJ/Rider plugin that extends JetBrains MCP Server with additional tools fo
 ## New Tool Pattern
 
 Each tool:
-1. Extends `AbstractMcpTool<Args>`
-2. `Args` — `@Serializable` data class (or `NoArgs`)
-3. Registered in `src/main/resources/META-INF/plugin.xml`
-4. Returns `Response(jsonString)` or `Response(error = "...")`
+1. A `suspend fun rider_*` inside a `*Toolset : McpToolset` class
+2. Annotated with `@McpTool` + `@McpDescription` (the cookbook recipe lives in the description)
+3. Toolset registered in `src/main/resources/META-INF/plugin.xml` via `mcpServer.mcpToolset`
+4. Returns a JSON string (built with `kotlinx.serialization.json`); errors via `mcpFail(...)`
 
 For long-running operations (build, test run) — **polling pattern**:
 - `start_*` → creates `OutputSession` via `SessionManager`, returns `sessionId`
@@ -30,12 +30,15 @@ src/main/kotlin/com/github/tropin/ridermcp/
 ├── SessionManager.kt       # Shared polling session infrastructure
 ├── build/                   # P0: Build observability
 ├── process/                 # P0: Process management
-├── ide/                     # P0: IDE state, tool windows, notifications
+├── ide/                     # P0+P4: IDE state, tool windows, terminals, TODO, endpoints, DB consoles
 ├── context/                 # P1: Programmer context (editors, cursor, selection)
-├── testing/                 # P1: Test runner (TODO)
-├── debugger/                # P2: .NET debugger (TODO)
-├── nuget/                   # P2: NuGet management (TODO)
-└── settings/                # P3: IDE settings management (TODO)
+├── testing/                 # P1: Test runner (run/wait/tree/rerun/filter)
+├── debugger/                # P2: .NET debugger (breakpoints, evaluate, step)
+├── runconfig/               # Run/Debug configuration CRUD
+├── nuget/                   # P2: NuGet management
+├── settings/                # P3: IDE inspections
+├── profiling/               # dotTrace + dotMemory session control
+└── admin/                   # Cache invalidation
 ```
 
 ## Commands
@@ -63,7 +66,8 @@ Task → tool map:
 - API endpoints → `rider_get_endpoints`
 - IDE terminal commands → `rider_list_terminals` + `rider_send_terminal_input`
 - Build → `rider_start_build` + `rider_get_output` + `rider_cancel_build`
-- Run tests → `rider_run_tests` + `rider_get_output` + `rider_get_test_results` + `rider_rerun_failed_tests`
+- Run tests → `rider_run_tests` + `rider_get_output` + `rider_get_test_results` + `rider_rerun_failed_tests` (`rider_run_tests_and_wait` bundles run+wait; `configName` alone runs the whole config — scope with filters)
+- SQL in open DB consoles → `rider_list_db_consoles` + `rider_execute_console` (three-part names, `database?` pin, slice heavy queries)
 - NuGet packages → `rider_list_packages` / `rider_manage_package` / `rider_nuget_restore`
 - Run/Debug configurations → `rider_create_run_config` / `rider_update_run_config` / `rider_delete_run_config`
 - Debugging → `rider_set_breakpoint` / `rider_remove_breakpoint` / `rider_start_debug` / `rider_debug_state` / `rider_debug_evaluate` / `rider_debug_step`
@@ -71,6 +75,7 @@ Task → tool map:
 - Code inspections → `rider_list_inspections` / `rider_toggle_inspection`
 - IDE caches → `rider_invalidate_caches`
 - Profiling (dotTrace) → `rider_profiling_state` / `rider_profiling_control`
+- Profiling (dotMemory) → `rider_memory_state` / `rider_memory_control`
 
 Polling pattern: `rider_start_build`, `rider_run_tests`, `rider_nuget_restore`, `rider_start_debug`, `rider_rerun_failed_tests` return `sessionId` — poll via `rider_get_output` until `status != "running"`.
 
