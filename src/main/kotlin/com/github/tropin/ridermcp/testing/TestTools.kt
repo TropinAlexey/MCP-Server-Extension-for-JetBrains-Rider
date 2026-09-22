@@ -147,6 +147,12 @@ class TestToolset : McpToolset {
 
         ApplicationManager.getApplication().invokeLater {
             val connection = project.messageBus.connect()
+            fun failTestStart(error: Throwable?) {
+                try { connection.disconnect() } catch (_: Exception) {}
+                session.exitCode = 1
+                session.status = "failed"
+                session.appendLine("Error starting test run '${cfgName}': ${error?.message ?: error?.javaClass?.simpleName ?: "unknown error"}")
+            }
             try {
             connection.subscribe(ExecutionManager.EXECUTION_TOPIC, object : ExecutionListener {
                 override fun processStarted(executorId: String, env: ExecutionEnvironment, handler: ProcessHandler) {
@@ -163,6 +169,17 @@ class TestToolset : McpToolset {
                             session.status = if (event.exitCode == 0) "passed" else "failed"
                         }
                     })
+                }
+                override fun processNotStarted(executorId: String, env: ExecutionEnvironment) {
+                    // Without this the session hangs in "running" forever: a failed
+                    // start (e.g. a unit-test config with no test scope → IDE shows
+                    // "Unknown error") never fires processStarted. Fail fast instead.
+                    if (env.runProfile.name != cfgName) return
+                    failTestStart(null)
+                }
+                override fun processNotStarted(executorId: String, env: ExecutionEnvironment, error: Throwable) {
+                    if (env.runProfile.name != cfgName) return
+                    failTestStart(error)
                 }
             })
 
@@ -335,6 +352,12 @@ class TestToolset : McpToolset {
 
         ApplicationManager.getApplication().invokeLater {
             val connection = project.messageBus.connect()
+            fun failRerunStart(error: Throwable?) {
+                try { connection.disconnect() } catch (_: Exception) {}
+                session.exitCode = 1
+                session.status = "failed"
+                session.appendLine("Error rerunning failed tests: ${error?.message ?: error?.javaClass?.simpleName ?: "unknown error"}")
+            }
             connection.subscribe(ExecutionManager.EXECUTION_TOPIC, object : ExecutionListener {
                 override fun processStarted(executorId: String, env: ExecutionEnvironment, handler: ProcessHandler) {
                     connection.disconnect()
@@ -349,6 +372,14 @@ class TestToolset : McpToolset {
                             session.status = if (event.exitCode == 0) "passed" else "failed"
                         }
                     })
+                }
+                override fun processNotStarted(executorId: String, env: ExecutionEnvironment) {
+                    // Same guard as above: a failed start never fires
+                    // processStarted, so without this the session hangs.
+                    failRerunStart(null)
+                }
+                override fun processNotStarted(executorId: String, env: ExecutionEnvironment, error: Throwable) {
+                    failRerunStart(error)
                 }
             })
 

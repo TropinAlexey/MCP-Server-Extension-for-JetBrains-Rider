@@ -279,6 +279,14 @@ gradlew.bat runIde
 
 ## What's New
 
+### v1.1.2
+
+- `rider_execute_console`: returns all result sets for multi-statement SQL (semicolon-aware splitter), adds `rowCount`/`hasMore`/`pageSize` per result set — no more silent data loss or blind truncation
+- `rider_list_db_consoles`: now includes `currentDatabase` per console
+- Improved SQL error messages: actionable hints instead of bare "Unknown error"
+- Debug/test sessions fail fast on `processNotStarted` instead of hanging forever
+- Agent hints extracted from CLAUDE.md to [AGENTS.md](AGENTS.md) for cross-agent use (Copilot, Cursor, Windsurf, etc.)
+
 ### v1.1.1
 
 - `rider_run_tests` / `rider_run_tests_and_wait`: hardened descriptions steer a vague «run tests» prompt to a scoped run instead of silently running the whole solution (eval-proven, see `notes/evals/results-log.md` R6g)

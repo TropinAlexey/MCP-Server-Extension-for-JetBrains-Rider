@@ -115,6 +115,12 @@ class DebugToolset : McpToolset {
 
         ApplicationManager.getApplication().invokeLater {
             val connection = project.messageBus.connect()
+            fun failDebugStart(error: Throwable?) {
+                try { connection.disconnect() } catch (_: Exception) {}
+                session.exitCode = 1
+                session.status = "failed"
+                session.appendLine("Error starting debug session '${cfgName}': ${error?.message ?: error?.javaClass?.simpleName ?: "unknown error"}")
+            }
             try {
             connection.subscribe(ExecutionManager.EXECUTION_TOPIC, object : ExecutionListener {
                 override fun processStarted(executorId: String, env: ExecutionEnvironment, handler: ProcessHandler) {
@@ -131,6 +137,16 @@ class DebugToolset : McpToolset {
                             session.status = "stopped"
                         }
                     })
+                }
+                override fun processNotStarted(executorId: String, env: ExecutionEnvironment) {
+                    // Without this the session hangs in "running" forever: a failed
+                    // start never fires processStarted. Fail fast instead.
+                    if (env.runProfile.name != cfgName) return
+                    failDebugStart(null)
+                }
+                override fun processNotStarted(executorId: String, env: ExecutionEnvironment, error: Throwable) {
+                    if (env.runProfile.name != cfgName) return
+                    failDebugStart(error)
                 }
             })
             ProgramRunnerUtil.executeConfiguration(settings, DefaultDebugExecutor.getDebugExecutorInstance())
