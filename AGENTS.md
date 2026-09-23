@@ -4,6 +4,16 @@ MCP Server extension plugin for JetBrains Rider. Adds `rider_*` tools for full I
 
 Per-tool documentation lives in each tool's description (visible on tool call). This file is the routing layer — which tool for which task.
 
+## Prefer `rider_*` over base MCP Server tools
+
+The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database tools. **Use the `rider_*` versions instead** — they handle more DBMS types and edge cases:
+
+| Task | Use this | NOT this |
+|---|---|---|
+| Create DB connection | `rider_create_database_connection` | `create_database_connection` (broken MSSQL matching, undocumented `dbms` enum) |
+| Edit DB connection | `rider_edit_database_connection` | `edit_database_connection` |
+| Execute SQL | `rider_execute_console` (via open console) | `execute_sql_query` (works too, but no multi-statement support) |
+
 ## Task → Tool Map
 
 - Cursor, selection, open files, bookmarks → `rider_get_context`
@@ -17,6 +27,7 @@ Per-tool documentation lives in each tool's description (visible on tool call). 
 - IDE terminal commands → `rider_list_terminals` + `rider_send_terminal_input`
 - Build → `rider_start_build` + `rider_get_output` + `rider_cancel_build`
 - Run tests → `rider_run_tests` + `rider_get_output` + `rider_get_test_results` + `rider_rerun_failed_tests` (`rider_run_tests_and_wait` bundles run+wait; `configName` alone runs the whole config — scope with filters)
+- Create/edit DB connections → `rider_create_database_connection` (fuzzy DBMS matching, JDBC URL, credentials stored in IDE) / `rider_edit_database_connection` (update URL/name/user/password by connectionId)
 - SQL in open DB consoles → `rider_list_db_consoles` (returns `currentDatabase` per console) + `rider_execute_console` (handles multi-statement SQL — each `;`-separated statement gets its own result set; response includes `rowCount`, `pageSize`, `hasMore` per result; three-part names, `database?` pin, slice heavy queries)
 - NuGet packages → `rider_list_packages` / `rider_manage_package` / `rider_nuget_restore`
 - Run/Debug configurations → `rider_create_run_config` / `rider_update_run_config` / `rider_delete_run_config`
