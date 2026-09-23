@@ -41,53 +41,51 @@ import kotlin.coroutines.coroutineContext
 class DebugToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Sets a line breakpoint in the debugger. filePath relative to project root or absolute. line is 1-indexed. Use before rider_start_debug to set up breakpoints for debugging.")
-    suspend fun rider_set_breakpoint(
-        @McpDescription("File path (relative or absolute)") filePath: String,
-        @McpDescription("Line number (1-indexed)") line: Int
+    @McpDescription(
+        "Manages .NET line breakpoints. action='set' (default) adds a breakpoint, action='remove' deletes it at that line. " +
+            "filePath is project-relative or absolute, line is 1-indexed. " +
+            "Use before rider_start_debug to arm breakpoints; verify paused state with rider_debug(action='state'). " +
+            "There is no listing action — set is idempotent ('already set' when present), remove fails when absent."
+    )
+    suspend fun rider_breakpoint(
+        @McpDescription("Action: set (default) adds breakpoint, remove deletes breakpoints at that line") action: String = "set",
+        @McpDescription("File path, project-relative (e.g. 'src/Program.cs') or absolute") filePath: String,
+        @McpDescription("Line number, 1-indexed") line: Int
     ): String {
         val project = coroutineContext.project
         val vf = resolveFile(project, filePath)
             ?: mcpFail("File not found: $filePath")
         val lineIndex = line - 1
 
-        val bm = XDebuggerManager.getInstance(project).breakpointManager
-        val existing = bm.allBreakpoints.filterIsInstance<XLineBreakpoint<*>>()
-            .find { it.fileUrl == vf.url && it.line == lineIndex }
-        if (existing != null) return "Breakpoint already set at $filePath:$line"
-
-        runOnEdt {
-            XDebuggerUtil.getInstance().toggleLineBreakpoint(project, vf, lineIndex, false)
+        return when (action.lowercase()) {
+            "set" -> {
+                val bm = XDebuggerManager.getInstance(project).breakpointManager
+                val existing = bm.allBreakpoints.filterIsInstance<XLineBreakpoint<*>>()
+                    .find { it.fileUrl == vf.url && it.line == lineIndex }
+                if (existing != null) return "Breakpoint already set at $filePath:$line"
+                runOnEdt {
+                    XDebuggerUtil.getInstance().toggleLineBreakpoint(project, vf, lineIndex, false)
+                }
+                "Breakpoint set at $filePath:$line"
+            }
+            "remove" -> {
+                val bm = XDebuggerManager.getInstance(project).breakpointManager
+                val toRemove = bm.allBreakpoints.filterIsInstance<XLineBreakpoint<*>>()
+                    .filter { it.fileUrl == vf.url && it.line == lineIndex }
+                if (toRemove.isEmpty()) mcpFail("No breakpoint at $filePath:$line")
+                runOnEdt {
+                    toRemove.forEach { bm.removeBreakpoint(it) }
+                }
+                "Breakpoint removed at $filePath:$line"
+            }
+            else -> mcpFail("Unknown action '$action'. Use: set, remove")
         }
-        return "Breakpoint set at $filePath:$line"
     }
 
     @McpTool
-    @McpDescription("Removes a line breakpoint at file:line. Use to clean up breakpoints after debugging.")
-    suspend fun rider_remove_breakpoint(
-        @McpDescription("File path (relative or absolute)") filePath: String,
-        @McpDescription("Line number (1-indexed)") line: Int
-    ): String {
-        val project = coroutineContext.project
-        val vf = resolveFile(project, filePath)
-            ?: mcpFail("File not found: $filePath")
-        val lineIndex = line - 1
-
-        val bm = XDebuggerManager.getInstance(project).breakpointManager
-        val toRemove = bm.allBreakpoints.filterIsInstance<XLineBreakpoint<*>>()
-            .filter { it.fileUrl == vf.url && it.line == lineIndex }
-        if (toRemove.isEmpty()) mcpFail("No breakpoint at $filePath:$line")
-
-        runOnEdt {
-            toRemove.forEach { bm.removeBreakpoint(it) }
-        }
-        return "Breakpoint removed at $filePath:$line"
-    }
-
-    @McpTool
-    @McpDescription("Launches a debug session for a run configuration (starts the app with debugger attached). Omit configName to use the selected one. Poll output with rider_get_output, check paused/running state with rider_debug_state.")
+    @McpDescription("Starts the app under the .NET debugger for an IDE run configuration (omit configName for the selected one). Returns sessionId — poll app stdout with rider_get_output and debugger status with rider_debug(action='state'). Use rider_breakpoint first to arm breakpoints. Do NOT use for plain runs without debugging, for builds (rider_build) or tests (rider_tests). Non-runnable configs (Publish/MSBuild profiles) fail fast.")
     suspend fun rider_start_debug(
-        @McpDescription("Run configuration name (omit for selected)") configName: String? = null
+        @McpDescription("IDE run configuration name (omit = selected configuration). Must match exactly; manage with rider_run_config") configName: String? = null
     ): String {
         val project = coroutineContext.project
         val runManager = RunManager.getInstance(project)
@@ -99,15 +97,12 @@ class DebugToolset : McpToolset {
                 ?: mcpFail("No active run configuration. Specify configName.")
         }
 
-        // Publish/MSBuild-style profiles exist as configurations but have no debug
-        // runner — fail fast with a readable error instead of throwing
-        // ExecutionException on the EDT and leaving a hung "running" session.
         val debugRunner = try {
             ProgramRunner.getRunner(DefaultDebugExecutor.EXECUTOR_ID, settings.configuration)
         } catch (_: Exception) {
             null
         }
-        if (debugRunner == null) mcpFail("Configuration '${settings.name}' cannot be debugged (no debug runner — Publish/MSBuild profiles aren't debuggable). Pick a run configuration instead: list them with get_run_configurations and pass its name as configName.")
+        if (debugRunner == null) mcpFail("Configuration '${settings.name}' cannot be debugged (no debug runner — Publish/MSBuild profiles aren't debuggable). Pick a run configuration instead: list them with the built-in get_run_configurations (or IDE Run → Edit Configurations) and pass its name as configName.")
 
         val session = SessionManager.create("debug")
         session.appendLine("Debugging: ${settings.name}")
@@ -139,8 +134,6 @@ class DebugToolset : McpToolset {
                     })
                 }
                 override fun processNotStarted(executorId: String, env: ExecutionEnvironment) {
-                    // Without this the session hangs in "running" forever: a failed
-                    // start never fires processStarted. Fail fast instead.
                     if (env.runProfile.name != cfgName) return
                     failDebugStart(null)
                 }
@@ -161,8 +154,27 @@ class DebugToolset : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Returns current debug session state: status (running/paused/stopped), current file and line when paused at breakpoint, full stack trace with file locations. Use to check where the debugger stopped or whether it's still running. Live-debug loop for a running process: rider_list_processes → attach with xdebug_attach_to_process → rider_set_breakpoint → poll this tool until paused → rider_debug_evaluate.")
-    suspend fun rider_debug_state(): String {
+    @McpDescription(
+        "Controls/inspects the active .NET debug session. action='state' (default) returns status (running/paused/stopped), current file:line and stack trace — poll it after rider_start_debug until paused. " +
+            "Stepping: stepOver/stepInto/stepOut, flow: resume/pause/stop (must be paused, except pause needs running, stop works always). " +
+            "action='evaluate' evaluates an expression in the current frame (requires expression; must be paused). " +
+            "Evaluated code runs inside the debuggee: property getters can have side effects — prefer dev/test instances and confirm evaluation of unknown expressions with the user. " +
+            "App stdout is NOT here — read it via rider_get_output(sessionId) or rider_tool_window(windowId='Debug', section='Console'). " +
+            "Recipe: rider_breakpoint → rider_start_debug → poll state until paused → evaluate/step."
+    )
+    suspend fun rider_debug(
+        @McpDescription("Action: state (default) inspects, stepOver/stepInto/stepOut/resume/pause/stop control flow, evaluate reads values") action: String = "state",
+        @McpDescription("Expression to evaluate, e.g. 'myVar.Property' (required for action='evaluate' only)") expression: String? = null
+    ): String {
+        return when (action.lowercase()) {
+            "state" -> debugState()
+            "stepover", "stepinto", "stepout", "resume", "pause", "stop" -> debugStep(action)
+            "evaluate" -> debugEvaluate(expression)
+            else -> mcpFail("Unknown action '$action'. Use: state, stepOver, stepInto, stepOut, resume, pause, stop, evaluate")
+        }
+    }
+
+    private suspend fun debugState(): String {
         val project = coroutineContext.project
         val session = XDebuggerManager.getInstance(project).currentSession
             ?: mcpFail("No active debug session")
@@ -225,15 +237,28 @@ class DebugToolset : McpToolset {
         return parts.joinToString("")
     }
 
-    @McpTool
-    @McpDescription("Evaluates an expression in the current debug frame (watch expression). Use to inspect variable values, call methods, check object state, or compute values while paused at a breakpoint. Debugger must be paused. Live-debug recipe for a running process: 1) rider_list_processes to find the PID, 2) attach with xdebug_attach_to_process, 3) rider_set_breakpoint at the place of interest, 4) rider_debug_state until status is paused, 5) evaluate here.")
-    suspend fun rider_debug_evaluate(
-        @McpDescription("Expression to evaluate") expression: String
-    ): String {
+    private suspend fun debugStep(action: String): String {
         val project = coroutineContext.project
         val session = XDebuggerManager.getInstance(project).currentSession
             ?: mcpFail("No active debug session")
-        if (!session.isPaused) mcpFail("Debugger is not paused (session running). Pause it first (rider_debug_step pause / xdebug_control_session PAUSE), or set a breakpoint (rider_set_breakpoint) + resume and wait (WAIT_FOR_PAUSE) until rider_debug_state shows paused, then evaluate. Note: pausing freezes the live process — prefer a dev/test instance over a user-facing API.")
+
+        when (action.lowercase()) {
+            "stepover" -> { if (!session.isPaused) mcpFail("Not paused"); session.stepOver(false) }
+            "stepinto" -> { if (!session.isPaused) mcpFail("Not paused"); session.stepInto() }
+            "stepout" -> { if (!session.isPaused) mcpFail("Not paused"); session.stepOut() }
+            "resume" -> { if (!session.isPaused) mcpFail("Not paused"); session.resume() }
+            "pause" -> { if (session.isPaused) mcpFail("Already paused"); session.pause() }
+            "stop" -> session.stop()
+        }
+        return "ok"
+    }
+
+    private suspend fun debugEvaluate(expression: String?): String {
+        if (expression.isNullOrBlank()) mcpFail("expression is required for action='evaluate'")
+        val project = coroutineContext.project
+        val session = XDebuggerManager.getInstance(project).currentSession
+            ?: mcpFail("No active debug session")
+        if (!session.isPaused) mcpFail("Debugger is not paused. Pause it first (rider_debug(action='pause')), or set a breakpoint + resume and wait until rider_debug(action='state') shows paused.")
 
         val frame = session.currentStackFrame
             ?: mcpFail("No current stack frame")
@@ -291,27 +316,6 @@ class DebugToolset : McpToolset {
             override fun renderError(error: String) { sb.append("error: $error") }
         })
         return sb.toString().ifEmpty { "[complex value]" }
-    }
-
-    @McpTool
-    @McpDescription("Controls debugger execution flow. Actions: stepOver (next line), stepInto (enter method), stepOut (exit method), resume (continue to next breakpoint), pause (break running program), stop (end debug session). Use to navigate through code during debugging.")
-    suspend fun rider_debug_step(
-        @McpDescription("Action: stepOver, stepInto, stepOut, resume, pause, stop") action: String
-    ): String {
-        val project = coroutineContext.project
-        val session = XDebuggerManager.getInstance(project).currentSession
-            ?: mcpFail("No active debug session")
-
-        when (action) {
-            "stepOver" -> { if (!session.isPaused) mcpFail("Not paused"); session.stepOver(false) }
-            "stepInto" -> { if (!session.isPaused) mcpFail("Not paused"); session.stepInto() }
-            "stepOut" -> { if (!session.isPaused) mcpFail("Not paused"); session.stepOut() }
-            "resume" -> { if (!session.isPaused) mcpFail("Not paused"); session.resume() }
-            "pause" -> { if (session.isPaused) mcpFail("Already paused"); session.pause() }
-            "stop" -> session.stop()
-            else -> mcpFail("Unknown action: $action. Use: stepOver, stepInto, stepOut, resume, pause, stop")
-        }
-        return "ok"
     }
 
     private fun resolveFile(project: com.intellij.openapi.project.Project, filePath: String): VirtualFile? {

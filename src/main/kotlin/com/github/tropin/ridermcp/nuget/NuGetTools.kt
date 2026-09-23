@@ -31,11 +31,30 @@ private fun validateProjectPath(project: com.intellij.openapi.project.Project, p
 class NuGetToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Lists installed NuGet packages (dependencies) for the solution or a specific project. Pass outdated=true to check for available package updates. Optional project path (relative .csproj).")
-    suspend fun rider_list_packages(
-        @McpDescription("Relative .csproj path") projectPath: String? = null,
-        @McpDescription("Check for updates") outdated: Boolean = false
+    @McpDescription(
+        "Manages NuGet packages via 'dotnet list/add/remove/restore'. action='list' (default) shows installed packages (optional projectPath to scope to one .csproj, outdated=true to check updates). " +
+            "action='add' installs (requires name; optional version/projectPath). action='remove' uninstalls (requires name; optional projectPath). " +
+            "add/remove mutate project files — confirm with the user first. " +
+            "action='restore' runs 'dotnet restore' async and returns sessionId — poll with rider_get_output. " +
+            "projectPath must stay inside the project dir. Do NOT use for building (rider_build) or running tests (rider_tests)."
+    )
+    suspend fun rider_nuget(
+        @McpDescription("Action: list (default), add, remove, restore (restore returns sessionId)") action: String = "list",
+        @McpDescription("NuGet package name, e.g. 'Newtonsoft.Json' (required for add/remove)") name: String? = null,
+        @McpDescription("Project-relative .csproj path to scope the operation (omit = whole solution)") projectPath: String? = null,
+        @McpDescription("Package version for add, e.g. '13.0.3' (omit = latest)") version: String? = null,
+        @McpDescription("Check for available updates (list only, default false)") outdated: Boolean = false
     ): String {
+        return when (action.lowercase()) {
+            "list" -> listPackages(projectPath, outdated)
+            "add" -> managePackage("add", name, projectPath, version)
+            "remove" -> managePackage("remove", name, projectPath, null)
+            "restore" -> nugetRestore()
+            else -> mcpFail("Unknown action '$action'. Use: list, add, remove, restore")
+        }
+    }
+
+    private suspend fun listPackages(projectPath: String?, outdated: Boolean): String {
         val project = coroutineContext.project
         projectPath?.let { validateProjectPath(project, it)?.let { err -> mcpFail(err) } }
         val cmdArgs = mutableListOf("list")
@@ -48,43 +67,25 @@ class NuGetToolset : McpToolset {
         return output.trim().ifEmpty { "No packages found" }
     }
 
-    @McpTool
-    @McpDescription("Adds or removes a NuGet package dependency. action: 'add' (install package) or 'remove' (uninstall). Optional project (.csproj path) and version. Use to manage .NET dependencies.")
-    suspend fun rider_manage_package(
-        @McpDescription("Action: add or remove") action: String,
-        @McpDescription("Package name") name: String,
-        @McpDescription("Relative .csproj path") projectPath: String? = null,
-        @McpDescription("Package version (for add)") version: String? = null
-    ): String {
+    private suspend fun managePackage(op: String, name: String?, projectPath: String?, version: String?): String {
+        if (name.isNullOrBlank()) mcpFail("name is required for action='$op'")
         val project = coroutineContext.project
         if (!name.matches(PACKAGE_NAME_RE)) mcpFail("Invalid package name: $name")
         version?.let { if (!it.matches(VERSION_RE)) mcpFail("Invalid version: $it") }
         projectPath?.let { validateProjectPath(project, it)?.let { err -> mcpFail(err) } }
 
         val cmdArgs = mutableListOf<String>()
-        when (action) {
-            "add" -> {
-                cmdArgs.add("add")
-                projectPath?.let { cmdArgs.add(it) }
-                cmdArgs.addAll(listOf("package", name))
-                version?.let { cmdArgs.addAll(listOf("--version", it)) }
-            }
-            "remove" -> {
-                cmdArgs.add("remove")
-                projectPath?.let { cmdArgs.add(it) }
-                cmdArgs.addAll(listOf("package", name))
-            }
-            else -> mcpFail("Unknown action: $action. Use: add, remove")
-        }
+        cmdArgs.add(op)
+        projectPath?.let { cmdArgs.add(it) }
+        cmdArgs.addAll(listOf("package", name))
+        if (op == "add" && version != null) cmdArgs.addAll(listOf("--version", version))
 
         val (exitCode, output) = runDotnetSync(project, cmdArgs, timeout = 60)
         if (exitCode != 0) mcpFail(output.trim())
         return output.trim()
     }
 
-    @McpTool
-    @McpDescription("Runs NuGet package restore (dotnet restore) to download missing dependencies. Returns sessionId — poll with rider_get_output until complete. Use after adding packages or when dependencies are missing. If the IDE is busy (indexing, build), check rider_get_ide_state first.")
-    suspend fun rider_nuget_restore(): String {
+    private suspend fun nugetRestore(): String {
         val project = coroutineContext.project
         val session = SessionManager.create("nuget")
         session.appendLine("Running: dotnet restore")

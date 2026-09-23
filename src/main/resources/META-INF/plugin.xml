@@ -18,13 +18,14 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.build.BuildToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.analysis.SweaToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.workspace.WorkspaceConfigToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.process.ProcessToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.ide.IdeStateToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.ide.TerminalToolset"/>
-        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.ide.TodoToolset"/>
-        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.ide.EndpointsToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.context.ContextToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.testing.TestToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.publish.PublishToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.debugger.DebugToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.nuget.NuGetToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.runconfig.RunConfigToolset"/>

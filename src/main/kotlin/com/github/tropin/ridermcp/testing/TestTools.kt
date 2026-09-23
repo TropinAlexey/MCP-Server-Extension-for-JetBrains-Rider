@@ -17,6 +17,7 @@ import com.intellij.execution.testframework.AbstractTestProxy
 import com.intellij.execution.testframework.sm.runner.SMTestProxy
 import com.intellij.execution.testframework.sm.runner.ui.SMTestRunnerResultsForm
 import com.intellij.mcpserver.McpToolset
+import com.jetbrains.rider.projectView.SolutionConfigurationManager
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
@@ -32,28 +33,43 @@ import kotlin.coroutines.coroutineContext
 class TestToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Runs unit/integration tests via the IDE (preferred over shell 'dotnet test' — you keep the structured result tree). Typical chain: rider_run_tests → poll rider_get_output(sessionId) until status is not 'running' → rider_get_test_results(sessionId) for the pass/fail tree. Shortcut: rider_run_tests_and_wait runs the same chain in one call. Filter by className (\"MyTestClass\"), methodName (\"ShouldWork\"), or raw dotnet test filter expression (\"FullyQualifiedName~Namespace.Class\"). Omit all filters to run all tests. WARNING: a bare configName — or no filters at all — ALWAYS runs the ENTIRE configuration (the whole solution, can be thousands of tests). On a vague prompt like \"run tests\", NEVER pass a bare configName: you MUST scope it with filter/className/methodName, or explicitly justify in your reply why a full run is intended. If the IDE is busy (indexing, build, active debug), check rider_get_ide_state first.")
-    suspend fun rider_run_tests(
-        @McpDescription("Run configuration name") configName: String? = null,
-        @McpDescription("dotnet test --filter expression") filter: String? = null,
-        @McpDescription("Test class name") className: String? = null,
-        @McpDescription("Test method name") methodName: String? = null
+    @McpDescription(
+        "Runs .NET tests. action='run' (default) starts tests and returns sessionId — poll with rider_get_output, then call rider_tests(action='results', sessionId=...) for the structured tree. " +
+            "action='run_and_wait' runs and blocks up to timeoutMs (default 300000) in one call. " +
+            "action='results' returns the pass/fail tree with durations, errors and stack traces (requires sessionId; IDE config runs only — filter runs have no tree, read failures from session output text instead). " +
+            "action='rerun_failed' reruns only previously failed tests. " +
+            "Scope with filter (raw 'dotnet test --filter' expr) or className/methodName — a filter run bypasses run configs and auto-resolves the .sln/.csproj. " +
+            "WARNING: a bare configName — or no filters at all — ALWAYS runs the ENTIRE configuration (can be thousands of tests). " +
+            "On a vague prompt like \"run tests\", NEVER pass a bare configName: scope with filter/className/methodName. " +
+            "Do NOT use for building (rider_build) or debugging (rider_start_debug). " +
+            "If the IDE is busy, check rider_get_ide_state first."
+    )
+    suspend fun rider_tests(
+        @McpDescription("Action: run (default) starts async run, run_and_wait blocks until done, results returns structured tree, rerun_failed retries failures") action: String = "run",
+        @McpDescription("IDE run configuration name (whole config runs — always combine with a filter to scope)") configName: String? = null,
+        @McpDescription("Raw 'dotnet test --filter' expression, e.g. 'FullyQualifiedName~MyClass'. Bypasses run configs") filter: String? = null,
+        @McpDescription("Test class name — converted to FullyQualifiedName~ filter, bypasses run configs") className: String? = null,
+        @McpDescription("Test method name — combined with className when both given, otherwise FullyQualifiedName~ filter") methodName: String? = null,
+        @McpDescription("Session ID from run/run_and_wait (required for action='results')") sessionId: String? = null,
+        @McpDescription("Max wait in ms for run_and_wait only, 1000-1800000, default 300000") timeoutMs: Int = 300000
     ): String {
+        return when (action.lowercase()) {
+            "run" -> runTests(configName, filter, className, methodName)
+            "run_and_wait" -> runTestsAndWait(configName, filter, className, methodName, timeoutMs)
+            "results" -> getTestResults(sessionId)
+            "rerun_failed" -> rerunFailedTests()
+            else -> mcpFail("Unknown action '$action'. Use: run, run_and_wait, results, rerun_failed")
+        }
+    }
+
+    private suspend fun runTests(configName: String?, filter: String?, className: String?, methodName: String?): String {
         val project = coroutineContext.project
         val launch = launchTests(project, configName, filter, className, methodName)
         if (launch.errorJson != null) return launch.errorJson
         return buildJsonObject { put("sessionId", launch.session!!.id) }.toString()
     }
 
-    @McpTool
-    @McpDescription("Runs tests and waits for completion in one call (run + wait). Returns the final status, exit code, last output lines, and a sessionId for rider_get_test_results (structured pass/fail tree). Prefer this over shell 'dotnet test'. If the timeout expires first, returns status 'running' with the sessionId — continue with rider_get_output, then rider_get_test_results. WARNING: a bare configName — or no filters at all — ALWAYS runs the ENTIRE configuration. On a vague prompt like \"run tests\", NEVER pass a bare configName: you MUST scope it with filter/className/methodName, or explicitly justify in your reply why a full run is intended. If the IDE is busy (indexing, build, active debug), check rider_get_ide_state first.")
-    suspend fun rider_run_tests_and_wait(
-        @McpDescription("Run configuration name") configName: String? = null,
-        @McpDescription("dotnet test --filter expression") filter: String? = null,
-        @McpDescription("Test class name") className: String? = null,
-        @McpDescription("Test method name") methodName: String? = null,
-        @McpDescription("Max wait in milliseconds (1000-1800000, default 300000)") timeoutMs: Int = 300000
-    ): String {
+    private suspend fun runTestsAndWait(configName: String?, filter: String?, className: String?, methodName: String?, timeoutMs: Int): String {
         val project = coroutineContext.project
         val launch = launchTests(project, configName, filter, className, methodName)
         if (launch.errorJson != null) return launch.errorJson
@@ -70,11 +86,85 @@ class TestToolset : McpToolset {
             session.exitCode?.let { put("exitCode", it) }
             putJsonArray("tail") { session.getAllLines().takeLast(30).forEach { add(it) } }
             if (session.status == "running") {
-                put("note", "Timeout expired, tests still running. Continue with rider_get_output, then rider_get_test_results.")
+                put("note", "Timeout expired, tests still running. Continue with rider_get_output, then rider_tests(action='results').")
             } else {
-                put("note", "Finished. Call rider_get_test_results with this sessionId for the structured tree.")
+                put("note", "Finished. Call rider_tests(action='results', sessionId='${session.id}') for the structured tree.")
             }
         }.toString()
+    }
+
+    private suspend fun getTestResults(sessionId: String?): String {
+        if (sessionId.isNullOrBlank()) mcpFail("sessionId is required for action='results'")
+        val project = coroutineContext.project
+        val session = SessionManager.get(sessionId)
+            ?: mcpFail("Session '$sessionId' not found")
+
+        if (session.status == "running") mcpFail("Tests still running, wait for completion")
+
+        val handler = session.tag as? ProcessHandler
+            ?: mcpFail("No process handler captured for this session")
+
+        val descriptors = RunContentManager.getInstance(project).allDescriptors
+        val descriptor = descriptors.find { it.processHandler === handler }
+            ?: mcpFail("Execution descriptor not found (tab may have been closed; filter/className runs have no IDE test tree — read failures with stack traces from the session output text instead)")
+
+        val console = descriptor.executionConsole ?: mcpFail("No console available")
+
+        val root = try {
+            val resultsForm = findResultsForm(console) ?: mcpFail("No test results form found")
+            resultsForm.testsRootNode
+        } catch (e: Exception) {
+            mcpFail("Cannot extract test tree: ${e.message}")
+        }
+
+        return extractTestNode(root).toString()
+    }
+
+    private suspend fun rerunFailedTests(): String {
+        val project = coroutineContext.project
+        val action = com.intellij.openapi.actionSystem.ActionManager.getInstance()
+            .getAction("RerunFailedTests")
+            ?: mcpFail("Rerun Failed Tests action not available")
+
+        val session = SessionManager.create("test")
+        session.appendLine("Rerunning failed tests")
+
+        ApplicationManager.getApplication().invokeLater {
+            val connection = project.messageBus.connect()
+            fun failRerunStart(error: Throwable?) {
+                try { connection.disconnect() } catch (_: Exception) {}
+                session.exitCode = 1
+                session.status = "failed"
+                session.appendLine("Error rerunning failed tests: ${error?.message ?: error?.javaClass?.simpleName ?: "unknown error"}")
+            }
+            connection.subscribe(ExecutionManager.EXECUTION_TOPIC, object : ExecutionListener {
+                override fun processStarted(executorId: String, env: ExecutionEnvironment, handler: ProcessHandler) {
+                    connection.disconnect()
+                    session.tag = handler
+                    handler.addProcessListener(object : ProcessListener {
+                        override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
+                            val text = event.text.trimEnd('\n', '\r')
+                            if (text.isNotEmpty()) session.appendLine(text)
+                        }
+                        override fun processTerminated(event: ProcessEvent) {
+                            session.exitCode = event.exitCode
+                            session.status = if (event.exitCode == 0) "passed" else "failed"
+                        }
+                    })
+                }
+                override fun processNotStarted(executorId: String, env: ExecutionEnvironment) {
+                    failRerunStart(null)
+                }
+                override fun processNotStarted(executorId: String, env: ExecutionEnvironment, error: Throwable) {
+                    failRerunStart(error)
+                }
+            })
+
+            val frame = com.intellij.openapi.wm.WindowManager.getInstance().getFrame(project)
+            com.intellij.openapi.actionSystem.ActionManager.getInstance().tryToExecute(action, null, frame, "", true)
+        }
+
+        return buildJsonObject { put("sessionId", session.id) }.toString()
     }
 
     private data class TestLaunch(val session: OutputSession?, val errorJson: String?)
@@ -103,8 +193,6 @@ class TestToolset : McpToolset {
             else -> null
         }
 
-        // Filtered runs go through 'dotnet test --filter' directly and do not
-        // need a pre-created run configuration — don't block them on configs.
         if (filterExpr != null) return TestLaunch(startFilteredTests(project, filterExpr), null)
 
         val settings = if (configName != null) {
@@ -131,9 +219,6 @@ class TestToolset : McpToolset {
         project: com.intellij.openapi.project.Project,
         settings: com.intellij.execution.RunnerAndConfigurationSettings
     ): OutputSession {
-        // Same guard as rider_start_debug: non-runnable profiles (Publish/...)
-        // have no run runner — fail fast instead of throwing on the EDT and
-        // leaving a hung "running" session.
         val runRunner = try {
             ProgramRunner.getRunner(DefaultRunExecutor.EXECUTOR_ID, settings.configuration)
         } catch (_: Exception) {
@@ -143,6 +228,7 @@ class TestToolset : McpToolset {
 
         val session = SessionManager.create("test")
         session.appendLine("Running: ${settings.name}")
+        captureSessionMetadata(session, project, settings.name)
         val cfgName = settings.name
 
         ApplicationManager.getApplication().invokeLater {
@@ -171,9 +257,6 @@ class TestToolset : McpToolset {
                     })
                 }
                 override fun processNotStarted(executorId: String, env: ExecutionEnvironment) {
-                    // Without this the session hangs in "running" forever: a failed
-                    // start (e.g. a unit-test config with no test scope → IDE shows
-                    // "Unknown error") never fires processStarted. Fail fast instead.
                     if (env.runProfile.name != cfgName) return
                     failTestStart(null)
                 }
@@ -196,11 +279,7 @@ class TestToolset : McpToolset {
 
     private fun startFilteredTests(project: com.intellij.openapi.project.Project, filter: String): OutputSession {
         val session = SessionManager.create("test")
-        // Config-less runs must not depend on the working directory: when the
-        // folder holds several projects dotnet answers MSB1011, so resolve an
-        // explicit target (.sln/.slnx, else a test-like .csproj) and run from
-        // its own directory. Null target = old behavior, dotnet reports the
-        // real error into the session output.
+        captureSessionMetadata(session, project)
         val target = resolveDotnetTestTarget(project)
         val cmd = if (target != null) {
             GeneralCommandLine("dotnet", "test", target.toString(), "--filter", filter)
@@ -231,11 +310,18 @@ class TestToolset : McpToolset {
         return session
     }
 
-    // Resolves an explicit `dotnet test` target under the project root so
-    // config-less runs don't depend on the working directory: exactly one
-    // .sln/.slnx (depth ≤ 3), else exactly one test-like .csproj (depth ≤ 4),
-    // else null (caller falls back to basePath and dotnet reports MSB1011
-    // itself). Skips build output and VCS dirs.
+    private fun captureSessionMetadata(session: OutputSession, project: com.intellij.openapi.project.Project, configName: String? = null) {
+        configName?.let { session.metadata["configName"] = it }
+        try {
+            SolutionConfigurationManager.getInstance(project).activeConfigurationAndPlatform?.let { active ->
+                session.metadata["configuration"] = active.configuration
+                session.metadata["platform"] = active.platform
+            }
+        } catch (_: Throwable) {
+            // configuration manager may not be ready yet
+        }
+    }
+
     private fun resolveDotnetTestTarget(project: com.intellij.openapi.project.Project): java.nio.file.Path? {
         val basePath = project.basePath ?: return null
         val base = try { java.nio.file.Paths.get(basePath) } catch (_: Exception) { return null }
@@ -274,36 +360,6 @@ class TestToolset : McpToolset {
         return null
     }
 
-    @McpTool
-    @McpDescription("Returns structured test results tree after tests finish: pass/fail status per test, duration, error messages, and stack traces for failures. Call after rider_get_output shows status is not 'running'. Use to analyze which tests passed or failed and why. Note: filter/className runs ('dotnet test --filter' as a plain process) have no IDE test tree — parse failures with stack traces from the session output text instead; the tree only exists for run-configuration launches.")
-    suspend fun rider_get_test_results(
-        @McpDescription("Session ID from rider_run_tests") sessionId: String
-    ): String {
-        val project = coroutineContext.project
-        val session = SessionManager.get(sessionId)
-            ?: mcpFail("Session '$sessionId' not found")
-
-        if (session.status == "running") mcpFail("Tests still running, wait for completion")
-
-        val handler = session.tag as? ProcessHandler
-            ?: mcpFail("No process handler captured for this session")
-
-        val descriptors = RunContentManager.getInstance(project).allDescriptors
-        val descriptor = descriptors.find { it.processHandler === handler }
-            ?: mcpFail("Execution descriptor not found (tab may have been closed; filter/className runs have no IDE test tree — read failures with stack traces from the session output text instead)")
-
-        val console = descriptor.executionConsole ?: mcpFail("No console available")
-
-        val root = try {
-            val resultsForm = findResultsForm(console) ?: mcpFail("No test results form found")
-            resultsForm.testsRootNode
-        } catch (e: Exception) {
-            mcpFail("Cannot extract test tree: ${e.message}")
-        }
-
-        return extractTestNode(root).toString()
-    }
-
     private fun findResultsForm(console: Any): SMTestRunnerResultsForm? {
         if (console is SMTestRunnerResultsForm) return console
         try {
@@ -337,56 +393,5 @@ class TestToolset : McpToolset {
                 }
             }
         }
-    }
-
-    @McpTool
-    @McpDescription("Reruns only the previously failed tests (retry failures). Uses the IDE's Rerun Failed Tests action. Poll with rider_get_output, then rider_get_test_results for results.")
-    suspend fun rider_rerun_failed_tests(): String {
-        val project = coroutineContext.project
-        val action = com.intellij.openapi.actionSystem.ActionManager.getInstance()
-            .getAction("RerunFailedTests")
-            ?: mcpFail("Rerun Failed Tests action not available")
-
-        val session = SessionManager.create("test")
-        session.appendLine("Rerunning failed tests")
-
-        ApplicationManager.getApplication().invokeLater {
-            val connection = project.messageBus.connect()
-            fun failRerunStart(error: Throwable?) {
-                try { connection.disconnect() } catch (_: Exception) {}
-                session.exitCode = 1
-                session.status = "failed"
-                session.appendLine("Error rerunning failed tests: ${error?.message ?: error?.javaClass?.simpleName ?: "unknown error"}")
-            }
-            connection.subscribe(ExecutionManager.EXECUTION_TOPIC, object : ExecutionListener {
-                override fun processStarted(executorId: String, env: ExecutionEnvironment, handler: ProcessHandler) {
-                    connection.disconnect()
-                    session.tag = handler
-                    handler.addProcessListener(object : ProcessListener {
-                        override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
-                            val text = event.text.trimEnd('\n', '\r')
-                            if (text.isNotEmpty()) session.appendLine(text)
-                        }
-                        override fun processTerminated(event: ProcessEvent) {
-                            session.exitCode = event.exitCode
-                            session.status = if (event.exitCode == 0) "passed" else "failed"
-                        }
-                    })
-                }
-                override fun processNotStarted(executorId: String, env: ExecutionEnvironment) {
-                    // Same guard as above: a failed start never fires
-                    // processStarted, so without this the session hangs.
-                    failRerunStart(null)
-                }
-                override fun processNotStarted(executorId: String, env: ExecutionEnvironment, error: Throwable) {
-                    failRerunStart(error)
-                }
-            })
-
-            val frame = com.intellij.openapi.wm.WindowManager.getInstance().getFrame(project)
-            com.intellij.openapi.actionSystem.ActionManager.getInstance().tryToExecute(action, null, frame, "", true)
-        }
-
-        return buildJsonObject { put("sessionId", session.id) }.toString()
     }
 }

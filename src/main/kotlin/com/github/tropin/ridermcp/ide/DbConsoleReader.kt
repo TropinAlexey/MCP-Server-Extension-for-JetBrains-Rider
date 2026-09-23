@@ -180,7 +180,7 @@ internal object DbConsoleReader {
                         throw IllegalStateException(
                             "No database selected for this console. " +
                                 "Select a database in the console toolbar dropdown, or pass database='<name>' explicitly. " +
-                                "Use list_database_schemas to discover available databases."
+                                "Use rider_list_db_consoles to check currentDatabase."
                         )
                     }
                     val raw = suspendCoroutineUninterceptedOrReturn<Any?> { cont ->
@@ -258,7 +258,7 @@ internal object DbConsoleReader {
                             ds.dbms?.name?.takeIf { it.isNotBlank() }?.let { put("dbms", it) }
                         } catch (_: Exception) {}
                         try {
-                            ds.url?.takeIf { it.isNotBlank() }?.let { put("url", it) }
+                            ds.url?.takeIf { it.isNotBlank() }?.let { put("url", com.github.tropin.ridermcp.maskJdbcSecrets(it)) }
                         } catch (_: Exception) {}
                         try {
                             ds.username?.takeIf { it.isNotBlank() }?.let { put("username", it) }

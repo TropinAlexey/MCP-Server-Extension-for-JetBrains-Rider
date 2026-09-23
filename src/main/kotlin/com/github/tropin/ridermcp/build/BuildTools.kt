@@ -8,6 +8,7 @@ import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.wm.WindowManager
 import com.intellij.task.ProjectTaskManager
+import com.jetbrains.rider.projectView.SolutionConfigurationManager
 import kotlinx.serialization.json.*
 import com.github.tropin.ridermcp.SessionManager
 import com.github.tropin.ridermcp.paginateLines
@@ -17,11 +18,36 @@ import com.intellij.mcpserver.project
 class BuildToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Starts building the solution (compile/build). Returns sessionId for polling. Use rider_get_output to poll build progress and get build logs until status is not 'running'. If the IDE is busy (indexing, another build, active debug), check rider_get_ide_state first.")
-    suspend fun rider_start_build(): String {
+    @McpDescription(
+        "Builds the .NET solution (MSBuild). action='start' (default) launches an async build and returns sessionId — poll it with rider_get_output until status != 'running'. " +
+            "action='cancel' stops the running build. " +
+            "Use for compile errors; structured errors are also in rider_tool_window(windowId='Problems'). " +
+            "Do NOT use for running apps (use rider_start_debug), running tests (use rider_tests), or restoring packages (use rider_nuget action='restore'). " +
+            "If the IDE is busy, check rider_get_ide_state first."
+    )
+    suspend fun rider_build(
+        @McpDescription("Action: start (default) launches build, cancel stops the running build") action: String = "start"
+    ): String {
+        return when (action.lowercase()) {
+            "start" -> buildStart()
+            "cancel" -> buildCancel()
+            else -> mcpFail("Unknown action '$action'. Use: start, cancel")
+        }
+    }
+
+    private suspend fun buildStart(): String {
         val project = coroutineContext.project
         val session = SessionManager.create("build")
         session.appendLine("Build started")
+
+        try {
+            SolutionConfigurationManager.getInstance(project).activeConfigurationAndPlatform?.let { active ->
+                session.metadata["configuration"] = active.configuration
+                session.metadata["platform"] = active.platform
+            }
+        } catch (_: Throwable) {
+            // configuration manager may not be ready yet
+        }
 
         ProjectTaskManager.getInstance(project).buildAllModules()
             .onSuccess { result ->
@@ -43,14 +69,14 @@ class BuildToolset : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Polls output for any async session (build, test, nuget restore). Returns new log lines since last call, plus current status and exit code. Keep polling until status is not 'running'. Works with sessionId from rider_start_build, rider_run_tests, rider_nuget_restore, rider_start_debug, rider_rerun_failed_tests. Supports pagination: fromEnd=true for last N lines, pattern for regex grep, offset for random access. Pass allLines=true to read ALL accumulated lines (not just new since last poll). totalLines and returnedRange use session-wide 0-based coordinates; [n] prefixes are session-wide 1-based line numbers.")
+    @McpDescription("Polls output of any async session started by rider_build, rider_tests, rider_nuget(action='restore') or rider_start_debug. Returns new log lines since the last call plus status and exitCode — keep polling until status is not 'running'. Pass allLines=true to re-read full history (default is delta only). Use fromEnd=true for the tail, pattern for regex grep (case-insensitive, invalid regex matched literally), offset for paging (mutually exclusive with fromEnd). totalLines and returnedRange are session-wide 0-based coordinates; [n] prefixes are session-wide 1-based line numbers.")
     suspend fun rider_get_output(
-        @McpDescription("Session ID from a start operation") sessionId: String,
-        @McpDescription("Max lines to return (0 = unlimited)") maxLines: Int = 0,
-        @McpDescription("Start from this line (0-based). Mutually exclusive with fromEnd (error if combined). Pages within pattern matches when pattern is set") offset: Int? = null,
-        @McpDescription("Return last maxLines lines instead of first (default false)") fromEnd: Boolean = false,
-        @McpDescription("Regex filter — return only matching lines (case-insensitive). E.g. 'error|exception|warn'") pattern: String? = null,
-        @McpDescription("Read all accumulated lines, not just new since last poll (default false)") allLines: Boolean = false
+        @McpDescription("Session ID returned by rider_build / rider_tests / rider_nuget(action='restore') / rider_start_debug") sessionId: String,
+        @McpDescription("Max lines to return (0 = unlimited, default 0)") maxLines: Int = 0,
+        @McpDescription("Start line, session-wide 0-based. Pages within pattern matches when pattern is set. Mutually exclusive with fromEnd") offset: Int? = null,
+        @McpDescription("Return last maxLines lines instead of first (default false). Use for tails/errors") fromEnd: Boolean = false,
+        @McpDescription("Regex filter, case-insensitive — only matching lines returned, e.g. 'error|exception|warn'") pattern: String? = null,
+        @McpDescription("true = re-read ALL accumulated lines; false (default) = only new lines since last poll") allLines: Boolean = false
     ): String {
         val session = SessionManager.get(sessionId)
             ?: mcpFail("Session '$sessionId' not found")
@@ -75,9 +101,7 @@ class BuildToolset : McpToolset {
         }.toString()
     }
 
-    @McpTool
-    @McpDescription("Cancels/stops the currently running build. Use when a build is taking too long or needs to be aborted.")
-    suspend fun rider_cancel_build(): String {
+    private suspend fun buildCancel(): String {
         val project = coroutineContext.project
         val action = ActionManager.getInstance().getAction("Stop")
             ?: mcpFail("No cancel action available")
