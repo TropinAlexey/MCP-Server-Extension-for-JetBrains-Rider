@@ -256,6 +256,13 @@ gradlew.bat runIde
 
 ## What's New
 
+### v1.1.3
+
+- Production-grade `McpDescription` for all 22 `rider_*` tools: real action names only, when-to-use routing, recipes — no more dead references to pre-merge tool names
+- Safety guards: JDBC credentials (password + userinfo) masked in responses, tool-window extraction capped, overlong regex patterns matched literally, `rider_kill_process` by pid with ambiguity refusal, `.dmw` validation on memory open, quote-aware env parsing
+- 18 unit tests (`src/test`) + `checkToolDocs` build check (README sync, description budget) wired into `check`
+- Eval scenarios updated to action-based chains; round R7 registered in `notes/evals/runs.md`
+
 ### v1.1.2
 
 - `rider_execute_console`: returns all result sets for multi-statement SQL (semicolon-aware splitter), adds `rowCount`/`hasMore`/`pageSize` per result set — no more silent data loss or blind truncation
