@@ -12,6 +12,7 @@ class OutputSession(
     @Volatile var exitCode: Int? = null
     @Volatile var progress: Double = -1.0
     @Volatile var tag: Any? = null
+    @Volatile var metadata: MutableMap<String, String> = mutableMapOf()
 
     private val lines = mutableListOf<String>()
     private var readCursor: Int = 0
@@ -57,6 +58,9 @@ object SessionManager {
 
     fun listByType(type: String): List<OutputSession> =
         sessions.values.filter { it.type == type }
+
+    fun listAll(): List<OutputSession> =
+        sessions.values.toList()
 
     fun running(): List<OutputSession> =
         sessions.values.filter { it.status == "running" }

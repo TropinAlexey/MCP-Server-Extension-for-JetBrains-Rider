@@ -20,12 +20,15 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 - Recently opened files → built-in `get_all_open_file_paths` (open editors) or VCS log for broader history
 - IDE readiness (indexing, busy) → `rider_get_ide_state` (call before heavy work)
 - IDE errors and warnings → `rider_get_output` (session output) or `rider_tool_window(action='content', windowId='Problems')`
+- Solution-wide error count that does not match the Problems panel → `rider_swea_errors`
+- Workspace build configuration, phantom errors after Publish, or mismatched RID/platform → `rider_workspace_config`
 - Any panel content (Build, Problems, etc.) → `rider_tool_window` (actions: `list`, `tabs`, `content` — see **Pagination** below and **Tool window map**)
 - Debugged app stdout (NOT the debugger trace) → `rider_tool_window(action='content', windowId='Debug', section='Console', fromEnd=true)`
 - TODO/FIXME/HACK in code → `rider_tool_window(action='content', windowId='TODO')`
 - API endpoints → built-in `search_symbol` or `get_service_map`; fallback: `rider_tool_window(action='content', windowId='Endpoints')`
 - IDE terminal commands → `rider_list_terminals` + `rider_send_terminal_input`
 - Build → `rider_build` (actions: `start`, `cancel`) + `rider_get_output`
+- Publish → `rider_publish` (`configName?`) + `rider_get_output`
 - Run tests → `rider_tests` (actions: `run`, `run_and_wait`, `results`, `rerun_failed`) + `rider_get_output` (`configName` alone runs the whole config — scope with filters)
 - Create/edit DB connections → `rider_database_connection` (actions: `create`, `edit`)
 - SQL in open DB consoles → `rider_list_db_consoles` + `rider_execute_console`
@@ -114,6 +117,16 @@ Recipes:
 // Finished run output (tab name from rider_tool_window(action='tabs', windowId='Run'))
 { "windowId": "Run", "tab": "e2e tests", "maxLines": 30, "fromEnd": true }
 ```
+
+### Artifacts diff after Publish
+
+When Publish produces different outputs than the regular build (e.g. Release vs Debug, different RID, trimmed assemblies), compare the two folders directly:
+
+1. Get the relevant paths: `rider_workspace_config` returns `exePath`/`workingDirectory` for the regular build and `publishDir` if a prior Publish was captured in `lastOperation`.
+2. Diff directories with shell tools (the agent can read the result):
+   - `diff -rq <publishDir> <regularOutputDir>` — which files differ or are unique.
+   - `find <publishDir> -type f | sort` vs the regular output to spot missing/extra files.
+3. For single-file differences, read both files as binary via `read_file` and compare hashes/bytes, or use `shasum`/`md5sum` on each side.
 
 ## Feedback
 

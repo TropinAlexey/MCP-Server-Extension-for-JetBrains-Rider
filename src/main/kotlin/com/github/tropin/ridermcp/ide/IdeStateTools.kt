@@ -28,12 +28,12 @@ private const val MAX_WINDOW_LINES = 20000
 class IdeStateToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Returns IDE readiness: activeFile, indexing (true while Rider indexes — wait before builds/tests/refactoring), busy (indexing OR any rider_* async session still running), runningSessions (sessions started via rider_build/rider_tests/rider_nuget/rider_start_debug). Call before starting heavy work. Note: only tracks indexing globally + own sessions; manual user builds in the UI are not listed. For session logs use rider_get_output; for panel errors use rider_tool_window(windowId='Problems'); for TODOs use rider_tool_window(windowId='TODO'); for endpoints prefer the built-in service/symbol search with rider_tool_window(windowId='Endpoints') as fallback.")
+    @McpDescription("Returns IDE readiness: projectDir (absolute solution root for path translation), activeFile (project-relative), indexing (true while Rider indexes — wait before builds/tests/refactoring), busy (indexing OR any rider_* async session still running), runningSessions (sessions started via rider_build/rider_tests/rider_nuget/rider_start_debug). Call before starting heavy work. Note: only tracks indexing globally + own sessions; manual user builds in the UI are not listed. For session logs use rider_get_output; for panel errors use rider_tool_window(windowId='Problems'); for TODOs use rider_tool_window(windowId='TODO'); for endpoints prefer the built-in service/symbol search with rider_tool_window(windowId='Endpoints') as fallback.")
     suspend fun rider_get_ide_state(): String {
         val project = coroutineContext.project
+        val projectDir = project.projectDir()
         val activeFile = runOnEdt {
             FileEditorManager.getInstance(project).selectedTextEditor?.let { editor ->
-                val projectDir = project.projectDir()
                 editor.virtualFile?.toNioPathOrNull()?.relTo(projectDir) ?: editor.virtualFile?.path
             }
         }
@@ -41,6 +41,7 @@ class IdeStateToolset : McpToolset {
         val running = com.github.tropin.ridermcp.SessionManager.running()
 
         return buildJsonObject {
+            put("projectDir", projectDir?.toString() ?: "unknown")
             put("activeFile", activeFile ?: "none")
             put("indexing", indexing)
             put("busy", indexing || running.isNotEmpty())

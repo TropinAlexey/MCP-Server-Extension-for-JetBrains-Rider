@@ -8,6 +8,7 @@ import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.wm.WindowManager
 import com.intellij.task.ProjectTaskManager
+import com.jetbrains.rider.projectView.SolutionConfigurationManager
 import kotlinx.serialization.json.*
 import com.github.tropin.ridermcp.SessionManager
 import com.github.tropin.ridermcp.paginateLines
@@ -38,6 +39,15 @@ class BuildToolset : McpToolset {
         val project = coroutineContext.project
         val session = SessionManager.create("build")
         session.appendLine("Build started")
+
+        try {
+            SolutionConfigurationManager.getInstance(project).activeConfigurationAndPlatform?.let { active ->
+                session.metadata["configuration"] = active.configuration
+                session.metadata["platform"] = active.platform
+            }
+        } catch (_: Throwable) {
+            // configuration manager may not be ready yet
+        }
 
         ProjectTaskManager.getInstance(project).buildAllModules()
             .onSuccess { result ->

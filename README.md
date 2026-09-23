@@ -63,13 +63,24 @@ MCP tools are synchronous (request → response). Long-running operations — bu
 2. `rider_get_output("build_1")` → returns new lines since the last call, plus current status
 3. Repeat until `status` is no longer `"running"` (`allLines=true` re-reads full history; `rider_tests(action='results', sessionId=...)` gives the structured test tree)
 
-## Available Tools (22)
+## Available Tools (25)
 
 ### Build & shared polling
 | Tool | Args | Description |
 |---|---|---|
 | `rider_build` | `action=start\|cancel` | Build solution (start returns sessionId) / cancel running build. Poll with `rider_get_output`; structured errors also in Problems panel |
 | `rider_get_output` | `sessionId`, `maxLines?`, `fromEnd?`, `pattern?`, `offset?`, `allLines?` | Poll any async session (build, test, restore, debug). Delta by default, `allLines=true` for full history; `fromEnd` = tail, `pattern` = regex grep, `offset` = paging |
+
+### Solution analysis & workspace config
+| Tool | Args | Description |
+|---|---|---|
+| `rider_swea_errors` | `maxExamples?=50` | Solution Wide Analysis error/warning counts per project, top error codes, and sample issues. Use when the solution-wide error count does not match the Problems panel |
+| `rider_workspace_config` | — | Read-only snapshot of runnable-project outputs (Configuration, Platform, TargetFramework, exePath, workingDirectory) and the last `rider_*` build/publish/test operation metadata. Use to diagnose phantom errors after Publish or mismatched RIDs |
+
+### Publish
+| Tool | Args | Description |
+|---|---|---|
+| `rider_publish` | `configName?` | Trigger a Publish run configuration and return a sessionId. Captures Configuration/Platform/PublishProfile metadata for `rider_workspace_config` |
 
 ### Test runner
 | Tool | Args | Description |
@@ -255,6 +266,15 @@ gradlew.bat runIde
 - Running commands without confirmation is opt-in ("brave mode" in the MCP server settings) and stays off by default — keep it off unless you trust the agent. This is a security feature, not an inconvenience.
 
 ## What's New
+
+### v1.1.4
+
+- New `rider_swea_errors`: exposes Solution Wide Analysis (SWEA) error/warning counts per project, top codes, and sample issues — the source of the status-bar solution-wide error count
+- New `rider_workspace_config`: read-only snapshot of runnable-project outputs (Configuration, Platform, TargetFramework, exePath, workingDirectory) plus last `rider_*` build/publish/test operation metadata; use it to diagnose phantom errors after Publish or mismatched RIDs
+- New `rider_publish`: trigger an existing Publish run configuration, stream its output, and capture Configuration/Platform/PublishProfile metadata
+- `rider_get_context` and `rider_get_ide_state` now include `projectDir` (absolute path to the project root)
+- Session metadata: `rider_build`, `rider_tests`, and `rider_publish` record active `configuration`/`platform` (plus test `configName` and publish profile/pubxml when known)
+- AGENTS.md recipe for diffing Publish artifacts against regular build outputs
 
 ### v1.1.3
 

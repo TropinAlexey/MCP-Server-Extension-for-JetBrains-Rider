@@ -17,6 +17,7 @@ import com.intellij.execution.testframework.AbstractTestProxy
 import com.intellij.execution.testframework.sm.runner.SMTestProxy
 import com.intellij.execution.testframework.sm.runner.ui.SMTestRunnerResultsForm
 import com.intellij.mcpserver.McpToolset
+import com.jetbrains.rider.projectView.SolutionConfigurationManager
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
@@ -227,6 +228,7 @@ class TestToolset : McpToolset {
 
         val session = SessionManager.create("test")
         session.appendLine("Running: ${settings.name}")
+        captureSessionMetadata(session, project, settings.name)
         val cfgName = settings.name
 
         ApplicationManager.getApplication().invokeLater {
@@ -277,6 +279,7 @@ class TestToolset : McpToolset {
 
     private fun startFilteredTests(project: com.intellij.openapi.project.Project, filter: String): OutputSession {
         val session = SessionManager.create("test")
+        captureSessionMetadata(session, project)
         val target = resolveDotnetTestTarget(project)
         val cmd = if (target != null) {
             GeneralCommandLine("dotnet", "test", target.toString(), "--filter", filter)
@@ -305,6 +308,18 @@ class TestToolset : McpToolset {
             session.appendLine("Error: ${e.message}")
         }
         return session
+    }
+
+    private fun captureSessionMetadata(session: OutputSession, project: com.intellij.openapi.project.Project, configName: String? = null) {
+        configName?.let { session.metadata["configName"] = it }
+        try {
+            SolutionConfigurationManager.getInstance(project).activeConfigurationAndPlatform?.let { active ->
+                session.metadata["configuration"] = active.configuration
+                session.metadata["platform"] = active.platform
+            }
+        } catch (_: Throwable) {
+            // configuration manager may not be ready yet
+        }
     }
 
     private fun resolveDotnetTestTarget(project: com.intellij.openapi.project.Project): java.nio.file.Path? {
