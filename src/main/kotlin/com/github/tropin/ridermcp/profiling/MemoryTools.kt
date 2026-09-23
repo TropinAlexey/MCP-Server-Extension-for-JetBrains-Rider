@@ -26,16 +26,15 @@ class MemoryToolset : McpToolset {
 
     @McpTool
     @McpDescription(
-        "dotMemory memory profiling: check status or control a session. " +
-            "action='state' (default) — returns availability and active session info. " +
-            "action='control' — sends a command (command: snapshot (requires pid), open (requires path), detach, kill). " +
-            "Start memory profiling from Rider (Run → Profile with dotMemory) first."
+        "Controls a live dotMemory session. action='state' (default) returns availability + active session status. " +
+            "action='control' sends command: snapshot (collect heap snapshot, requires pid from rider_list_processes), open (open a saved .dmw workspace, requires path), detach (keep app running), kill (kill profiled process — destructive). " +
+            "Start memory profiling from Rider (Run → Profile with dotMemory) first. For CPU/time profiling use rider_profiling."
     )
     suspend fun rider_memory(
-        @McpDescription("Action: state (default), control") action: String = "state",
-        @McpDescription("Command for control: snapshot, open, detach, kill") command: String? = null,
-        @McpDescription("Process ID (required for snapshot)") pid: Int = 0,
-        @McpDescription("Workspace path (required for open)") path: String? = null
+        @McpDescription("Action: state (default) inspects, control sends a command") action: String = "state",
+        @McpDescription("Control command: snapshot, open, detach, kill (required for control)") command: String? = null,
+        @McpDescription("Target process ID from rider_list_processes (required for snapshot)") pid: Int = 0,
+        @McpDescription("Workspace .dmw path (required for open)") path: String? = null
     ): String {
         return when (action.lowercase()) {
             "state" -> memoryState()
@@ -77,6 +76,8 @@ class MemoryToolset : McpToolset {
             }
             "open" -> {
                 if (path.isNullOrBlank()) mcpFail("open requires path to a .dmw workspace")
+                if (!path.endsWith(".dmw", ignoreCase = true)) mcpFail("open requires a .dmw workspace file, got '$path'")
+                if (!java.io.File(path).exists()) mcpFail("Workspace file not found: '$path'")
                 host.importWorkspace.fire(path)
             }
             "detach", "kill" -> {

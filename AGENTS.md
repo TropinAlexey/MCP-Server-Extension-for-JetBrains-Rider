@@ -10,41 +10,41 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 
 | Task | Use this | NOT this |
 |---|---|---|
-| Create DB connection | `rider_create_database_connection` | `create_database_connection` (broken MSSQL matching, undocumented `dbms` enum) |
-| Edit DB connection | `rider_edit_database_connection` | `edit_database_connection` |
+| Create DB connection | `rider_database_connection(action='create')` | `create_database_connection` (broken MSSQL matching, undocumented `dbms` enum) |
+| Edit DB connection | `rider_database_connection(action='edit')` | `edit_database_connection` |
 | Execute SQL | `rider_execute_console` (via open console) | `execute_sql_query` (works too, but no multi-statement support) |
 
 ## Task → Tool Map
 
 - Cursor, selection, open files, bookmarks → `rider_get_context`
-- Recently opened files → `rider_get_recent_files`
-- IDE readiness (indexing, busy) → `rider_get_ide_state`
-- IDE errors and warnings → `rider_get_notifications`
-- Any panel content (Build, Problems, etc.) → `rider_list_tool_windows` + `rider_list_tabs` + `rider_get_tool_window_content` (see **Pagination** below and **Tool window map**)
-- Debugged app stdout (NOT the debugger trace) → `rider_get_tool_window_content` with `section=console` + `fromEnd=true` (Debug window: `Console` = process stdout via debugger API; `Debug Output` = `Loaded Assembly / Pdb / Started|Exited Thread` trace)
-- TODO/FIXME/HACK in code → `rider_get_todos`
-- API endpoints → `rider_get_endpoints`
+- Recently opened files → built-in `get_all_open_file_paths` (open editors) or VCS log for broader history
+- IDE readiness (indexing, busy) → `rider_get_ide_state` (call before heavy work)
+- IDE errors and warnings → `rider_get_output` (session output) or `rider_tool_window(action='content', windowId='Problems')`
+- Any panel content (Build, Problems, etc.) → `rider_tool_window` (actions: `list`, `tabs`, `content` — see **Pagination** below and **Tool window map**)
+- Debugged app stdout (NOT the debugger trace) → `rider_tool_window(action='content', windowId='Debug', section='Console', fromEnd=true)`
+- TODO/FIXME/HACK in code → `rider_tool_window(action='content', windowId='TODO')`
+- API endpoints → built-in `search_symbol` or `get_service_map`; fallback: `rider_tool_window(action='content', windowId='Endpoints')`
 - IDE terminal commands → `rider_list_terminals` + `rider_send_terminal_input`
-- Build → `rider_start_build` + `rider_get_output` + `rider_cancel_build`
-- Run tests → `rider_run_tests` + `rider_get_output` + `rider_get_test_results` + `rider_rerun_failed_tests` (`rider_run_tests_and_wait` bundles run+wait; `configName` alone runs the whole config — scope with filters)
-- Create/edit DB connections → `rider_create_database_connection` (fuzzy DBMS matching, JDBC URL, credentials stored in IDE) / `rider_edit_database_connection` (update URL/name/user/password by connectionId)
-- SQL in open DB consoles → `rider_list_db_consoles` (returns `currentDatabase` per console) + `rider_execute_console` (handles multi-statement SQL — each `;`-separated statement gets its own result set; response includes `rowCount`, `pageSize`, `hasMore` per result; three-part names, `database?` pin, slice heavy queries)
-- NuGet packages → `rider_list_packages` / `rider_manage_package` / `rider_nuget_restore`
-- Run/Debug configurations → `rider_create_run_config` / `rider_update_run_config` / `rider_delete_run_config`
-- Debugging → `rider_set_breakpoint` / `rider_remove_breakpoint` / `rider_start_debug` / `rider_debug_state` / `rider_debug_evaluate` / `rider_debug_step`
+- Build → `rider_build` (actions: `start`, `cancel`) + `rider_get_output`
+- Run tests → `rider_tests` (actions: `run`, `run_and_wait`, `results`, `rerun_failed`) + `rider_get_output` (`configName` alone runs the whole config — scope with filters)
+- Create/edit DB connections → `rider_database_connection` (actions: `create`, `edit`)
+- SQL in open DB consoles → `rider_list_db_consoles` + `rider_execute_console`
+- NuGet packages → `rider_nuget` (actions: `list`, `add`, `remove`, `restore`)
+- Run/Debug configurations → `rider_run_config` (actions: `create`, `update`, `delete`; type IDs from built-in `get_run_configurations` or IDE Run → Edit Configurations; launches via `rider_start_debug` / `rider_tests`)
+- Debugging → `rider_breakpoint` (actions: `set`, `remove`) / `rider_start_debug` / `rider_debug` (actions: `state`, `stepOver`, `stepInto`, `stepOut`, `resume`, `pause`, `stop`, `evaluate`)
 - IDE processes → `rider_list_processes` / `rider_kill_process`
-- Code inspections → `rider_list_inspections` / `rider_toggle_inspection`
+- Code inspections → `rider_inspections` (actions: `list`, `toggle`)
 - IDE caches → `rider_invalidate_caches`
-- Profiling (dotTrace) → `rider_profiling_state` / `rider_profiling_control`
-- Profiling (dotMemory) → `rider_memory_state` / `rider_memory_control`
+- Profiling (dotTrace) → `rider_profiling` (actions: `state`, `control`)
+- Profiling (dotMemory) → `rider_memory` (actions: `state`, `control`)
 
 ## Polling Pattern
 
-`rider_start_build`, `rider_run_tests`, `rider_nuget_restore`, `rider_start_debug`, `rider_rerun_failed_tests` return `sessionId` — poll via `rider_get_output` until `status != "running"`.
+`rider_build(action='start')`, `rider_tests(action='run')`, `rider_nuget(action='restore')`, `rider_start_debug`, `rider_tests(action='rerun_failed')` return `sessionId` — poll via `rider_get_output` until `status != "running"`.
 
 ## Pagination & Filtering
 
-`rider_get_tool_window_content` and `rider_get_output` share the same pagination parameters. Response always includes `totalLines` and `returnedRange` so you know exactly what you got and how much more is available.
+`rider_tool_window(action='content')` and `rider_get_output` share the same pagination parameters. Response always includes `totalLines` and `returnedRange` so you know exactly what you got and how much more is available.
 
 **Parameters:**
 
@@ -62,7 +62,7 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 - `returnedRange` — `{ from, to }` — which lines were returned (0-based)
 - `truncated` — `true` when more lines exist beyond what was returned
 - `matchedLines` — number of lines matching `pattern` (only when `pattern` used)
-- `availableSections` — sub-tab titles in the window content (`rider_get_tool_window_content` only, always present — use for the `section` param instead of guessing)
+- `availableSections` — sub-tab titles in the window content (`rider_tool_window` only, always present — use for the `section` param instead of guessing)
 
 **Recipes:**
 
@@ -91,7 +91,7 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 
 ## Tool Window Map
 
-Model: **window → tabs → Swing component tree**. Navigate: `rider_list_tool_windows` → `rider_list_tabs {windowId}` → `rider_get_tool_window_content {windowId, tab?, section?}`.
+Model: **window → tabs → Swing component tree**. Navigate: `rider_tool_window(action='list')` → `rider_tool_window(action='tabs', windowId=...)` → `rider_tool_window(windowId=..., tab=..., section=...)`.
 
 | Window | Tabs | Sections inside |
 |---|---|---|
@@ -111,7 +111,7 @@ Recipes:
 { "windowId": "Debug", "section": "console", "maxLines": 50, "fromEnd": true }
 // Debugger trace tail
 { "windowId": "Debug", "section": "output", "maxLines": 30, "fromEnd": true }
-// Finished run output (tab name from rider_list_tabs("Run"))
+// Finished run output (tab name from rider_tool_window(action='tabs', windowId='Run'))
 { "windowId": "Run", "tab": "e2e tests", "maxLines": 30, "fromEnd": true }
 ```
 

@@ -14,15 +14,14 @@ class ProfilingToolset : McpToolset {
 
     @McpTool
     @McpDescription(
-        "dotTrace performance profiling: check status or control a session. " +
-            "action='state' (default) — returns active session info, snapshots, errors. " +
-            "action='control' — sends a command to the active session (command: start, stop, drop, detach, close; optional pid for multi-process). " +
-            "Start profiling from Rider (Run → Profile) first."
+        "Controls a live dotTrace performance session. action='state' (default) returns active session (config, processes, snapshots with paths, errors) + opened snapshots + profilingDisabled flag. " +
+            "action='control' sends command to the active session: start/resume, stop (save snapshot), drop (discard), detach, close; optional pid targets one process in multi-process sessions. " +
+            "Start profiling from Rider (Run → Profile) first — this tool cannot start a session from scratch. For memory profiling use rider_memory."
     )
     suspend fun rider_profiling(
-        @McpDescription("Action: state (default), control") action: String = "state",
-        @McpDescription("Command for control action: start, stop, drop, detach, close") command: String? = null,
-        @McpDescription("Process ID (for multi-process sessions)") pid: Int = 0
+        @McpDescription("Action: state (default) inspects, control sends a command") action: String = "state",
+        @McpDescription("Control command: start, stop, drop, detach, close (required for control)") command: String? = null,
+        @McpDescription("Target process ID for multi-process sessions (omit = whole session)") pid: Int = 0
     ): String {
         return when (action.lowercase()) {
             "state" -> profilingState()

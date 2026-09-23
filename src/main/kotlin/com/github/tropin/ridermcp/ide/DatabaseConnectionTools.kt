@@ -1,5 +1,6 @@
 package com.github.tropin.ridermcp.ide
 
+import com.github.tropin.ridermcp.maskJdbcSecrets
 import com.github.tropin.ridermcp.runOnEdt
 import com.intellij.credentialStore.OneTimeString
 import com.intellij.database.access.DatabaseCredentials
@@ -18,24 +19,35 @@ class DatabaseConnectionToolset : McpToolset {
 
     @McpTool
     @McpDescription(
-        "Creates a new database connection in the IDE Database tool window. " +
-            "After creation, the connection is available for SQL execution via rider_execute_console and other database tools. " +
-            "Supported DBMS: PostgreSQL, MySQL, MariaDB, Oracle, SQL Server (Microsoft SQL Server / MSSQL), " +
-            "SQLite, H2, DB2, Sybase, Cassandra, ClickHouse, CockroachDB, Derby, Exasol, Greenplum, " +
-            "HyperSQL, Redshift, Snowflake, Vertica, MongoDB, and others — pass the common name and the tool " +
-            "fuzzy-matches it to the IDE's built-in driver list. " +
-            "The url must be a JDBC URL matching the driver (e.g. jdbc:sqlserver://host:1433;databaseName=mydb " +
-            "for SQL Server, jdbc:postgresql://host:5432/mydb for PostgreSQL). " +
-            "Password is stored in the IDE credential store (never logged). " +
-            "Returns the connection's uniqueId — pass it as connectionId to execute_sql_query and other database tools."
+        "Manages IDE database connections (data sources). action='create' (default) requires dbms + JDBC url + name; optional user/password (password goes to the IDE credential store, never logged). " +
+            "action='edit' requires connectionId; optional url/name/user/password. " +
+            "DBMS is matched fuzzily (PostgreSQL, MySQL, MariaDB, Oracle, SQL Server/MSSQL, SQLite, H2, DB2, ClickHouse, MongoDB, ...) with URL-vs-driver validation on create; edit sanity-checks the URL against known drivers (to switch DBMS, create a new connection). " +
+            "Credentials in URLs are masked in responses (password= and userinfo). " +
+            "Returns uniqueId (connectionId for the built-in query tools). To run SQL the rider_* way, open this connection's console in the Database tool window, then use rider_list_db_consoles + rider_execute_console(console=...). " +
+            "Prefer rider_* over the built-in create_database_connection/edit_database_connection (broken MSSQL matching, undocumented dbms enum). " +
+            "This only manages connections — it never executes SQL."
     )
-    suspend fun rider_create_database_connection(
-        @McpDescription("DBMS type — common name like 'PostgreSQL', 'SQL Server', 'MySQL', 'Oracle', 'SQLite', etc. Case-insensitive, fuzzy-matched to built-in drivers") dbms: String,
-        @McpDescription("JDBC URL for the connection (e.g. jdbc:sqlserver://host:1433;databaseName=mydb)") url: String,
-        @McpDescription("Display name for the connection in the Database tool window (e.g. 'Production MSSQL')") name: String,
-        @McpDescription("Database username (omit for auth methods that don't require it)") user: String? = null,
-        @McpDescription("Database password (stored in IDE credential store, never logged)") password: String? = null
+    suspend fun rider_database_connection(
+        @McpDescription("Action: create (default), edit") action: String = "create",
+        @McpDescription("DBMS display name, e.g. 'PostgreSQL', 'SQL Server', 'MySQL' (required for create; fuzzy-matched, aliases mssql/postgres/maria/mongo accepted)") dbms: String? = null,
+        @McpDescription("JDBC URL, must match the driver (required for create; e.g. driver sample URL is shown on mismatch)") url: String? = null,
+        @McpDescription("Connection display name, must be unique (required for create)") name: String? = null,
+        @McpDescription("DB username (optional)") user: String? = null,
+        @McpDescription("DB password — stored in IDE credential store, never logged or echoed (optional)") password: String? = null,
+        @McpDescription("Connection uniqueId from create (required for edit)") connectionId: String? = null
     ): String {
+        return when (action.lowercase()) {
+            "create" -> createConnection(dbms, url, name, user, password)
+            "edit" -> editConnection(connectionId, url, name, user, password)
+            else -> mcpFail("Unknown action '$action'. Use: create, edit")
+        }
+    }
+
+    private suspend fun createConnection(dbms: String?, url: String?, name: String?, user: String?, password: String?): String {
+        if (dbms.isNullOrBlank()) mcpFail("dbms is required for action='create'")
+        if (url.isNullOrBlank()) mcpFail("url is required for action='create'")
+        if (name.isNullOrBlank()) mcpFail("name is required for action='create'")
+
         val project = coroutineContext.project
 
         val driver = runOnEdt {
@@ -44,16 +56,12 @@ class DatabaseConnectionToolset : McpToolset {
 
             val normalized = dbms.trim().lowercase()
 
-            // 1. Exact match by driver name (case-insensitive)
             allDrivers.firstOrNull { it.name.lowercase() == normalized }
-                // 2. Match by URL pattern
                 ?: allDrivers.firstOrNull { it.matchesUrl(url) }
-                // 3. Fuzzy match: driver name contains the query or vice versa
                 ?: allDrivers.firstOrNull {
                     val dn = it.name.lowercase()
                     dn.contains(normalized) || normalized.contains(dn)
                 }
-                // 4. Common aliases
                 ?: run {
                     val aliasMap = mapOf(
                         "mssql" to "sql server",
@@ -117,31 +125,29 @@ class DatabaseConnectionToolset : McpToolset {
             put("name", ds.name)
             put("uniqueId", ds.uniqueId)
             put("driver", driver.name)
-            put("url", url.replace(Regex("password=[^;&]+"), "password=***"))
+            put("url", maskJdbcSecrets(url))
             if (!user.isNullOrBlank()) put("username", user)
-            put("hint", "Connection added to Database tool window. Use rider_list_db_consoles or execute_sql_query with connectionId='${ds.uniqueId}' to run queries.")
+            put("hint", "Connection added to Database tool window. Open its console there, then use rider_list_db_consoles + rider_execute_console(console='<fileName>'); the built-in query tools take connectionId='${ds.uniqueId}'.")
         }.toString()
     }
 
-    @McpTool
-    @McpDescription(
-        "Edits an existing database connection in the IDE. " +
-            "Pass the connectionId (uniqueId from list_database_connections or rider_list_db_consoles) " +
-            "and only the fields you want to change — omitted fields keep their current values."
-    )
-    suspend fun rider_edit_database_connection(
-        @McpDescription("The uniqueId of the connection to edit (from list_database_connections or rider_list_db_consoles)") connectionId: String,
-        @McpDescription("New JDBC URL (omit to keep current)") url: String? = null,
-        @McpDescription("New display name (omit to keep current)") name: String? = null,
-        @McpDescription("New username (omit to keep current)") user: String? = null,
-        @McpDescription("New password (omit to keep current)") password: String? = null
-    ): String {
+    private suspend fun editConnection(connectionId: String?, url: String?, name: String?, user: String?, password: String?): String {
+        if (connectionId.isNullOrBlank()) mcpFail("connectionId is required for action='edit'")
         val project = coroutineContext.project
 
         val ds = runOnEdt {
             LocalDataSourceManager.getInstance(project).dataSources
                 .firstOrNull { it.uniqueId == connectionId }
         } ?: mcpFail("No connection found with id '$connectionId'. Use list_database_connections to see available connections.")
+
+        if (!url.isNullOrBlank()) {
+            val known = runOnEdt {
+                DatabaseDriverManager.getInstance().drivers.any { it.isPredefined && it.matchesUrl(url) }
+            }
+            if (!known) {
+                mcpFail("No known driver matches URL '$url'. Edit keeps the current driver — to switch DBMS, create a new connection instead (action='create' re-validates driver match).")
+            }
+        }
 
         runOnEdt {
             if (!url.isNullOrBlank()) {
@@ -163,7 +169,7 @@ class DatabaseConnectionToolset : McpToolset {
             put("status", "updated")
             put("name", ds.name)
             put("uniqueId", ds.uniqueId)
-            ds.url?.let { put("url", it.replace(Regex("password=[^;&]+"), "password=***")) }
+            ds.url?.let { put("url", maskJdbcSecrets(it)) }
             ds.username?.takeIf { it.isNotBlank() }?.let { put("username", it) }
         }.toString()
     }

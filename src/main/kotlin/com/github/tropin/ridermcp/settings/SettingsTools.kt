@@ -14,12 +14,27 @@ import kotlin.coroutines.coroutineContext
 class SettingsToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Lists code inspections (static analysis rules, code quality checks). Filter by keyword in name/shortName/group. enabledOnly=true shows only active rules. Returns shortName needed by rider_toggle_inspection. Use to find and review which code analysis rules are active.")
-    suspend fun rider_list_inspections(
-        @McpDescription("Filter keyword") filter: String? = null,
-        @McpDescription("Show only enabled") enabledOnly: Boolean = false,
-        @McpDescription("Max results") limit: Int = 50
+    @McpDescription(
+        "Manages Rider static-analysis inspections. action='list' (default) searches rules by keyword (filter matches shortName/name/group), enabledOnly narrows to active, limit caps results. " +
+            "action='toggle' enables/disables one rule (requires shortName from list + enabled flag). " +
+            "For actual code problems use rider_tool_window(windowId='Problems'), not this catalog tool."
+    )
+    suspend fun rider_inspections(
+        @McpDescription("Action: list (default) searches rules, toggle enables/disables one rule") action: String = "list",
+        @McpDescription("Keyword filter over shortName/displayName/group (list only)") filter: String? = null,
+        @McpDescription("Show only enabled rules (list only, default false)") enabledOnly: Boolean = false,
+        @McpDescription("Max rules returned (list only, default 50)") limit: Int = 50,
+        @McpDescription("Inspection shortName from list (required for toggle)") shortName: String? = null,
+        @McpDescription("true = enable, false = disable (toggle only, default true)") enabled: Boolean = true
     ): String {
+        return when (action.lowercase()) {
+            "list" -> listInspections(filter, enabledOnly, limit)
+            "toggle" -> toggleInspection(shortName, enabled)
+            else -> mcpFail("Unknown action '$action'. Use: list, toggle")
+        }
+    }
+
+    private suspend fun listInspections(filter: String?, enabledOnly: Boolean, limit: Int): String {
         val project = coroutineContext.project
         val profile = InspectionProjectProfileManager.getInstance(project).currentProfile as? InspectionProfileImpl
             ?: mcpFail("Cannot access inspection profile")
@@ -56,18 +71,14 @@ class SettingsToolset : McpToolset {
         }.toString()
     }
 
-    @McpTool
-    @McpDescription("Enables or disables a code inspection (static analysis rule) by shortName from rider_list_inspections. Use to suppress noisy warnings or enable stricter checks.")
-    suspend fun rider_toggle_inspection(
-        @McpDescription("Inspection short name") shortName: String,
-        @McpDescription("Enable or disable") enabled: Boolean
-    ): String {
+    private suspend fun toggleInspection(shortName: String?, enabled: Boolean): String {
+        if (shortName.isNullOrBlank()) mcpFail("shortName is required for action='toggle'")
         val project = coroutineContext.project
         val profile = InspectionProjectProfileManager.getInstance(project).currentProfile as? InspectionProfileImpl
             ?: mcpFail("Cannot access inspection profile")
 
         profile.getToolsOrNull(shortName, null)
-            ?: mcpFail("Inspection '$shortName' not found. Use rider_list_inspections to find the shortName.")
+            ?: mcpFail("Inspection '$shortName' not found. Use rider_inspections(action='list') to find the shortName.")
 
         val tool = profile.getToolsOrNull(shortName, null)!!
         if (tool.isEnabled == enabled) {
