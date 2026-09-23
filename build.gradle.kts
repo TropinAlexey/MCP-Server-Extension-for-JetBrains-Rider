@@ -13,6 +13,13 @@ dependencies {
         testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
     }
     compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    testImplementation(kotlin("test"))
+    testImplementation(kotlin("test-junit"))
+    testImplementation("junit:junit:4.13.2")
+}
+
+tasks.withType<Test> {
+    useJUnit()
 }
 
 intellijPlatform {

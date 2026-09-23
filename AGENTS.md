@@ -118,3 +118,11 @@ Recipes:
 ## Feedback
 
 `feedback/` holds usage feedback. Any agent using these tools should drop a note here after a session with real friction — one file per session/issue, name `YYYY-MM-DD-short-topic.md`. Template: context (1 line) → what helped → what misrouted/missing → proposals by priority.
+
+## Release hygiene
+
+After any significant change (tool code, `McpDescription`, `plugin.xml`, docs that affect evals): run `./gradlew buildPlugin` and report the fresh zip path (`build/distributions/mcp-server-extension-<version>.zip`) plus the tree hash — evals and installs must reference a zip built from the current tree (methodology `notes/evals/methodology.md` p.6).
+
+## Testing rule
+
+New or changed tool behavior ships with tests, no exceptions — pure logic (masking, parsing, pagination caps, validation) as unit tests, IDE-bound paths as IDE tests. A guard without a test is unfinished work: add the test in the same change and report the test run result alongside the zip.

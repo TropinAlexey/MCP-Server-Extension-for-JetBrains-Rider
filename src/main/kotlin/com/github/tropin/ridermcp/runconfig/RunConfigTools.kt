@@ -113,30 +113,33 @@ class RunConfigToolset : McpToolset {
         return buildJsonObject { put("deleted", name) }.toString()
     }
 
-    // Comma-separated key=value pairs; a value containing commas must be
-    // double-quoted ("KEY=a,b"). Quotes are stripped, whitespace trimmed.
-    private fun parseEnvString(env: String): Map<String, String> {
-        if (env.isBlank()) return emptyMap()
-        val pairs = mutableListOf<String>()
-        val cur = StringBuilder()
-        var inQuotes = false
-        for (ch in env) {
-            when {
-                ch == '"' -> { inQuotes = !inQuotes; cur.append(ch) }
-                ch == ',' && !inQuotes -> { pairs.add(cur.toString()); cur.clear() }
-                else -> cur.append(ch)
-            }
+    private fun parseEnvString(env: String): Map<String, String> = parseRunConfigEnv(env)
+}
+
+// Comma-separated key=value pairs; a value containing commas must be
+// double-quoted ("KEY=a,b"). Quotes are stripped, whitespace trimmed.
+// Top-level internal for unit tests — behavior contract, do not weaken.
+internal fun parseRunConfigEnv(env: String): Map<String, String> {
+    if (env.isBlank()) return emptyMap()
+    val pairs = mutableListOf<String>()
+    val cur = StringBuilder()
+    var inQuotes = false
+    for (ch in env) {
+        when {
+            ch == '"' -> { inQuotes = !inQuotes; cur.append(ch) }
+            ch == ',' && !inQuotes -> { pairs.add(cur.toString()); cur.clear() }
+            else -> cur.append(ch)
         }
-        pairs.add(cur.toString())
-        return pairs.associate { pair ->
-            val idx = pair.indexOf('=')
-            if (idx <= 0) mcpFail("Invalid env entry '${pair.trim()}', expected key=value (quote values with commas: KEY=\"a,b\")")
-            val key = pair.substring(0, idx).trim()
-            var value = pair.substring(idx + 1).trim()
-            if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
-                value = value.substring(1, value.length - 1)
-            }
-            key to value
+    }
+    pairs.add(cur.toString())
+    return pairs.associate { pair ->
+        val idx = pair.indexOf('=')
+        if (idx <= 0) mcpFail("Invalid env entry '${pair.trim()}', expected key=value (quote values with commas: KEY=\"a,b\")")
+        val key = pair.substring(0, idx).trim()
+        var value = pair.substring(idx + 1).trim()
+        if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+            value = value.substring(1, value.length - 1)
         }
+        key to value
     }
 }
