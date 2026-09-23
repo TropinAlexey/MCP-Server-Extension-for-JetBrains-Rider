@@ -9,6 +9,12 @@ import java.nio.file.Path
 
 fun Project.projectDir(): Path? = guessProjectDir()?.toNioPathOrNull()
 
+// Masks credentials in JDBC URLs for tool responses: password=... params
+// and userinfo (user:pass@) embedded in the URL authority. Never log raw URLs.
+fun maskJdbcSecrets(url: String): String =
+    url.replace(Regex("password=[^;&\\s]+"), "password=***")
+        .replace(Regex("(://)[^/\\s]*@"), "$1***@")
+
 fun Path.relTo(projectDir: Path?): String =
     projectDir?.relativize(this)?.toString() ?: this.toString()
 
@@ -49,8 +55,11 @@ fun paginateLines(
     val totalLines = globalTotal ?: sliceTotal
 
     val filtered = if (!pattern.isNullOrBlank()) {
-        // Invalid regex is matched literally instead of failing the call.
-        val regex = try { Regex(pattern, RegexOption.IGNORE_CASE) } catch (_: Exception) { Regex(Regex.escape(pattern), RegexOption.IGNORE_CASE) }
+        // Overlong patterns are matched literally: user/agent-supplied regex runs
+        // on the server thread, and pathological patterns (e.g. nested quantifiers)
+        // over thousands of lines are a ReDoS vector. 300 chars covers real greps.
+        val regex = if (pattern.length > 300) Regex(Regex.escape(pattern), RegexOption.IGNORE_CASE)
+            else try { Regex(pattern, RegexOption.IGNORE_CASE) } catch (_: Exception) { Regex(Regex.escape(pattern), RegexOption.IGNORE_CASE) }
         allLines.mapIndexedNotNull { idx, line -> if (regex.containsMatchIn(line)) idx to line else null }
     } else null
 

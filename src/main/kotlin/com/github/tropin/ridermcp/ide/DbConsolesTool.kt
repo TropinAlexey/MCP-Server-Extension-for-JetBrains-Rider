@@ -12,7 +12,7 @@ import kotlin.coroutines.coroutineContext
 class DbConsolesToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Lists database consoles (SQL query consoles) currently open in the IDE, each bound to its data source. Call this FIRST when the user says a DB console is open, or before scanning servers with list_schemas — the open console already identifies the right database. Returns console file name plus data source name, uniqueId (pass it as connectionId to the database tools like execute_sql_query), DBMS, connection URL, and currentDatabase (the database selected in the console toolbar). If the target database is not introspected in the IDE model, use any introspected database as the execution context and address tables with three-part names (db.schema.table); confirm the real database list with SELECT name FROM sys.databases — never trust a filtered schema list. Always confirm the database context BEFORE running expensive queries.")
+    @McpDescription("Lists open SQL consoles (editor tabs bound to a data source) with console file name, data source name + uniqueId (use as connectionId), DBMS, URL and currentDatabase (console toolbar dropdown). Call FIRST when the user mentions an open console, or before introspecting servers — the open console already identifies the right database. Returns [] when nothing is open (open a console via double-click in the Database tool window first).")
     suspend fun rider_list_db_consoles(): String {
         val project = coroutineContext.project
         return runOnEdt {
@@ -27,12 +27,12 @@ class DbConsolesToolset : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Executes SQL in the context of an open database console's data source and returns the result as CSV text. Handles multiple statements separated by semicolons — each produces its own result set (no silent loss). Use when the user has a console open (find it with rider_list_db_consoles) instead of scanning servers. Runs without requiring IDE introspection of the target database — address tables with three-part names (db.schema.table) when needed. Execution database: the console's current one (its toolbar dropdown) by default, or pass database='<name>' to pin it explicitly. For heavy queries, slice the work (TOP, date/id ranges, EXISTS instead of COUNT LIKE over CAST) and page large results. Response includes rowCount and hasMore per result set — when hasMore=true, add TOP/OFFSET or increase pageSize to get remaining rows.")
+    @McpDescription("Executes SQL using an open console's data source (resolve names via rider_list_db_consoles) and returns CSV text. Multi-statement input (semicolon-separated) runs statement-by-statement, each with its own result set — no silent loss. Needs NO IDE introspection: address other DBs with three-part names (db.schema.table); catalog per dialect — MSSQL SELECT name FROM sys.databases, Postgres SELECT datname FROM pg_database, MySQL SHOW DATABASES. Execution DB = console's currentDatabase by default, or pin with database='<name>'. Default to SELECT; confirm INSERT/UPDATE/DELETE/DDL with the user first. Slice heavy queries (TOP, date/id ranges, EXISTS instead of COUNT LIKE over CAST) and page with pageSize; hasMore=true means truncated — re-query with TOP/OFFSET plus ORDER BY (OFFSET without ORDER BY is nondeterministic). Prefer over built-in execute_sql_query (no multi-statement support).")
     suspend fun rider_execute_console(
-        @McpDescription("SQL statement(s) to execute — multiple statements separated by ';' are executed individually, each returning its own result set") sql: String,
-        @McpDescription("Console file name (omit for the first open console). Use rider_list_db_consoles to discover names") console: String? = null,
-        @McpDescription("Rows per page (default 200). Response includes hasMore=true when the result was truncated") pageSize: Int = 200,
-        @McpDescription("Execution database name (omit to use the console's current database from its toolbar dropdown). Use list_database_schemas if unsure about available databases") database: String? = null
+        @McpDescription("SQL statement(s); ';'-separated statements each return their own result set") sql: String,
+        @McpDescription("Open console file name from rider_list_db_consoles (omit = first open console)") console: String? = null,
+        @McpDescription("Rows per page, 1-5000, default 200. hasMore=true means truncated — narrow with TOP/OFFSET or raise pageSize") pageSize: Int = 200,
+        @McpDescription("Execution database to pin (omit = console's currentDatabase toolbar value)") database: String? = null
     ): String {
         val project = coroutineContext.project
         val resolved = runOnEdt { DbConsoleReader.resolveConsole(project, console) }

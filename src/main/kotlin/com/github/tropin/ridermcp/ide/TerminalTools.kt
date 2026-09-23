@@ -13,7 +13,7 @@ import kotlin.coroutines.coroutineContext
 class TerminalToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Lists open terminal tabs/sessions in the IDE with their names and indices. Use before rider_send_terminal_input to find the correct tab index.")
+    @McpDescription("Lists IDE-integrated terminal tabs (name + index, marks active). Call first to resolve the tab index for rider_send_terminal_input. This is for interactive shells only — NOT for run/debug consoles (use rider_get_output or rider_tool_window windowId='Run'/'Debug') and NOT for tool-window text dumps (use rider_tool_window).")
     suspend fun rider_list_terminals(): String {
         val project = coroutineContext.project
         return runOnEdt {
@@ -35,10 +35,10 @@ class TerminalToolset : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Sends a command or text to an IDE terminal tab (executes it). Use tab index from rider_list_terminals (default 0). Appends newline automatically. Use to run shell commands, scripts, or interact with running processes in the IDE terminal.")
+    @McpDescription("Sends text/command to an IDE terminal tab and executes it (newline appended). Resolves the tab via rider_list_terminals (default tab=0). Fire-and-forget: there is NO reliable read-back of terminal output via tools — for output you need, use rider_build/rider_tests/rider_nuget instead. Confirm destructive shell commands with the user first. Fails when the tab has no attached shell process.")
     suspend fun rider_send_terminal_input(
-        @McpDescription("Text/command to send") text: String,
-        @McpDescription("Terminal tab index") tab: Int = 0
+        @McpDescription("Text/command to execute (newline appended automatically)") text: String,
+        @McpDescription("Terminal tab index from rider_list_terminals (default 0)") tab: Int = 0
     ): String {
         val project = coroutineContext.project
         runOnEdt {

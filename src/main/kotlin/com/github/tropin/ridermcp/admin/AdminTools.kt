@@ -12,7 +12,7 @@ import kotlin.coroutines.coroutineContext
 class AdminToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Invalidates IDE caches and restarts Rider. Use when IDE shows stale state: wrong syntax highlighting, missing references, broken code completion, indexing stuck, or phantom errors. This is the 'nuclear option' for IDE glitches.")
+    @McpDescription("Invalidates Rider caches and restarts the IDE (returns immediately; all rider_* sessions die). Confirm with the user first. Nuclear option for stale state only: wrong highlighting, missing references, broken completion, stuck indexing, phantom errors. Do NOT use for normal build/test failures — use rider_build/rider_tests + rider_tool_window(windowId='Problems') first.")
     suspend fun rider_invalidate_caches(): String {
         val project = coroutineContext.project
         ApplicationManager.getApplication().invokeLater {

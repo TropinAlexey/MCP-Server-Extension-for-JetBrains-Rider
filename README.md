@@ -35,23 +35,22 @@ This plugin bridges that gap. It gives any MCP-compatible client (Claude Code, C
 | Capability | Built-in MCP Server | This Extension |
 |---|---|---|
 | Read/edit files | ✅ (most clients do it natively) | — |
-| Build solution | ✅ start + final status | ✅ streaming output, cancel, progress |
-| See build errors | ✅ after build completes | ✅ real-time via Problems panel + deep text extraction |
+| Build solution | ✅ start + final status | ✅ streaming output via sessionId + `rider_get_output`, cancel, progress |
+| See build errors | ✅ after build completes | ✅ real-time via Problems panel (`rider_tool_window`) + deep text extraction |
 | Process management | ❌ | ✅ list & kill IDE-managed processes |
-| IDE state/progress | ❌ | ✅ indexing, building, publishing status |
-| Tool windows | ❌ | ✅ read any tool window content |
-| Notifications | ❌ | ✅ balloon messages, event log |
+| IDE state/progress | ❌ | ✅ indexing, busy, runningSessions |
+| Tool windows | ❌ | ✅ read any tool window via `rider_tool_window(action=list/tabs/content)` |
 | Programmer context | Partial (open files, selection) | ✅ all-in-one: cursor, selection, surrounding code, open editors, bookmarks, unsaved files |
-| Test runner | Partial (run via configs) | ✅ run, poll, results tree with stack traces, rerun failed |
-| Run config CRUD | Partial (list & execute) | ✅ create, update, delete |
-| .NET debugger | Partial (xdebug only) | ✅ breakpoints, evaluate, step, stack trace |
-| NuGet management | ❌ | ✅ list, add, remove, restore |
-| IDE settings | ❌ | ✅ inspections list & toggle |
+| Test runner | Partial (run via configs) | ✅ `rider_tests(action=run/run_and_wait/results/rerun_failed)` with stack traces |
+| Run config CRUD | Partial (list & execute, built-in) | ✅ `rider_run_config(action=create/update/delete)` |
+| .NET debugger | Partial (xdebug only) | ✅ `rider_breakpoint` + `rider_start_debug` + `rider_debug(state/step/evaluate)` |
+| NuGet management | ❌ | ✅ `rider_nuget(action=list/add/remove/restore)` |
+| IDE settings | ❌ | ✅ `rider_inspections(action=list/toggle)` |
 | Terminal integration | Partial (execute commands) | ✅ list tabs, send input to specific terminals |
-| TODO items | ❌ | ✅ project-wide TODO/FIXME/HACK |
-| API endpoints | ❌ | ✅ HTTP routes from Endpoints panel |
+| TODO / endpoints | ❌ | ✅ via `rider_tool_window` (TODO / Endpoints panels) |
+| DB consoles & SQL | Partial (built-in single-statement) | ✅ `rider_list_db_consoles` + multi-statement `rider_execute_console` |
 | Cache invalidation | ❌ | ✅ invalidate caches & restart |
-| dotTrace control | Partial (report analysis) | ✅ live session control: start/stop/detach profiling |
+| dotTrace / dotMemory | Partial (report analysis) | ✅ live session state + control |
 
 ## How It Works
 
@@ -60,117 +59,86 @@ This is a companion to the built-in MCP server — not a replacement and not a f
 ### Polling Pattern for Async Operations
 MCP tools are synchronous (request → response). Long-running operations — builds, test runs, package restores, debug sessions — use a polling pattern instead of blocking:
 
-1. `rider_start_build` / `rider_run_tests` / `rider_nuget_restore` / `rider_start_debug` → returns `{"sessionId": "build_1"}`
+1. `rider_build(action='start')` / `rider_tests(action='run')` / `rider_nuget(action='restore')` / `rider_start_debug` → returns `{"sessionId": "build_1"}`
 2. `rider_get_output("build_1")` → returns new lines since the last call, plus current status
-3. Repeat until `status` is no longer `"running"`
+3. Repeat until `status` is no longer `"running"` (`allLines=true` re-reads full history; `rider_tests(action='results', sessionId=...)` gives the structured test tree)
 
-## Available Tools (41)
+## Available Tools (22)
 
-### Build
-| Tool | Description |
-|---|---|
-| `rider_start_build` | Start solution build, returns session ID for polling |
-| `rider_cancel_build` | Cancel a running build |
-
-### Test Runner
+### Build & shared polling
 | Tool | Args | Description |
 |---|---|---|
-| `rider_run_tests` | `configName?`, `filter?`, `className?`, `methodName?` | Run tests. Filter by class/method or a raw `dotnet test --filter` expression. Omit everything to run all tests. If several test configurations exist, pass `configName` to pick one — but it runs the whole configuration (can be thousands of tests), so add a filter to scope it |
-| `rider_run_tests_and_wait` | same filters + `timeoutMs?` | Run tests and wait in one call. Returns status, exit code, last lines, and a sessionId for `rider_get_test_results`. On timeout returns `running` — continue polling |
-| `rider_get_test_results` | `sessionId` | Structured test results tree with statuses, durations, errors, stack traces |
-| `rider_rerun_failed_tests` | — | Rerun previously failed tests |
+| `rider_build` | `action=start\|cancel` | Build solution (start returns sessionId) / cancel running build. Poll with `rider_get_output`; structured errors also in Problems panel |
+| `rider_get_output` | `sessionId`, `maxLines?`, `fromEnd?`, `pattern?`, `offset?`, `allLines?` | Poll any async session (build, test, restore, debug). Delta by default, `allLines=true` for full history; `fromEnd` = tail, `pattern` = regex grep, `offset` = paging |
 
-### Shared Polling
+### Test runner
 | Tool | Args | Description |
 |---|---|---|
-| `rider_get_output` | `sessionId`, `maxLines?`, `fromEnd?`, `pattern?`, `offset?`, `allLines?` | Poll output of any async session (build, test, restore, debug). Returns new lines since the last call. `fromEnd` reads the tail, `pattern` searches with a regular expression, `offset` navigates page by page, `allLines` rereads the whole history |
+| `rider_tests` | `action=run\|run_and_wait\|results\|rerun_failed`, `configName?`, `filter?`, `className?`, `methodName?`, `sessionId?`, `timeoutMs?` | Run scoped tests (prefer `filter`/`className`/`methodName` — bare `configName` runs the whole config). `run` → sessionId + poll; `run_and_wait` → blocks; `results` → structured tree (IDE config runs only); `rerun_failed` → retry failures |
 
-### Process Management
-| Tool | Description |
-|---|---|
-| `rider_list_processes` | List running processes with PID, command line, display name. Optional `type` filter (build/test/run) |
-| `rider_kill_process` | Kill a process by display name |
-
-### IDE State
+### Process management
 | Tool | Args | Description |
 |---|---|---|
-| `rider_get_ide_state` | — | Progress indicators, active file, busy status |
-| `rider_get_notifications` | `limit` (default 5) | Recent IDE notifications |
-| `rider_list_tool_windows` | `all` (default false) | Tool windows (visible only by default) |
-| `rider_list_tabs` | `windowId` | Tab names of a tool window + selected tab |
-| `rider_get_tool_window_content` | `windowId`, `tab?`, `section?`, `maxLines?`, `offset?`, `fromEnd?`, `pattern?` | Text content of a tool window tab (editors, consoles, trees, lists). `section` reads one sub-tab only (e.g. `console` for Debug stdout). Defaults to selected tab, 200 lines |
+| `rider_list_processes` | `type?` (build/test/run) | Live IDE-managed processes with PID, command line, display name |
+| `rider_kill_process` | `processName` (exact, from list) | Force-kill a hung process; prefer native stop (`rider_build cancel`, `rider_debug stop`) when applicable |
 
-### Run Configuration CRUD
+### IDE state & tool windows
 | Tool | Args | Description |
 |---|---|---|
-| `rider_create_run_config` | `name`, `typeId`, `env?`, `programArgs?` | Create a run config. Use the built-in `get_run_configurations` for available types |
-| `rider_update_run_config` | `name`, `env?`, `programArgs?`, `newName?` | Update env, args, or rename |
-| `rider_delete_run_config` | `name` | Delete a run configuration |
+| `rider_get_ide_state` | — | Readiness: activeFile, indexing, busy, runningSessions. Check before heavy work |
+| `rider_tool_window` | `action=content\|list\|tabs`, `windowId?`, `all?`, `tab?`, `section?`, `maxLines?`, `offset?`, `fromEnd?`, `pattern?` | Read any panel (Build, Run, Debug, Problems, TODO, Terminal, Endpoints, ...). Navigate list → tabs → content; `section='Console'` = app stdout, `section='Debug Output'` = debugger trace |
 
-### .NET Debugger
+### Run configurations
 | Tool | Args | Description |
 |---|---|---|
-| `rider_set_breakpoint` | `file`, `line` | Set a line breakpoint (absolute or project-relative path) |
-| `rider_remove_breakpoint` | `file`, `line` | Remove a line breakpoint |
-| `rider_start_debug` | `configName?` | Start debug session, returns sessionId for polling |
-| `rider_debug_state` | — | Session status, current position, stack trace with frame names |
-| `rider_debug_evaluate` | `expression` | Evaluate expression in the current debug frame (debugger must be paused) |
-| `rider_debug_step` | `action` | stepOver, stepInto, stepOut, resume, pause, stop |
+| `rider_run_config` | `action=create\|update\|delete`, `name`, `typeId?`, `programArgs?`, `env?`, `newName?` | CRUD for run/debug configs (does not launch; launch via `rider_start_debug`/`rider_tests`). `typeId` from built-in `get_run_configurations` (or IDE Run → Edit Configurations) |
 
-### NuGet Management
+### .NET debugger
 | Tool | Args | Description |
 |---|---|---|
-| `rider_list_packages` | `project?`, `outdated?` | List installed NuGet packages, optionally show available updates |
-| `rider_manage_package` | `action`, `name`, `project?`, `version?` | Add or remove a NuGet package |
-| `rider_nuget_restore` | — | Run `dotnet restore`, returns sessionId for polling |
+| `rider_breakpoint` | `action=set\|remove`, `filePath`, `line` | Arm/disarm line breakpoint (1-indexed) before debugging |
+| `rider_start_debug` | `configName?` | Launch app under debugger, returns sessionId |
+| `rider_debug` | `action=state\|stepOver\|stepInto\|stepOut\|resume\|pause\|stop\|evaluate`, `expression?` | Inspect state/stack, step, evaluate (must be paused). App stdout via `rider_get_output` or Debug Console section |
 
-### Inspection Management
+### NuGet
 | Tool | Args | Description |
 |---|---|---|
-| `rider_list_inspections` | `keyword?`, `enabledOnly?` | Search inspections by keyword, filter by enabled state |
-| `rider_toggle_inspection` | `shortName`, `enabled` | Enable or disable an inspection |
+| `rider_nuget` | `action=list\|add\|remove\|restore`, `name?`, `projectPath?`, `version?`, `outdated?` | list/add/remove packages; restore returns sessionId for polling |
+
+### Inspections
+| Tool | Args | Description |
+|---|---|---|
+| `rider_inspections` | `action=list\|toggle`, `filter?`, `enabledOnly?`, `limit?`, `shortName?`, `enabled?` | Catalog of static-analysis rules (not the Problems panel) |
 
 ### Terminal
 | Tool | Args | Description |
 |---|---|---|
-| `rider_list_terminals` | — | List open terminal tabs with names |
-| `rider_send_terminal_input` | `text`, `tab?` | Send text input to a terminal tab (appends newline). Default tab 0 |
+| `rider_list_terminals` | — | IDE terminal tabs (index + name) |
+| `rider_send_terminal_input` | `text`, `tab?=0` | Execute shell input in a terminal tab (not for run/debug consoles) |
 
-### Project Insights
+### Database
 | Tool | Args | Description |
 |---|---|---|
-| `rider_get_todos` | `limit?` | TODO/FIXME/HACK items from the TODO tool window (default limit 100) |
-| `rider_get_endpoints` | — | API endpoints from the Endpoints tool window (HTTP method, URL, handler) |
-| `rider_list_db_consoles` | — | Open database consoles with their data sources (name, id for the database tools, DBMS, URL). Ask this first when a DB console is open — no need to scan servers |
-| `rider_execute_console` | `sql`, `console?`, `pageSize?`, `database?` | Execute SQL in an open console's data source, returns CSV. No IDE introspection required — use three-part names for other databases. Execution DB: console's current one by default, or pin it with `database` |
+| `rider_database_connection` | `action=create\|edit`, `dbms?`, `url?`, `name?`, `user?`, `password?`, `connectionId?` | Manage data sources (JDBC). Returns uniqueId. Prefer over built-in create/edit (MSSQL matching fixed) |
+| `rider_list_db_consoles` | — | Open SQL consoles with data source + currentDatabase. Call first |
+| `rider_execute_console` | `sql`, `console?`, `pageSize?`, `database?` | Execute SQL (multi-statement supported) → CSV with rowCount/hasMore. Prefer over built-in execute (no introspection needed) |
 
-### dotTrace Profiling
+### Profiling
 | Tool | Args | Description |
 |---|---|---|
-| `rider_profiling_state` | — | dotTrace state: active session info (processes, snapshots, errors), opened snapshots, profiling availability |
-| `rider_profiling_control` | `command`, `pid?` | Control active session. Commands: `start`, `stop` (save snapshot), `drop` (discard data), `detach`, `close`. Optional `pid` for multi-process |
+| `rider_profiling` | `action=state\|control`, `command?=start\|stop\|drop\|detach\|close`, `pid?` | Live dotTrace session (start it from Rider Run → Profile first) |
+| `rider_memory` | `action=state\|control`, `command?=snapshot\|open\|detach\|kill`, `pid?`, `path?` | Live dotMemory session (snapshot needs pid, open needs .dmw path) |
 
-### dotMemory Profiling
+### Admin & context
 | Tool | Args | Description |
 |---|---|---|
-| `rider_memory_state` | — | dotMemory availability and active memory session status |
-| `rider_memory_control` | `command`, `pid?`, `path?` | Control memory profiling. Commands: `snapshot` (collect, requires `pid`), `open` (open a `.dmw` workspace, requires `path`), `detach`, `kill` (kill the profiled process — destructive) |
-
-### Admin
-| Tool | Args | Description |
-|---|---|---|
-| `rider_invalidate_caches` | — | Invalidate IDE caches and restart. Use for stale highlighting, missing references, broken indexing |
-
-### Programmer Context
-| Tool | Description |
-|---|---|
-| `rider_get_context` | Active file + cursor + surrounding code + selection + open editors + bookmarks — all in one call |
-| `rider_get_recent_files` | 20 most recently opened files |
+| `rider_invalidate_caches` | — | Nuclear option: invalidate caches + restart IDE (sessions die) |
+| `rider_get_context` | — | Programmer focus: active file + cursor + selection + ±5 lines + open editors + bookmarks |
 
 ### Tool Window Map
 
 Every tool window follows the same model: **window → tabs → sections**.
-Navigate it in three steps: `rider_list_tool_windows` → `rider_list_tabs` → `rider_get_tool_window_content`.
+Navigate in three steps: `rider_tool_window(action='list')` → `rider_tool_window(action='tabs', windowId=...)` → `rider_tool_window(action='content', ...)`.
 
 | Window | Tabs | Inside each tab |
 |---|---|---|
@@ -179,12 +147,12 @@ Navigate it in three steps: `rider_list_tool_windows` → `rider_list_tabs` → 
 | `Build` | Build sessions | Compiler output; structured errors are also in `Problems` |
 | `Problems` | Current file / project scope | Errors and warnings tree |
 | `Terminal` | One tab per terminal | Shell console (read via content, write via `rider_send_terminal_input`) |
-| `TODO` | Scope filter | TODO/FIXME/HACK tree (also via `rider_get_todos`) |
-| `Endpoints` | — | HTTP routes tree/list (also via `rider_get_endpoints`) |
+| `TODO` | Scope filter | TODO/FIXME/HACK tree |
+| `Endpoints` | — | HTTP routes tree/list |
 | `Services` | Run dashboard entries | Service/run consoles. May report `has no content` until opened once in Rider (`View → Tool Windows → Services`) |
 | `NuGet`, `Database`, others | Varies | Generic text/tree extraction (see rules below) |
 
-How content is returned (`rider_get_tool_window_content`):
+How content is returned (`rider_tool_window(action='content', ...)`):
 - Every response lists `availableSections` — the sub-tabs found inside — so there is no need to guess their names.
 - `section` reads a single sub-tab by a name fragment (case-insensitive), e.g. `section=console`.
 - The Debug window exposes two dedicated sections: `Console` (your application's own output) and `Debug Output` (the debugger trace — loaded assemblies, thread events).
@@ -195,13 +163,13 @@ How content is returned (`rider_get_tool_window_content`):
 Recipes:
 ```jsonc
 // Application output of the active debug session, last 50 lines (not the debugger trace)
-{ "windowId": "Debug", "section": "console", "maxLines": 50, "fromEnd": true }
+{ "action": "content", "windowId": "Debug", "section": "console", "maxLines": 50, "fromEnd": true }
 
 // Debugger trace tail (assemblies, threads)
-{ "windowId": "Debug", "section": "output", "maxLines": 30, "fromEnd": true }
+{ "action": "content", "windowId": "Debug", "section": "output", "maxLines": 30, "fromEnd": true }
 
-// Process output of a finished run (tab name from rider_list_tabs("Run"))
-{ "windowId": "Run", "tab": "e2e tests", "maxLines": 30, "fromEnd": true }
+// Process output of a finished run (tab name from tabs action on "Run")
+{ "action": "content", "windowId": "Run", "tab": "e2e tests", "maxLines": 30, "fromEnd": true }
 ```
 
 ## Installation
@@ -262,12 +230,21 @@ gradlew.bat runIde
 | "Debugger is not paused..." | Pause first — evaluating/stepping require a paused debugger (pausing freezes the live process; prefer a dev/test instance) |
 | Debug console is empty | The session produced no application output (the debugger trace is still in `Debug Output`) |
 | Terminal "not ready" | The tab has no attached process yet — open a terminal in Rider and retry |
-| "Configuration '…' not found" | Names must match exactly — list them with the built-in `get_run_configurations` |
+| "Configuration '…' not found" | Names must match exactly — list them with the built-in `get_run_configurations` (or IDE Run → Edit Configurations) |
 | `rider_list_db_consoles` returns `[]` | Open the console in an editor tab first (double-click it in the Database tool window) |
 | A tool returns a file path you cannot read | Read only paths from `rider_get_context` (project-relative, always readable); absolute local path as fallback. Never feed one tool's path into another tool blindly |
 | Target database missing from the schema list | The list is the introspected subset, not the truth. Run the query through any introspected database with three-part names (`db.schema.table`) and confirm via `SELECT name FROM sys.databases` |
 | Heavy SQL (`COUNT LIKE` over `CAST`, full-table scans) | Confirm the database context first, then slice: `TOP`, date/id ranges, `EXISTS` instead of `COUNT LIKE`, `pageSize` for paging. Deliberate cancel is normal practice, not a failure |
 | Tempted by generic `execute_tool` | Don't — it has no action listing and can't reach DB consoles or run profiles. Use the `rider_*` tool for the job |
+
+## Known limits (accepted, not hidden)
+
+- Tool-window reads run on the EDT and are capped at 20000 lines with a truncation marker — huge consoles don't freeze the IDE, but page with `section`/`pattern`/`maxLines` instead of dumping.
+- `rider_send_terminal_input` is fire-and-forget: terminal scrollback has no reliable read-back via tools. Need output? Use `rider_build` / `rider_tests` / `rider_nuget`.
+- `rider_kill_process` matches by exact display name; ambiguous names fail — pass `pid` from the same listing.
+- `rider_debug(action='evaluate')` runs code inside the debuggee (getters can have side effects) — dev/test instances only.
+- `OFFSET` paging without `ORDER BY` is nondeterministic — always pair them.
+- Post-description-rewrite eval round (R7) is pending — see `notes/evals/runs.md`. Ship-gate per `CONTRACT.md`.
 
 ## Limitations & Privacy
 
@@ -278,6 +255,13 @@ gradlew.bat runIde
 - Running commands without confirmation is opt-in ("brave mode" in the MCP server settings) and stays off by default — keep it off unless you trust the agent. This is a security feature, not an inconvenience.
 
 ## What's New
+
+### v1.1.3
+
+- Production-grade `McpDescription` for all 22 `rider_*` tools: real action names only, when-to-use routing, recipes — no more dead references to pre-merge tool names
+- Safety guards: JDBC credentials (password + userinfo) masked in responses, tool-window extraction capped, overlong regex patterns matched literally, `rider_kill_process` by pid with ambiguity refusal, `.dmw` validation on memory open, quote-aware env parsing
+- 18 unit tests (`src/test`) + `checkToolDocs` build check (README sync, description budget) wired into `check`
+- Eval scenarios updated to action-based chains; round R7 registered in `notes/evals/runs.md`
 
 ### v1.1.2
 

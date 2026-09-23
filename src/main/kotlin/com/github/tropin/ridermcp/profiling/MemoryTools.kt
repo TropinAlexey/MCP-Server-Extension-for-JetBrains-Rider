@@ -14,10 +14,6 @@ import kotlin.coroutines.coroutineContext
 
 class MemoryToolset : McpToolset {
 
-    // The generated `solution.dotMemoryHost` extension only exists in newer
-    // models, so resolve the host the same way generated code does. The factory
-    // never runs when the backend provides the extension; if it doesn't, we
-    // fail gracefully into "not available" instead of fabricating a host.
     private fun dotMemoryHost(project: com.intellij.openapi.project.Project): DotMemoryHost? {
         return try {
             project.solution.getOrCreateExtension("dotMemoryHost", DotMemoryHost::class) {
@@ -29,8 +25,25 @@ class MemoryToolset : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Returns dotMemory memory profiling state: whether dotMemory is available, and whether a memory profiling session is active or finished. Use to check if memory profiling is running before taking snapshots. The stock tools only analyze dotTrace snapshots — live memory sessions are visible only here.")
-    suspend fun rider_memory_state(): String {
+    @McpDescription(
+        "Controls a live dotMemory session. action='state' (default) returns availability + active session status. " +
+            "action='control' sends command: snapshot (collect heap snapshot, requires pid from rider_list_processes), open (open a saved .dmw workspace, requires path), detach (keep app running), kill (kill profiled process — destructive). " +
+            "Start memory profiling from Rider (Run → Profile with dotMemory) first. For CPU/time profiling use rider_profiling."
+    )
+    suspend fun rider_memory(
+        @McpDescription("Action: state (default) inspects, control sends a command") action: String = "state",
+        @McpDescription("Control command: snapshot, open, detach, kill (required for control)") command: String? = null,
+        @McpDescription("Target process ID from rider_list_processes (required for snapshot)") pid: Int = 0,
+        @McpDescription("Workspace .dmw path (required for open)") path: String? = null
+    ): String {
+        return when (action.lowercase()) {
+            "state" -> memoryState()
+            "control" -> memoryControl(command, pid, path)
+            else -> mcpFail("Unknown action '$action'. Use: state, control")
+        }
+    }
+
+    private suspend fun memoryState(): String {
         val project = coroutineContext.project
         val host = dotMemoryHost(project) ?: return """{"available":false}"""
 
@@ -47,22 +60,15 @@ class MemoryToolset : McpToolset {
         }.toString()
     }
 
-    @McpTool
-    @McpDescription("Controls an active dotMemory profiling session. Commands: 'snapshot' (collect a memory snapshot for the process, requires pid), 'open' (open a saved .dmw workspace, requires path), 'detach' (detach profiler, process keeps running), 'kill' (kill the profiled process — destructive, use to stop a hung profiled app). Use rider_memory_state first to check session status. Start memory profiling from Rider (Run → Profile with dotMemory).")
-    suspend fun rider_memory_control(
-        @McpDescription("Command: snapshot, open, detach, kill") command: String,
-        @McpDescription("Process ID (required for snapshot)") pid: Int = 0,
-        @McpDescription("Workspace path (required for open)") path: String? = null
-    ): String {
+    private suspend fun memoryControl(command: String?, pid: Int, path: String?): String {
+        if (command.isNullOrBlank()) mcpFail("command is required for action='control'. Use: snapshot, open, detach, kill")
         val project = coroutineContext.project
         val host = dotMemoryHost(project) ?: mcpFail("dotMemory is not available in this IDE")
 
         when (command.lowercase()) {
             "snapshot" -> {
-                if (pid == 0) mcpFail("snapshot requires pid. Use rider_memory_state or rider_list_processes to find it.")
+                if (pid == 0) mcpFail("snapshot requires pid. Use rider_list_processes to find it.")
                 try {
-                    // start(TReq) is deprecated in favor of the lifetime overload;
-                    // Eternal matches the old default (fire-and-forget snapshot request).
                     host.getSnapshot.start(Lifetime.Eternal, pid)
                 } catch (e: Exception) {
                     mcpFail("Failed to request snapshot: ${e.message}")
@@ -70,6 +76,8 @@ class MemoryToolset : McpToolset {
             }
             "open" -> {
                 if (path.isNullOrBlank()) mcpFail("open requires path to a .dmw workspace")
+                if (!path.endsWith(".dmw", ignoreCase = true)) mcpFail("open requires a .dmw workspace file, got '$path'")
+                if (!java.io.File(path).exists()) mcpFail("Workspace file not found: '$path'")
                 host.importWorkspace.fire(path)
             }
             "detach", "kill" -> {

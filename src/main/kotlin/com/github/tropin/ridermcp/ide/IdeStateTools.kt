@@ -5,8 +5,6 @@ import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
-import com.intellij.notification.Notification
-import com.intellij.notification.NotificationsManager
 import com.intellij.execution.ui.ExecutionConsole
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Editor
@@ -23,20 +21,22 @@ import com.github.tropin.ridermcp.relTo
 import com.github.tropin.ridermcp.runOnEdt
 import kotlin.coroutines.coroutineContext
 
+// Hard cap on Swing/console text extraction per call: tool-window reads run on
+// the EDT, so unbounded extraction would freeze the Rider UI on huge consoles.
+private const val MAX_WINDOW_LINES = 20000
+
 class IdeStateToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Returns IDE activity status: progress indicators (indexing, building, analyzing), currently active/focused file, whether IDE is busy or idle. Use to check if IDE is ready before starting builds, tests, or refactoring. Fields: activeFile, indexing (dumb mode — project is being indexed), busy (indexing OR own async sessions still running), runningSessions (build/test/restore/debug sessions launched via rider_* tools). Note: user-driven IDE work outside rider_* tools (manual builds) is not tracked — only indexing (dumb mode) is visible globally.")
+    @McpDescription("Returns IDE readiness: activeFile, indexing (true while Rider indexes — wait before builds/tests/refactoring), busy (indexing OR any rider_* async session still running), runningSessions (sessions started via rider_build/rider_tests/rider_nuget/rider_start_debug). Call before starting heavy work. Note: only tracks indexing globally + own sessions; manual user builds in the UI are not listed. For session logs use rider_get_output; for panel errors use rider_tool_window(windowId='Problems'); for TODOs use rider_tool_window(windowId='TODO'); for endpoints prefer the built-in service/symbol search with rider_tool_window(windowId='Endpoints') as fallback.")
     suspend fun rider_get_ide_state(): String {
         val project = coroutineContext.project
-        // FileEditorManager model reads require the EDT.
         val activeFile = runOnEdt {
             FileEditorManager.getInstance(project).selectedTextEditor?.let { editor ->
                 val projectDir = project.projectDir()
                 editor.virtualFile?.toNioPathOrNull()?.relTo(projectDir) ?: editor.virtualFile?.path
             }
         }
-        // DumbService.isDumb is a cheap volatile read, safe off the EDT.
         val indexing = DumbService.getInstance(project).isDumb
         val running = com.github.tropin.ridermcp.SessionManager.running()
 
@@ -51,34 +51,35 @@ class IdeStateToolset : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Returns recent IDE notifications (errors, warnings, info messages). Use to check for build errors, plugin updates, indexing issues, or any IDE alerts. Default limit: 5, pass limit for more.")
-    suspend fun rider_get_notifications(
-        @McpDescription("Max notifications to return") limit: Int = 5
+    @McpDescription(
+        "Reads any IDE tool window (Build, Run, Debug, Problems, TODO, Terminal, Endpoints, Services, NuGet, Database, ...). " +
+            "action='list' lists window IDs (all=true includes hidden). action='tabs' lists tabs of one window (requires windowId). " +
+            "action='content' (default) reads text of a window (requires windowId; optional tab for multi-tab windows, section for a single sub-tab, maxLines/offset/fromEnd/pattern for paging). " +
+            "Navigate: list → tabs → content. Every content response includes availableSections — use an entry from there for section instead of guessing. " +
+            "Panels may show secrets/tokens (terminal scrollback, DB URLs, debug values) — do not paste into logs or chats. " +
+            "Routing: app stdout of a debug session = windowId='Debug', section='Console'; debugger trace (assemblies/threads) = section='Debug Output' (NOT app logs); finished run output = windowId='Run' + tab name; live build/test/debug streams = rider_get_output(sessionId), panels are snapshots. " +
+            "TIP: fromEnd=true for tails/errors, pattern for grep; Problems/TODO trees usually need no fromEnd."
+    )
+    suspend fun rider_tool_window(
+        @McpDescription("Action: content (default) reads text, list lists window IDs, tabs lists tabs of one window") action: String = "content",
+        @McpDescription("Tool window ID from action='list', e.g. 'Problems', 'Build', 'Run', 'Debug', 'TODO' (required for tabs/content)") windowId: String? = null,
+        @McpDescription("Include hidden windows (list only, default false)") all: Boolean = false,
+        @McpDescription("Tab display name from action='tabs' (content only; default = selected tab)") tab: String? = null,
+        @McpDescription("Sub-tab/section name fragment, case-insensitive — use an entry from availableSections, e.g. 'Console' (content only)") section: String? = null,
+        @McpDescription("Max lines for content (default 200, 0 = unlimited — avoid on huge windows)") maxLines: Int = 200,
+        @McpDescription("Start line, 0-based, for paging (content only; mutually exclusive with fromEnd)") offset: Int? = null,
+        @McpDescription("Return last maxLines lines — use for tails/errors (content only, default false)") fromEnd: Boolean = false,
+        @McpDescription("Regex filter, case-insensitive, e.g. 'error|exception|warn' (content only)") pattern: String? = null
     ): String {
-        val project = coroutineContext.project
-        val notifications = runOnEdt {
-            NotificationsManager.getNotificationsManager()
-                .getNotificationsOfType(Notification::class.java, project)
-                .takeLast(limit)
+        return when (action.lowercase()) {
+            "list" -> listToolWindows(all)
+            "tabs" -> listTabs(windowId)
+            "content" -> getToolWindowContent(windowId, tab, section, maxLines, offset, fromEnd, pattern)
+            else -> mcpFail("Unknown action '$action'. Use: content, list, tabs")
         }
-
-        return buildJsonArray {
-            notifications.forEach { n ->
-                addJsonObject {
-                    n.title.takeIf { it.isNotEmpty() }?.let { put("title", it) }
-                    n.content.takeIf { it.isNotEmpty() }?.let { put("content", it) }
-                    put("type", n.type.name)
-                    put("group", n.groupId)
-                }
-            }
-        }.toString()
     }
 
-    @McpTool
-    @McpDescription("Lists IDE tool windows (panels/panes like Terminal, Build, Debug, NuGet, TODO, Problems, etc.). By default only visible ones; pass all=true to discover all available panels. Use to find windowId for rider_get_tool_window_content.")
-    suspend fun rider_list_tool_windows(
-        @McpDescription("Show all tool windows, not just visible") all: Boolean = false
-    ): String {
+    private suspend fun listToolWindows(all: Boolean): String {
         val project = coroutineContext.project
         return runOnEdt {
             val twm = ToolWindowManager.getInstance(project)
@@ -96,11 +97,8 @@ class IdeStateToolset : McpToolset {
         }
     }
 
-    @McpTool
-    @McpDescription("Lists tabs of an IDE tool window (debug sessions, run configurations, terminal tabs, etc.). Returns tab names and which one is selected. Use before rider_get_tool_window_content to choose the tab parameter.")
-    suspend fun rider_list_tabs(
-        @McpDescription("Tool window ID (from rider_list_tool_windows)") windowId: String
-    ): String {
+    private suspend fun listTabs(windowId: String?): String {
+        if (windowId.isNullOrBlank()) mcpFail("windowId is required for action='tabs'")
         val project = coroutineContext.project
         return runOnEdt {
             val tw = ToolWindowManager.getInstance(project).getToolWindow(windowId)
@@ -117,17 +115,11 @@ class IdeStateToolset : McpToolset {
         }
     }
 
-    @McpTool
-    @McpDescription("Reads text content from any IDE tool window/panel (Build output, Problems, Debug, NuGet, Database, etc.). TIP: pass section to read one sub-tab only — for application logs use windowId='Debug', section='Console'. The default Debug view mixes app output with the debugger trace; section='Debug Output' returns only that trace (Loaded Assembly / Started|Exited Thread). Supports pagination, tail reading, and regex filtering. Response always includes totalLines so you know the full size. Use fromEnd=true for last N lines (errors, recent logs). Use pattern for regex grep (case-insensitive; matched lines prefixed with [lineNo]). Use rider_list_tabs to discover tab names. The response always includes availableSections so you don't have to guess section names.")
-    suspend fun rider_get_tool_window_content(
-        @McpDescription("Tool window ID") windowId: String,
-        @McpDescription("Tab name (omit for active). Use rider_list_tabs to discover names") tab: String? = null,
-        @McpDescription("Sub-section name (sub-tab title substring, case-insensitive). Debug examples: 'Console' for app stdout, 'Debug Output' for debugger trace. Omit for full content. See availableSections in the response for valid values.") section: String? = null,
-        @McpDescription("Max output lines (default 200, 0 = unlimited)") maxLines: Int = 200,
-        @McpDescription("Start from this line (0-based). Mutually exclusive with fromEnd (error if combined). Pages within pattern matches when pattern is set") offset: Int? = null,
-        @McpDescription("Return last maxLines lines instead of first (default false). Best for Debug/Build logs where errors are at the end") fromEnd: Boolean = false,
-        @McpDescription("Regex filter — return only matching lines (case-insensitive). E.g. 'error|exception|warn'") pattern: String? = null
+    private suspend fun getToolWindowContent(
+        windowId: String?, tab: String?, section: String?,
+        maxLines: Int, offset: Int?, fromEnd: Boolean, pattern: String?
     ): String {
+        if (windowId.isNullOrBlank()) mcpFail("windowId is required for action='content'")
         val project = coroutineContext.project
         return runOnEdt {
                 val tw = ToolWindowManager.getInstance(project).getToolWindow(windowId)
@@ -145,8 +137,6 @@ class IdeStateToolset : McpToolset {
                 val actualSections = mutableListOf<String>().also { collectTabTitles(component, it) }
                 val availableSections = actualSections.toMutableList()
                 if (isDebugWindow(windowId)) {
-                    // Documented Debug sub-tabs even when they are not JBTabs in the Swing tree
-                    // (the app console is fetched via the debugger API, not from Swing).
                     if (availableSections.none { it.equals("Console", ignoreCase = true) }) availableSections.add(0, "Console")
                     if (availableSections.none { it.equals("Debug Output", ignoreCase = true) }) availableSections.add("Debug Output")
                 }
@@ -160,7 +150,10 @@ class IdeStateToolset : McpToolset {
                     allLines.addAll(resolved.second)
                 } else {
                     sectionTitle = null
-                    extractText(component, allLines, Int.MAX_VALUE)
+                    extractText(component, allLines, MAX_WINDOW_LINES)
+                }
+                if (allLines.size >= MAX_WINDOW_LINES) {
+                    allLines.add("[truncated at $MAX_WINDOW_LINES lines — narrow with section/pattern/maxLines]")
                 }
 
                 val page = paginateLines(allLines, maxLines, offset, fromEnd, pattern)
@@ -190,10 +183,6 @@ class IdeStateToolset : McpToolset {
 
     private fun isDebugWindow(windowId: String) = windowId.equals("Debug", ignoreCase = true)
 
-    // Resolves a named sub-section (sub-tab) inside tool window content.
-    // Runs on EDT. Returns the section title and its already-extracted text lines.
-    // actualSections are titles really found in the Swing tree — the error path
-    // lists only those, never the synthetic Debug titles from availableSections.
     private fun resolveSection(
         project: Project,
         windowId: String,
@@ -204,27 +193,19 @@ class IdeStateToolset : McpToolset {
     ): Pair<String, List<String>> {
         val isConsoleQuery = isDebugWindow(windowId) && section.contains("console", ignoreCase = true)
         if (isConsoleQuery) {
-            // The debugger's process console (app stdout) is not reliably a Swing sub-tab
-            // of the Debug tool window content — fetch it via the debugger API first.
-            // (RunContentManager lookup by processHandler identity can resolve to a wrong,
-            // empty descriptor, so session.consoleView is the source of truth.)
             val lines = debugConsoleLines(project, tab)
             if (lines.any { it.isNotBlank() }) return "Console" to lines
-            // Fall through to Swing search if the API console is empty — the real
-            // stdout may still be reachable via merged-content traversal.
         }
 
         findSectionComponent(component, section)?.let { (title, target) ->
             val lines = mutableListOf<String>()
-            extractText(target, lines, Int.MAX_VALUE)
+            extractText(target, lines, MAX_WINDOW_LINES)
             return title to lines
         }
 
-        // "Debug Output" is advertised even when it is not a Swing sub-tab —
-        // resolve it to the full-window extraction (debugger trace).
         if (!isConsoleQuery && isDebugWindow(windowId) && section.contains("output", ignoreCase = true)) {
             val lines = mutableListOf<String>()
-            extractText(component, lines, Int.MAX_VALUE)
+            extractText(component, lines, MAX_WINDOW_LINES)
             return "Debug Output" to lines
         }
 
@@ -232,8 +213,6 @@ class IdeStateToolset : McpToolset {
         mcpFail("Section '$section' not found. Available: $actualSections")
     }
 
-    // Depth-first search for a sub-tab whose title contains the query.
-    // Supports both JBTabs (IntelliJ tab layout) and JTabbedPane (Swing tabs).
     private fun findSectionComponent(component: java.awt.Component, query: String): Pair<String, java.awt.Component>? {
         if (component is com.intellij.ui.tabs.JBTabs) {
             component.tabs.firstOrNull { it.text.contains(query, ignoreCase = true) }
@@ -278,10 +257,6 @@ class IdeStateToolset : McpToolset {
         }
     }
 
-    // App stdout lines of a debug session, independent of UI layout.
-    // Source of truth is XDebugSession.consoleView; its document is read directly
-    // because Swing traversal of the console component can come up empty
-    // (virtualized output, custom console implementations).
     private fun debugConsoleLines(project: Project, tab: String?): List<String> {
         val mgr = XDebuggerManager.getInstance(project)
         val session = if (tab != null) {
@@ -291,36 +266,30 @@ class IdeStateToolset : McpToolset {
             mgr.currentSession ?: mcpFail("No active debug session")
         }
 
-        // 1. Direct document text from the session console view.
         try {
             val consoleView = session.consoleView
             if (consoleView != null) {
-                consoleTextFromConsole(consoleView)?.takeIf { it.isNotBlank() }?.let { return it.lines() }
+                consoleTextFromConsole(consoleView)?.takeIf { it.isNotBlank() }?.let { return it.lines().take(MAX_WINDOW_LINES) }
                 val swingLines = mutableListOf<String>()
-                extractText(consoleView.component, swingLines, Int.MAX_VALUE)
+                extractText(consoleView.component, swingLines, MAX_WINDOW_LINES)
                 if (swingLines.any { it.isNotBlank() }) return swingLines
             }
         } catch (_: Throwable) {
-            // fall through to RunContentManager lookup
         }
 
-        // 2. Fallback: RunContentDescriptor with the same process handler.
         val handler = session.debugProcess.processHandler
         val descriptor = com.intellij.execution.ui.RunContentManager.getInstance(project).allDescriptors
             .firstOrNull { it.processHandler === handler }
             ?: mcpFail("Debug session '${session.sessionName}' has no process console. The app may use an external console window.")
         val console = descriptor.executionConsole
             ?: mcpFail("Debug session '${session.sessionName}' has no execution console")
-        consoleTextFromConsole(console)?.takeIf { it.isNotBlank() }?.let { return it.lines() }
+        consoleTextFromConsole(console)?.takeIf { it.isNotBlank() }?.let { return it.lines().take(MAX_WINDOW_LINES) }
         val lines = mutableListOf<String>()
-        extractText(console.component, lines, Int.MAX_VALUE)
+        extractText(console.component, lines, MAX_WINDOW_LINES)
         return lines
     }
 
-    // Best-effort raw text of an ExecutionConsole without walking Swing children.
-    // Uses reflection for getEditor()/getEditors() so no dependency on impl classes.
     private fun consoleTextFromConsole(console: ExecutionConsole): String? {
-        // DuplexConsoleView (debug console + output): concatenate both sides.
         try {
             if (console.javaClass.name.contains("Duplex")) {
                 val sb = StringBuilder()
@@ -368,12 +337,10 @@ class IdeStateToolset : McpToolset {
     private fun extractText(component: java.awt.Component, lines: MutableList<String>, limit: Int) {
         if (lines.size >= limit) return
         when {
-            // EditorComponentImpl is the actual Swing wrapper; Editor interface is not a Component
             component is com.intellij.openapi.editor.impl.EditorComponentImpl -> {
                 val text = component.editor.document.text
                 if (text.isNotBlank()) text.lines().forEach { if (lines.size < limit) lines.add(it) }
             }
-            // JBTabs only exposes selected tab as Swing child; iterate all tabs explicitly
             component is com.intellij.ui.tabs.JBTabs -> {
                 for (tabInfo in component.tabs) {
                     if (lines.size >= limit) break

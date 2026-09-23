@@ -8,7 +8,6 @@ import com.intellij.mcpserver.project
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
-import com.intellij.openapi.fileEditor.impl.EditorHistoryManager
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.toNioPathOrNull
 import kotlinx.serialization.json.*
@@ -19,7 +18,7 @@ import kotlin.coroutines.coroutineContext
 class ContextToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Returns programmer's current focus: active file path, cursor/caret position (line + column), selected text with line range, surrounding code context (±5 lines), list of other open editors, unsaved/modified files, and bookmarks. Use this to see what the user is looking at, what text they have selected, or where their cursor is. For open database consoles with their data sources (name + id for the database tools), use rider_list_db_consoles.")
+    @McpDescription("Returns what the programmer is looking at right now: active file (project-relative), cursor line+column (1-indexed), selected text with line range, surrounding code (±5 lines, current line marked '>>> '), other open editors, unsaved files, and bookmarks. Use for 'what is the user looking at / selected'. Contents may include secrets when open files hold them — do not paste into logs or chats. For IDE busyness use rider_get_ide_state; for any tool window text use rider_tool_window; for open DB consoles use rider_list_db_consoles.")
     suspend fun rider_get_context(): String {
         val project = coroutineContext.project
         val projectDir = project.projectDir()
@@ -93,16 +92,4 @@ class ContextToolset : McpToolset {
         return result.toString()
     }
 
-    @McpTool
-    @McpDescription("Returns the 20 most recently opened/viewed files (newest first). Use to understand which files the user has been working on, or to find files they recently edited or reviewed.")
-    suspend fun rider_get_recent_files(): String {
-        val project = coroutineContext.project
-        val projectDir = project.projectDir()
-        val files = ApplicationManager.getApplication().runReadAction<List<String>> {
-            EditorHistoryManager.getInstance(project).fileList.takeLast(20).reversed().map { file ->
-                file.toNioPathOrNull()?.relTo(projectDir) ?: file.path
-            }
-        }
-        return buildJsonArray { files.forEach { add(it) } }.toString()
-    }
 }
