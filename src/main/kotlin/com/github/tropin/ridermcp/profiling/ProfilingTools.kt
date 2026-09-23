@@ -13,8 +13,25 @@ import kotlin.coroutines.coroutineContext
 class ProfilingToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Returns dotTrace performance profiling state: active profiling session info, profiled process PIDs, collected/opened snapshots (paths and sizes), and errors. Use to check if profiling is running, see snapshot status, or diagnose profiling issues.")
-    suspend fun rider_profiling_state(): String {
+    @McpDescription(
+        "dotTrace performance profiling: check status or control a session. " +
+            "action='state' (default) — returns active session info, snapshots, errors. " +
+            "action='control' — sends a command to the active session (command: start, stop, drop, detach, close; optional pid for multi-process). " +
+            "Start profiling from Rider (Run → Profile) first."
+    )
+    suspend fun rider_profiling(
+        @McpDescription("Action: state (default), control") action: String = "state",
+        @McpDescription("Command for control action: start, stop, drop, detach, close") command: String? = null,
+        @McpDescription("Process ID (for multi-process sessions)") pid: Int = 0
+    ): String {
+        return when (action.lowercase()) {
+            "state" -> profilingState()
+            "control" -> profilingControl(command, pid)
+            else -> mcpFail("Unknown action '$action'. Use: state, control")
+        }
+    }
+
+    private suspend fun profilingState(): String {
         val project = coroutineContext.project
         val host = project.solution.dotTraceHost
 
@@ -89,12 +106,8 @@ class ProfilingToolset : McpToolset {
         }.toString()
     }
 
-    @McpTool
-    @McpDescription("Controls an active dotTrace profiling session. Commands: 'start' (begin/resume data collection), 'stop' (stop & save performance snapshot), 'drop' (discard collected data & continue), 'detach' (detach profiler from process), 'close' (end session). Optional pid for multi-process sessions. Use rider_profiling_state first to check session status.")
-    suspend fun rider_profiling_control(
-        @McpDescription("Command: start, stop, drop, detach, close") command: String,
-        @McpDescription("Process ID (for multi-process sessions)") pid: Int = 0
-    ): String {
+    private suspend fun profilingControl(command: String?, pid: Int): String {
+        if (command.isNullOrBlank()) mcpFail("command is required for action='control'. Use: start, stop, drop, detach, close")
         val project = coroutineContext.project
         val host = project.solution.dotTraceHost
         val session = host.activeSession.value
