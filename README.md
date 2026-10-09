@@ -267,6 +267,17 @@ gradlew.bat runIde
 
 ## What's New
 
+### v1.1.5
+
+- `rider_execute_console` runs on a dedicated JDBC connection of the console's data source instead of the IDE AI query processor:
+  - errors carry the real server text, vendor code and SQLState (e.g. `Invalid column name 'value'. [error 207, SQLState S0001]`) instead of «Unknown error» / «no details from IDE»; `PRINT`/`RAISERROR` output returned in `messages`
+  - the console's `currentDatabase` is used when `database` is omitted (no more «No database selected» with a database picked in the toolbar)
+  - T-SQL (MSSQL/Sybase) is split by `GO` lines, not by `;` — `DECLARE @sql …; select @sql = …; exec sp_executesql @sql` runs as one batch; every result set and update count of a batch is returned; `split=go|semicolon|none` overrides
+  - `timeoutSeconds` (default 60, 0 = none): driver query timeout plus a watchdog that cancels the statement; the timed-out batch is named, later batches are reported as skipped, and the connection is discarded so the next call starts clean. Client cancellation cancels the running statement too
+  - `maxCellLength` (default 4000) cuts long cells with a `…[+N chars]` marker and reports `truncatedCells`; `offset` pages through big result sets
+- Driver error texts are passed through JDBC secret masking; `password=` masking is now case-insensitive (`Password=` in MSSQL URLs)
+- `rider_list_db_consoles`: `currentDatabase` is resolved from the search path's database node (no schema names posing as databases), plus `currentSchema`
+
 ### v1.1.4
 
 - New `rider_swea_errors`: exposes Solution Wide Analysis (SWEA) error/warning counts per project, top codes, and sample issues — the source of the status-bar solution-wide error count
