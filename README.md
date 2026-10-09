@@ -132,7 +132,7 @@ MCP tools are synchronous (request → response). Long-running operations — bu
 |---|---|---|
 | `rider_database_connection` | `action=create\|edit`, `dbms?`, `url?`, `name?`, `user?`, `password?`, `connectionId?` | Manage data sources (JDBC). Returns uniqueId. Prefer over built-in create/edit (MSSQL matching fixed) |
 | `rider_list_db_consoles` | — | Open SQL consoles with data source + currentDatabase. Call first |
-| `rider_execute_console` | `sql`, `console?`, `pageSize?`, `database?` | Execute SQL (multi-statement supported) → CSV with rowCount/hasMore. Prefer over built-in execute (no introspection needed) |
+| `rider_execute_console` | `sql`, `console?`, `pageSize?`, `database?`, `offset?`, `timeoutSeconds?=60`, `maxCellLength?=4000`, `split?=auto` | Execute SQL on a dedicated JDBC connection → CSV per result set with rowCount/hasMore; server error text + code + SQLState; T-SQL split by `GO`; per-batch timeout with cancel. Prefer over built-in execute |
 
 ### Profiling
 | Tool | Args | Description |

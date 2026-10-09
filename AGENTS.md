@@ -12,7 +12,7 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 |---|---|---|
 | Create DB connection | `rider_database_connection(action='create')` | `create_database_connection` (broken MSSQL matching, undocumented `dbms` enum) |
 | Edit DB connection | `rider_database_connection(action='edit')` | `edit_database_connection` |
-| Execute SQL | `rider_execute_console` (via open console) | `execute_sql_query` (works too, but no multi-statement support) |
+| Execute SQL | `rider_execute_console` (via open console) | `execute_sql_query` (hides driver errors as "Unknown error", no T-SQL batches, no timeout control) |
 
 ## Task → Tool Map
 
@@ -31,7 +31,7 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 - Publish → `rider_publish` (`configName?`) + `rider_get_output`
 - Run tests → `rider_tests` (actions: `run`, `run_and_wait`, `results`, `rerun_failed`) + `rider_get_output` (`configName` alone runs the whole config — scope with filters)
 - Create/edit DB connections → `rider_database_connection` (actions: `create`, `edit`)
-- SQL in open DB consoles → `rider_list_db_consoles` + `rider_execute_console`
+- SQL in open DB consoles → `rider_list_db_consoles` + `rider_execute_console` (T-SQL scripts with `DECLARE @x …; … sp_executesql` run as one batch — split is by `GO` for MSSQL; slow scans → `timeoutSeconds`; huge cells → `maxCellLength`; next page → `offset` + `ORDER BY`)
 - NuGet packages → `rider_nuget` (actions: `list`, `add`, `remove`, `restore`)
 - Run/Debug configurations → `rider_run_config` (actions: `create`, `update`, `delete`; type IDs from built-in `get_run_configurations` or IDE Run → Edit Configurations; launches via `rider_start_debug` / `rider_tests`)
 - Debugging → `rider_breakpoint` (actions: `set`, `remove`) / `rider_start_debug` / `rider_debug` (actions: `state`, `stepOver`, `stepInto`, `stepOut`, `resume`, `pause`, `stop`, `evaluate`)
