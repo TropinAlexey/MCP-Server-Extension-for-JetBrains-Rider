@@ -12,9 +12,10 @@
     <depends>com.intellij.mcpServer</depends>
     <depends optional="true" config-file="db-consoles.xml">com.intellij.database</depends>
 
-    <dependencies>
-        <plugin id="intellij.testRunner.plugin" />
-    </dependencies>
+    <!-- Test runner: a separate plugin since 2026.2, part of the platform in 2026.1. A hard dependency
+         kept the whole plugin from loading on 2026.1, so it is optional: when present its classes join
+         the plugin's classloader, otherwise the platform provides them. -->
+    <depends optional="true" config-file="test-runner.xml">intellij.testRunner.plugin</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.build.BuildToolset"/>
