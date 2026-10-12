@@ -3,10 +3,12 @@ package com.github.tropin.ridermcp.ide
 import com.intellij.database.console.JdbcConsole
 import com.intellij.database.console.JdbcConsoleProvider
 import com.intellij.database.dataSource.LocalDataSource
+import com.intellij.database.dataSource.LocalDataSourceManager
 import com.intellij.database.model.ObjectKind
 import com.intellij.database.util.ObjectPath
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
 import kotlinx.serialization.json.*
 
 internal object DbConsoleReader {
@@ -50,25 +52,43 @@ internal object DbConsoleReader {
     }
 
     fun listOpenConsoles(project: Project): String {
-        val consoles = FileEditorManager.getInstance(project).openFiles.mapNotNull { file ->
+        val fem = FileEditorManager.getInstance(project)
+        val selected = fem.selectedFiles.toSet()
+        val jobs = ConsoleJobService.getInstance()
+        val dataSources = LocalDataSourceManager.getInstance(project).dataSources.associateBy { it.uniqueId }
+        val tableEditors = mutableListOf<JsonObject>()
+        val consoles = fem.openFiles.mapNotNull { file ->
             try {
-                val console = JdbcConsoleProvider.getConsole(project, file) ?: return@mapNotNull null
+                val console = JdbcConsoleProvider.getConsole(project, file)
+                if (console == null) {
+                    describeTableEditor(file, dataSources, file in selected)?.let(tableEditors::add)
+                    return@mapNotNull null
+                }
                 val ds = try { console.dataSource } catch (_: Exception) { null }
                 buildJsonObject {
                     put("console", file.name)
+                    if (file in selected) put("selected", true)
                     if (ds == null) {
                         put("dataSource", "(not attached)")
                     } else {
                         put("dataSource", ds.name)
                         put("uniqueId", ds.uniqueId)
-                        currentPathName(console, ObjectKind.DATABASE)?.let { put("currentDatabase", it) }
+                        val url = try { ds.url } catch (_: Exception) { null }
+                        val fromConsole = currentPathName(console, ObjectKind.DATABASE)
+                        val currentDb = fromConsole ?: DbEditorPaths.databaseFromUrl(url)
+                        currentDb?.let { put("currentDatabase", it) }
+                        put("currentDatabaseSource", when {
+                            fromConsole != null -> "console"
+                            currentDb != null -> "url"
+                            else -> "login-default"
+                        })
                         currentPathName(console, ObjectKind.SCHEMA)?.let { put("currentSchema", it) }
+                        put("readOnly", runCatching { ds.isReadOnly }.getOrDefault(false))
+                        jobs.running("${ds.uniqueId}|${file.name}")?.let { put("busyJobId", it.id) }
                         try {
                             ds.dbms?.name?.takeIf { it.isNotBlank() }?.let { put("dbms", it) }
                         } catch (_: Exception) {}
-                        try {
-                            ds.url?.takeIf { it.isNotBlank() }?.let { put("url", com.github.tropin.ridermcp.maskJdbcSecrets(it)) }
-                        } catch (_: Exception) {}
+                        url?.takeIf { it.isNotBlank() }?.let { put("url", com.github.tropin.ridermcp.maskJdbcSecrets(it)) }
                         try {
                             ds.username?.takeIf { it.isNotBlank() }?.let { put("username", it) }
                         } catch (_: Exception) {}
@@ -78,10 +98,28 @@ internal object DbConsoleReader {
                 null
             }
         }
-        if (consoles.isEmpty()) return "[]"
+        if (consoles.isEmpty() && tableEditors.isEmpty()) return "[]"
         return buildJsonObject {
             put("count", consoles.size)
             putJsonArray("consoles") { consoles.forEach { add(it) } }
+            if (tableEditors.isNotEmpty()) putJsonArray("tableEditors") { tableEditors.forEach { add(it) } }
         }.toString()
+    }
+
+    /** Table/view editor tab: its virtual path starts with the data source id, then kind/name pairs. */
+    private fun describeTableEditor(file: VirtualFile, dataSources: Map<String, LocalDataSource>, selected: Boolean): JsonObject? {
+        val tab = DbEditorPaths.parse(file.path) ?: return null
+        val ds = dataSources[tab.dataSourceId] ?: return null
+        return buildJsonObject {
+            put("tab", file.presentableName)
+            if (selected) put("selected", true)
+            put("kind", tab.kind)
+            put("dataSource", ds.name)
+            put("dataSourceId", ds.uniqueId)
+            tab.database?.let { put("database", it) }
+            tab.schema?.let { put("schema", it) }
+            tab.objectName?.let { put("object", it) }
+            put("readOnly", runCatching { ds.isReadOnly }.getOrDefault(false))
+        }
     }
 }

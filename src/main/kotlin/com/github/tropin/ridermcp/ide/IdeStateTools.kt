@@ -355,8 +355,9 @@ class IdeStateToolset : McpToolset {
             component is javax.swing.JTree -> {
                 val model = component.model ?: return
                 val root = model.root ?: return
-                collectTreeText(model, root, lines, limit, 0)
+                collectTreeText(component, model, root, lines, limit, 0)
             }
+            component is javax.swing.JTable -> tableText(component, lines, limit)
             component is javax.swing.JList<*> -> {
                 val m = component.model
                 for (i in 0 until m.size) {
@@ -377,13 +378,59 @@ class IdeStateToolset : McpToolset {
         }
     }
 
-    private fun collectTreeText(model: javax.swing.tree.TreeModel, node: Any, lines: MutableList<String>, limit: Int, depth: Int) {
+    private fun collectTreeText(tree: javax.swing.JTree, model: javax.swing.tree.TreeModel, node: Any, lines: MutableList<String>, limit: Int, depth: Int) {
         if (lines.size >= limit) return
-        val indent = "  ".repeat(depth)
-        lines.add("$indent${node.toString()}")
+        val text = nodeText(tree, model, node)
+        // Invisible roots and nodes without a presentation are noise for agents: keep their children only.
+        val next = if (text == null) depth else {
+            lines.add("${"  ".repeat(depth)}$text")
+            depth + 1
+        }
         for (i in 0 until model.getChildCount(node)) {
             if (lines.size >= limit) break
-            collectTreeText(model, model.getChild(node, i), lines, limit, depth + 1)
+            collectTreeText(tree, model, model.getChild(node, i), lines, limit, next)
         }
+    }
+
+    /** Text the tree renderer shows for [node]; null for nodes whose only text is an identity toString. */
+    private fun nodeText(tree: javax.swing.JTree, model: javax.swing.tree.TreeModel, node: Any): String? {
+        val rendered = try {
+            val c = tree.cellRenderer?.getTreeCellRendererComponent(tree, node, false, false, model.isLeaf(node), 0, false)
+            when (c) {
+                is com.intellij.ui.SimpleColoredComponent -> c.getCharSequence(false).toString()
+                is javax.swing.JLabel -> c.text
+                else -> null
+            }
+        } catch (_: Throwable) {
+            null
+        }?.trim()
+        val text = rendered?.takeIf { it.isNotEmpty() } ?: node.toString().trim()
+        return text.takeUnless { it.isEmpty() || isIdentityText(it) }
+    }
+
+    /** `com.foo.Bar@1a2b3c` or a raw map dump like `{EXTRA_PARAMS_AUDITOR_KEY=…}`. */
+    private fun isIdentityText(text: String): Boolean =
+        IDENTITY_TEXT.matches(text) || (text.startsWith("{") && text.contains("_KEY="))
+
+    /** Swing table (e.g. a query result grid) as CSV: header + loaded rows, long cells cut. */
+    private fun tableText(table: javax.swing.JTable, lines: MutableList<String>, limit: Int) {
+        val columns = (0 until table.columnCount).filter { table.getColumnName(it).isNotBlank() || table.columnCount == 1 }
+        if (columns.isEmpty()) return
+        lines.add(columns.joinToString(",") { csvCell(table.getColumnName(it)) })
+        for (r in 0 until table.rowCount) {
+            if (lines.size >= limit) break
+            lines.add(columns.joinToString(",") { c -> table.getValueAt(r, c)?.toString()?.let(::csvCell).orEmpty() })
+        }
+        lines.add("[${table.rowCount} rows loaded in the grid]")
+    }
+
+    private fun csvCell(value: String): String {
+        val cut = if (value.length > MAX_CELL) value.take(MAX_CELL) + "…[+${value.length - MAX_CELL} chars]" else value
+        return if (cut.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) "\"" + cut.replace("\"", "\"\"") + "\"" else cut
+    }
+
+    private companion object {
+        const val MAX_CELL = 4000
+        val IDENTITY_TEXT = Regex("^[\\w.$]+@[0-9a-f]{4,}$")
     }
 }

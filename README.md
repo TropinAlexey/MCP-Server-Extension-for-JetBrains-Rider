@@ -48,7 +48,7 @@ This plugin bridges that gap. It gives any MCP-compatible client (Claude Code, C
 | IDE settings | ❌ | ✅ `rider_inspections(action=list/toggle)` |
 | Terminal integration | Partial (execute commands) | ✅ list tabs, send input to specific terminals |
 | TODO / endpoints | ❌ | ✅ via `rider_tool_window` (TODO / Endpoints panels) |
-| DB consoles & SQL | Partial (built-in single-statement) | ✅ `rider_list_db_consoles` + multi-statement `rider_execute_console` |
+| DB consoles & SQL | Partial (built-in single-statement) | ✅ `rider_list_db_consoles` + multi-statement `rider_execute_console` with background jobs, read-only guard, secret masking, CSV/JSON export; `rider_console_results` for user-run results |
 | Cache invalidation | ❌ | ✅ invalidate caches & restart |
 | dotTrace / dotMemory | Partial (report analysis) | ✅ live session state + control |
 
@@ -131,8 +131,10 @@ MCP tools are synchronous (request → response). Long-running operations — bu
 | Tool | Args | Description |
 |---|---|---|
 | `rider_database_connection` | `action=create\|edit`, `dbms?`, `url?`, `name?`, `user?`, `password?`, `connectionId?` | Manage data sources (JDBC). Returns uniqueId. Prefer over built-in create/edit (MSSQL matching fixed) |
-| `rider_list_db_consoles` | — | Open SQL consoles with data source + currentDatabase. Call first |
-| `rider_execute_console` | `sql`, `console?`, `pageSize?`, `database?`, `offset?`, `timeoutSeconds?=60`, `maxCellLength?=4000`, `split?=auto` | Execute SQL on a dedicated JDBC connection → CSV per result set with rowCount/hasMore; server error text + code + SQLState; T-SQL split by `GO`; per-batch timeout with cancel. Prefer over built-in execute |
+| `rider_list_db_consoles` | — | Open SQL consoles with data source, currentDatabase, readOnly, busyJobId; `tableEditors` = open table/view tabs with database/schema/object. Call first |
+| `rider_execute_console` | `sql`, `console?`, `pageSize?`, `database?`, `offset?`, `timeoutSeconds?=60`, `maxCellLength?=4000`, `split?=auto`, `async?`, `waitSeconds?=50`, `onClientTimeout?=cancel\|detach`, `readOnly?`, `maskSecrets?=true`, `outputFile?` | Execute SQL on a dedicated JDBC connection → CSV per result set with rowCount/hasMore; server error text + code + SQLState; T-SQL split by `GO`; per-batch timeout with cancel; background jobs; read-only guard (forced for Read-only data sources); secret masking; CSV/JSON export. Prefer over built-in execute |
+| `rider_console_job` | `action=status\|result\|cancel\|list`, `jobId?`, `messagesOffset?` | Poll/cancel `rider_execute_console` jobs: status, timestamped PRINT/RAISERROR messages, final result |
+| `rider_console_results` | `console?`, `index?`, `offset?`, `pageSize?`, `maxCellLength?`, `outputLines?`, `maskSecrets?`, `outputFile?` | Result grids + Output log of what the user ran in a console (Services → Database); `state=running` while executing |
 
 ### Profiling
 | Tool | Args | Description |
@@ -266,6 +268,19 @@ gradlew.bat runIde
 - Running commands without confirmation is opt-in ("brave mode" in the MCP server settings) and stays off by default — keep it off unless you trust the agent. This is a security feature, not an inconvenience.
 
 ## What's New
+
+### v1.2.0
+
+- Long queries no longer leave orphaned server requests:
+  - `rider_execute_console(async=true)` returns a `jobId` at once; new `rider_console_job(action=status|result|cancel|list)` polls status, current batch and timestamped `PRINT`/`RAISERROR … WITH NOWAIT` messages, returns the result or cancels the statement on the server (force-closing the connection if the driver ignores the cancel)
+  - a sync call waits `waitSeconds` (default 50, below MCP client timeouts), then cancels the server query (`onClientTimeout=cancel`) or keeps it as a job (`detach`)
+  - a busy console answers immediately with its `jobId` instead of queueing
+- Read-only mode: `readOnly=true`, forced for data sources marked Read-only in Rider. DML/DDL, `COMMIT`, non-system procedures and dynamic SQL built in variables are rejected before sending; MSSQL runs in a rolled-back transaction, PostgreSQL in a read-only session; `#temp` tables, table variables and `CREATE TEMP TABLE` stay allowed. Responses report `readOnlyEnforced`
+- `maskSecrets` (default on): password/secret/token/api_key columns become `***`, `password=` values inside connection strings are masked
+- `outputFile`: every result set is streamed to CSV/JSON; the response keeps path, row count and a 5-row preview
+- New `rider_console_results`: result grids (CSV with columns, loaded/total rows) and the Output log of scripts the user ran in a console; `state=running` while executing, never blocks the console
+- `rider_list_db_consoles`: `readOnly`, `busyJobId`, `selected`, `currentDatabase` falls back to the URL's database, and `tableEditors` lists open table/view tabs with data source, database, schema and object
+- `rider_tool_window`: result grids are returned as CSV, tree nodes use their rendered names (no more `Class@hash` noise in Services)
 
 ### v1.1.5
 

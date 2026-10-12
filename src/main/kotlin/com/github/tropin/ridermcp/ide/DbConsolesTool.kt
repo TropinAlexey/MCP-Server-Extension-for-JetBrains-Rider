@@ -7,13 +7,16 @@ import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.*
+import java.nio.file.Path
+import java.nio.file.Paths
 import kotlin.coroutines.coroutineContext
 
 class DbConsolesToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Lists open SQL consoles (editor tabs bound to a data source) with console file name, data source name + uniqueId (use as connectionId), DBMS, URL and currentDatabase (console toolbar dropdown). Call FIRST when the user mentions an open console, or before introspecting servers — the open console already identifies the right database. Returns [] when nothing is open (open a console via double-click in the Database tool window first).")
+    @McpDescription("Lists open SQL consoles (editor tabs bound to a data source) with console file name, data source name + uniqueId (use as connectionId), DBMS, URL, currentDatabase (console toolbar, else the URL's database), readOnly (data source Read-only flag) and busyJobId when a rider_execute_console job runs there. tableEditors lists open table/view tabs with dataSource, database, schema, object and kind — use them when the user says 'the open table'; selected=true marks the active tab. Call FIRST when the user mentions an open console or table. Returns [] when nothing is open (open a console via double-click in the Database tool window first).")
     suspend fun rider_list_db_consoles(): String {
         val project = coroutineContext.project
         return runOnEdt {
@@ -28,7 +31,7 @@ class DbConsolesToolset : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Executes SQL over the data source of an open console (names via rider_list_db_consoles) on a dedicated JDBC connection; returns CSV per result set. Errors carry the server text, vendor code and SQLState. Splitting: auto = T-SQL (MSSQL/Sybase) by GO lines, so DECLARE/@vars live across ';' — each batch may return several result sets; other DBMS by ';'. Execution DB = console's currentDatabase unless database='<name>'. timeoutSeconds (default 60) cancels a hung batch — the failing batch is named, later ones are skipped. Address other DBs with three-part names; catalogs: MSSQL sys.databases, Postgres pg_database, MySQL SHOW DATABASES. Default to SELECT; confirm DML/DDL with the user first. hasMore=true = page truncated: raise pageSize or page with offset (needs ORDER BY), or slice via TOP/id ranges. Long cells are cut to maxCellLength (truncatedCells>0). Prefer over built-in execute_sql_query (it hides driver errors as 'Unknown error').")
+    @McpDescription("Executes SQL over the data source of an open console (names via rider_list_db_consoles) on a dedicated JDBC connection; returns CSV per result set, server errors with vendor code/SQLState, PRINT/RAISERROR in messages. T-SQL (MSSQL/Sybase) is split by GO lines, others by ';'. DB = console's currentDatabase unless database=. Long queries: async=true returns a jobId at once — poll rider_console_job; a sync call waits waitSeconds (default 50, below MCP client timeouts), then cancels the server query (onClientTimeout=cancel) or keeps it as a job (detach). A busy console answers with its jobId instead of queueing. readOnly (forced for Read-only data sources) rejects DML/DDL before sending and runs in a rolled-back transaction (MSSQL) or read-only session (PostgreSQL); #temp tables and @table vars stay allowed. maskSecrets (default on) hides password/secret/token columns and password= values. outputFile streams every result set to CSV/JSON and returns path + preview. hasMore=true: raise pageSize or page with offset + ORDER BY. Default to SELECT; confirm DML/DDL with the user first.")
     suspend fun rider_execute_console(
         @McpDescription("SQL script; see split for how it is cut into batches") sql: String,
         @McpDescription("Open console file name from rider_list_db_consoles (omit = first open console)") console: String? = null,
@@ -37,35 +40,130 @@ class DbConsolesToolset : McpToolset {
         @McpDescription("Rows to skip in each result set before the page (re-runs the query; pair with ORDER BY)") offset: Int = 0,
         @McpDescription("Per-batch query timeout in seconds, 0 = none, max 3600, default 60") timeoutSeconds: Int = 60,
         @McpDescription("Max chars per cell, longer values are cut with a '…[+N chars]' marker; 0 = unlimited, default 4000") maxCellLength: Int = 4000,
-        @McpDescription("auto (default: GO for MSSQL/Sybase, ';' otherwise) | go | semicolon | none (send the script as one batch)") split: String = "auto"
+        @McpDescription("auto (default: GO for MSSQL/Sybase, ';' otherwise) | go | semicolon | none (send the script as one batch)") split: String = "auto",
+        @McpDescription("true = start as a background job and return its jobId immediately; poll rider_console_job") async: Boolean = false,
+        @McpDescription("Sync calls: seconds to wait for the result, 1-3600, default 50 — keep below the MCP client's tool timeout") waitSeconds: Int = 50,
+        @McpDescription("Sync calls still running after waitSeconds: cancel (default, the server query is cancelled) | detach (keeps running as a job, returns jobId)") onClientTimeout: String = "cancel",
+        @McpDescription("true = read-only mode (DML/DDL rejected, changes rolled back). Always on for data sources marked Read-only in Rider; false cannot lift that") readOnly: Boolean = false,
+        @McpDescription("Mask secrets in cells and messages: password/pwd/secret/token/api_key columns → ***, password=… inside connection strings → password=***. Default true") maskSecrets: Boolean = true,
+        @McpDescription("Write every result set to this file instead of the response: .csv or .json; later result sets go to <name>-<batch>-<result>.<ext>. Relative paths resolve against the project dir. Response keeps path, rowCount and a 5-row preview") outputFile: String? = null
     ): String {
         val project = coroutineContext.project
         val splitMode = SqlText.parseSplitMode(split)
             ?: mcpFail("Unknown split='$split'. Use auto, go, semicolon or none.")
+        val detach = when (onClientTimeout.trim().lowercase()) {
+            "cancel" -> false
+            "detach" -> true
+            else -> mcpFail("Unknown onClientTimeout='$onClientTimeout'. Use cancel or detach.")
+        }
         val resolved = runOnEdt { DbConsoleReader.resolveConsole(project, console) }
             ?: mcpFail(
                 if (console.isNullOrBlank()) "No open database console found. Open one in Rider first (double-click it in the Database tool window)."
                 else "Console '$console' is not open. Open consoles: ${runOnEdt { DbConsoleReader.openConsoleNames(project) }}"
             )
+        val ds = resolved.dataSource
         val targetDb = database?.takeIf { it.isNotBlank() } ?: resolved.currentDatabase
+        val outputPath = outputFile?.takeIf { it.isNotBlank() }?.let { resolveOutputFile(it, project.basePath) }
+
+        val dsReadOnly = runCatching { ds.isReadOnly }.getOrDefault(false)
+        val enforceReadOnly = readOnly || dsReadOnly
+        if (enforceReadOnly) {
+            val tsql = runCatching { ds.dbms.isMicrosoft || ds.dbms.isSybase }.getOrDefault(true)
+            val verdict = SqlReadOnlyGuard.check(sql, tsql)
+            if (!verdict.allowed) {
+                val why = if (dsReadOnly) "data source '${ds.name}' is marked Read-only" else "readOnly=true"
+                mcpFail(
+                    "Read-only mode ($why) rejected the script before sending it: ${verdict.violations.joinToString("; ")}. " +
+                        "Allowed: SELECT, #temp tables, @table variables, CREATE TEMP TABLE, read-only system procedures (sp_help*, sp_who…), " +
+                        "sp_executesql / EXEC('…') / sp_MSforeachdb with literal SQL. A column named like a keyword must be quoted ([load], \"load\")."
+                )
+            }
+        }
+
         val opts = JdbcConsoleExecutor.Options(
             pageSize = pageSize.coerceIn(1, 5000),
             offset = offset.coerceAtLeast(0),
             timeoutSeconds = timeoutSeconds.coerceIn(0, 3600),
             maxCellLength = maxCellLength.coerceAtLeast(0),
-            splitMode = splitMode
+            splitMode = splitMode,
+            readOnly = enforceReadOnly,
+            maskSecrets = maskSecrets,
+            outputFile = outputPath
         )
 
-        val outcome = try {
-            JdbcConsoleExecutor.execute(project, resolved.dataSource, sql, targetDb, opts)
-        } catch (e: IllegalStateException) {
-            mcpFail("${e.message ?: "Query execution failed"} (console='${resolved.fileName}', dataSource='${resolved.dataSource.name}')")
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            mcpFail("Query execution failed: ${SqlText.describe(e)} (console='${resolved.fileName}', dataSource='${resolved.dataSource.name}')")
+        val consoleKey = "${ds.uniqueId}|${resolved.fileName}"
+        val service = ConsoleJobService.getInstance()
+        val (busy, job) = service.start(
+            consoleKey,
+            create = { id ->
+                ConsoleJob(id, consoleKey, resolved.fileName, ds.name, targetDb, SqlText.snippet(sql, 120), enforceReadOnly)
+            }
+        ) { j ->
+            val outcome = try {
+                JdbcConsoleExecutor.execute(project, ds, sql, targetDb, opts, j)
+            } catch (e: IllegalStateException) {
+                throw ConsoleJobFailure("${e.message ?: "Query execution failed"} (console='${resolved.fileName}', dataSource='${ds.name}')")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                throw ConsoleJobFailure("Query execution failed: ${SqlText.describe(e)} (console='${resolved.fileName}', dataSource='${ds.name}')")
+            }
+            render(outcome, resolved.fileName, ds.name, targetDb, opts)
         }
+        if (busy != null) {
+            mcpFail(
+                "Console '${resolved.fileName}' is busy: jobId=${busy.id}, running ${busy.elapsedMs / 1000}s (${busy.sqlSnippet}). " +
+                    "Poll rider_console_job(jobId='${busy.id}') or stop it with action='cancel'."
+            )
+        }
+        job!!
 
+        if (async) return withHint(job.statusJson(), "Running in background. Poll rider_console_job(jobId='${job.id}') every 5-30 s; cancel with action='cancel'.")
+
+        val finished = try {
+            withTimeoutOrNull(waitSeconds.coerceIn(1, 3600) * 1000L) { job.done.await() }
+        } catch (e: CancellationException) {
+            // The MCP call itself was cancelled: do not leave the statement running unless asked to.
+            if (!detach) service.cancelAsync(job)
+            throw e
+        }
+        if (finished == null) {
+            if (detach) {
+                return withHint(job.statusJson(), "Still running after waitSeconds=$waitSeconds — detached as job ${job.id}. Poll rider_console_job(jobId='${job.id}').")
+            }
+            val status = service.cancel(job)
+            val last = job.lastMessages(5).takeIf { it.isNotEmpty() }?.let { " Last server messages: ${it.joinToString(" | ")}" }.orEmpty()
+            mcpFail(
+                "Query still running after waitSeconds=$waitSeconds (sync budget, kept below MCP client timeouts) — " +
+                    (if (status == "cancelled") "cancelled on the server" else "cancel requested, connection force-closed") +
+                    " (onClientTimeout=cancel).$last For long queries re-run with async=true and poll rider_console_job, " +
+                    "or pass onClientTimeout='detach'."
+            )
+        }
+        job.error?.let { mcpFail(it) }
+        return job.result.toString()
+    }
+
+    private fun withHint(json: JsonObject, hint: String): String = buildJsonObject {
+        json.forEach { (k, v) -> put(k, v) }
+        put("hint", hint)
+    }.toString()
+
+    private fun resolveOutputFile(value: String, basePath: String?): Path {
+        val ext = value.substringAfterLast('.', "").lowercase()
+        if (ext != "csv" && ext != "json") mcpFail("outputFile must end with .csv or .json, got '$value'")
+        val p = Paths.get(value)
+        return (if (p.isAbsolute || basePath == null) p else Paths.get(basePath).resolve(p)).normalize()
+    }
+
+    /** Builds the response object, or throws [ConsoleJobFailure] for a single failed batch. */
+    private fun render(
+        outcome: JdbcConsoleExecutor.Outcome,
+        consoleName: String,
+        dataSourceName: String,
+        targetDb: String?,
+        opts: JdbcConsoleExecutor.Options
+    ): JsonObject {
         fun JsonObjectBuilder.putEntry(r: JdbcConsoleExecutor.Entry) {
             put("status", r.status)
             if (r.error != null) {
@@ -76,18 +174,22 @@ class DbConsolesToolset : McpToolset {
                 put("updateCount", r.updateCount)
                 return
             }
+            r.file?.let { put("file", it) }
             put("text", r.text)
             put("rowCount", r.rowCount)
             put("hasMore", r.hasMore)
             if (r.truncatedCells > 0) put("truncatedCells", r.truncatedCells)
+            if (r.maskedCells > 0) put("maskedCells", r.maskedCells)
         }
 
         fun JsonObjectBuilder.putHeader() {
-            put("console", resolved.fileName)
-            put("dataSource", resolved.dataSource.name)
+            put("console", consoleName)
+            put("dataSource", dataSourceName)
             targetDb?.let { put("database", it) }
             put("pageSize", opts.pageSize)
             if (opts.offset > 0) put("offset", opts.offset)
+            put("readOnlyEnforced", outcome.readOnlyMode != null)
+            outcome.readOnlyMode?.let { put("readOnlyMode", it) }
         }
 
         fun JsonObjectBuilder.putMessages() {
@@ -99,14 +201,14 @@ class DbConsolesToolset : McpToolset {
             val r = entries[0]
             if (r.error != null) {
                 val msgs = if (outcome.messages.isEmpty()) "" else " Server messages: ${outcome.messages.joinToString(" | ")}"
-                mcpFail(r.error + msgs)
+                throw ConsoleJobFailure(r.error + msgs)
             }
             return buildJsonObject {
                 putHeader()
                 putEntry(r)
                 putMessages()
                 put("elapsedMs", outcome.elapsedMs)
-            }.toString()
+            }
         }
 
         return buildJsonObject {
@@ -127,6 +229,6 @@ class DbConsolesToolset : McpToolset {
             }
             putMessages()
             put("elapsedMs", outcome.elapsedMs)
-        }.toString()
+        }
     }
 }

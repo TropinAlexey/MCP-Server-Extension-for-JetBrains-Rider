@@ -12,7 +12,8 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 |---|---|---|
 | Create DB connection | `rider_database_connection(action='create')` | `create_database_connection` (broken MSSQL matching, undocumented `dbms` enum) |
 | Edit DB connection | `rider_database_connection(action='edit')` | `edit_database_connection` |
-| Execute SQL | `rider_execute_console` (via open console) | `execute_sql_query` (hides driver errors as "Unknown error", no T-SQL batches, no timeout control) |
+| Execute SQL | `rider_execute_console` (via open console) | `execute_sql_query` (hides driver errors as "Unknown error", no T-SQL batches, no timeout control, requires schema introspection — DMV/server queries fail with "Schema … is not found"; use `rider_execute_console(database='master')`) |
+| Results the user ran in a console | `rider_console_results` | `list_recent_sql_queries` / `fetch_query_result` (no result set ids for console runs), `rider_tool_window(section=…)` on Services (ambiguous titles) |
 
 ## Task → Tool Map
 
@@ -32,6 +33,12 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 - Run tests → `rider_tests` (actions: `run`, `run_and_wait`, `results`, `rerun_failed`) + `rider_get_output` (`configName` alone runs the whole config — scope with filters)
 - Create/edit DB connections → `rider_database_connection` (actions: `create`, `edit`)
 - SQL in open DB consoles → `rider_list_db_consoles` + `rider_execute_console` (T-SQL scripts with `DECLARE @x …; … sp_executesql` run as one batch — split is by `GO` for MSSQL; slow scans → `timeoutSeconds`; huge cells → `maxCellLength`; next page → `offset` + `ORDER BY`)
+  - Long queries (> ~40 s: cursors over databases, full scans) → `async=true` → `jobId`, then `rider_console_job(action='status', jobId, messagesOffset)` until `status != running`; cancel with `action='cancel'`. A sync call waits `waitSeconds` (default 50) and then cancels the server query (`onClientTimeout='cancel'`) or detaches it as a job (`'detach'`) — it never leaves an orphaned query behind. A busy console answers with its `jobId` at once.
+  - Production / "read-only" requests → `readOnly=true` (forced for data sources marked Read-only — see `readOnly` in `rider_list_db_consoles`): DML/DDL rejected before sending, MSSQL runs in a rolled-back transaction, PostgreSQL in a read-only session; `#temp` / `@table` / `CREATE TEMP TABLE` allowed. Dynamic SQL must be literal (`sp_executesql N'…'`, `sp_MSforeachdb '… [?].sys.tables …'`) — SQL assembled in variables is rejected because it cannot be checked. Check `readOnlyEnforced` in the response.
+  - Secrets: `maskSecrets` is on by default (password/secret/token columns, `password=` in connection strings). Turn it off only when the user explicitly needs the value.
+  - Large exports (thousands of rows, reports over many databases) → `outputFile='<path>.csv|.json'`, then read the file; the response keeps a 5-row preview.
+  - "The open table" / "the tab I have open" → `rider_list_db_consoles` → `tableEditors` (dataSource, database, schema, object; `selected=true` = active tab)
+- Results of a script the USER ran in a console (Services → Database result tabs) → `rider_console_results(console, index?, outputFile?)`; `state=running` while it executes — poll it, the console is not blocked. `hasMoreInIde=true` = the IDE grid fetched only its first page
 - NuGet packages → `rider_nuget` (actions: `list`, `add`, `remove`, `restore`)
 - Run/Debug configurations → `rider_run_config` (actions: `create`, `update`, `delete`; type IDs from built-in `get_run_configurations` or IDE Run → Edit Configurations; launches via `rider_start_debug` / `rider_tests`)
 - Debugging → `rider_breakpoint` (actions: `set`, `remove`) / `rider_start_debug` / `rider_debug` (actions: `state`, `stepOver`, `stepInto`, `stepOut`, `resume`, `pause`, `stop`, `evaluate`)
@@ -41,9 +48,40 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 - Profiling (dotTrace) → `rider_profiling` (actions: `state`, `control`)
 - Profiling (dotMemory) → `rider_memory` (actions: `state`, `control`)
 
+## Database consoles playbook
+
+**Pick the database first.** `rider_list_db_consoles` → `consoles[]` (`currentDatabase`, `readOnly`, `busyJobId`) and `tableEditors[]` (open table/view tabs with `database`/`schema`/`object`; `selected=true` = active tab). When the user says "the open console/table", take database and schema from here — never guess between similarly named databases.
+
+**Run SQL yourself:**
+- Short query (< ~40 s) → `rider_execute_console(sql, console)`. The sync call waits `waitSeconds` (default 50, keep it below the MCP client tool timeout); on expiry `onClientTimeout='cancel'` cancels the server query, `'detach'` keeps it running as a job. Nothing is left orphaned on the server.
+- Long query (cursor over databases, full scans, `waitfor`) → `rider_execute_console(..., async=true, timeoutSeconds=<per batch>)` → `jobId`; poll `rider_console_job(action='status', jobId, messagesOffset=<nextMessagesOffset>)` every 5–30 s until `status != running`; the finished status carries `result`. Stop with `action='cancel'`.
+- Progress of long scripts: `raiserror('%s done', 0, 1, @x) with nowait` — appears in job `messages[]` with timestamps while running.
+- Busy console error ("busy: jobId=…") → poll or cancel that job; do not retry blindly.
+- Big outputs (thousands of rows, reports over many databases) → `outputFile='<path>.csv|.json'`, then read the file; the response keeps only path, rowCount and a 5-row preview.
+
+**Production = read-only:**
+- Pass `readOnly=true` on any production / "only SELECT" request (it is forced for data sources marked Read-only in Rider). Confirm `readOnlyEnforced: true` in the response.
+- Allowed: SELECT, `#temp` tables, `@table` variables, `CREATE TEMP TABLE`, read-only system procedures (`sp_help*`, `sp_who*`, `sp_spaceused` …), literal dynamic SQL (`sp_executesql N'…'`, `EXEC('…')`, `sp_MSforeachdb '… [?].sys.tables …'`).
+- Rejected before sending: DML/DDL on real tables, `COMMIT`, `SET IMPLICIT_TRANSACTIONS`, other procedures, and dynamic SQL assembled in variables (`exec sp_executesql @sql`) — rewrite cross-database loops with `sp_MSforeachdb` + a literal, or with three-part names.
+- A column named like a keyword (`load`, `backup`) is rejected unquoted — quote it: `[load]`.
+- If the user asks whether something changed, answer from facts and offer a verifying SELECT; never run DML to "check".
+
+**Secrets:** `maskSecrets` is on by default (password/secret/token/api_key columns → `***`, `password=` inside connection strings). Disable only when the user explicitly needs the value, and never paste secrets into notes or chats.
+
+**Results the user ran themselves** (Services → Database result tabs):
+- `rider_console_results(console='<file>')` → every result grid of the last run as CSV (`columns`, `loadedRows`, `totalRows`, `hasMoreInIde`) plus the Output tail and `summary` ("N rows retrieved in …"). `state=running` → poll again; reading never blocks the console.
+- `hasMoreInIde=true` → the IDE grid fetched only its first page; ask the user to raise the grid page size or re-run via `rider_execute_console(outputFile=…)`.
+- Large grids → `outputFile`.
+- The user's `#temp` tables live in their console session and are NOT reachable from `rider_execute_console` (separate connection) — read the final SELECTs via `rider_console_results`.
+- Do not use `list_recent_sql_queries` / `fetch_query_result` for console runs (no result set ids), nor `rider_tool_window(section=…)` on Services (titles repeat across runs and servers).
+
+**When the agent cannot run it** (MCP client timeout too short, user prefers to run it): write the script (temp tables + final SELECTs + `raiserror … with nowait` progress, a header saying it is read-only), ask the user to run it in the console, then read it with `rider_console_results`.
+
 ## Polling Pattern
 
 `rider_build(action='start')`, `rider_tests(action='run')`, `rider_nuget(action='restore')`, `rider_start_debug`, `rider_tests(action='rerun_failed')` return `sessionId` — poll via `rider_get_output` until `status != "running"`.
+
+`rider_execute_console(async=true)` (or a sync call detached by `onClientTimeout='detach'`) returns `jobId` — poll via `rider_console_job(action='status')` until `status != "running"`.
 
 ## Pagination & Filtering
 
@@ -105,7 +143,7 @@ Model: **window → tabs → Swing component tree**. Navigate: `rider_tool_windo
 | `Terminal` | One per terminal | Shell console |
 | `TODO` | Scope filter | TODO/FIXME/HACK tree |
 | `Endpoints` | — | HTTP routes tree/list |
-| `Services` | Dashboard entries | May be `has no content` until opened once in UI |
+| `Services` | Dashboard entries | May be `has no content` until opened once in UI. Result grids are read as CSV, but titles repeat across runs/servers — for console results use `rider_console_results` instead of `section` |
 | Others | Varies | Generic extraction: sub-tabs marked `--- <title> ---`, editors as text, trees flattened with indent |
 
 Recipes:

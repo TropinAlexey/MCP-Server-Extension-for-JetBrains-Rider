@@ -2,5 +2,7 @@
     <extensions defaultExtensionNs="com.intellij">
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.ide.DbConsolesToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.ide.DatabaseConnectionToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.ide.ConsoleJobToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.ide.ConsoleResultsToolset"/>
     </extensions>
 </idea-plugin>
