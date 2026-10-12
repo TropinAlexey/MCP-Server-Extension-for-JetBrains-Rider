@@ -7,6 +7,9 @@ import com.intellij.database.access.DatabaseCredentials
 import com.intellij.database.dataSource.DatabaseDriverManager
 import com.intellij.database.dataSource.LocalDataSource
 import com.intellij.database.dataSource.LocalDataSourceManager
+import com.intellij.database.psi.DbPsiFacade
+import com.intellij.database.vfs.DbVFSUtils
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
@@ -21,29 +24,54 @@ class DatabaseConnectionToolset : McpToolset {
     @McpDescription(
         "Manages IDE database connections (data sources). action='create' (default) requires dbms + JDBC url + name; optional user/password (password goes to the IDE credential store, never logged). " +
             "action='edit' requires connectionId; optional url/name/user/password. " +
-            "DBMS is matched fuzzily (PostgreSQL, MySQL, MariaDB, Oracle, SQL Server/MSSQL, SQLite, H2, DB2, ClickHouse, MongoDB, ...) with URL-vs-driver validation on create; edit sanity-checks the URL against known drivers (to switch DBMS, create a new connection). " +
-            "Credentials in URLs are masked in responses (password= and userinfo). " +
-            "Returns uniqueId (connectionId for the built-in query tools). To run SQL the rider_* way, open this connection's console in the Database tool window, then use rider_list_db_consoles + rider_execute_console(console=...). " +
-            "Prefer rider_* over the built-in create_database_connection/edit_database_connection (broken MSSQL matching, undocumented dbms enum). " +
-            "This only manages connections — it never executes SQL."
+            "readOnly=true marks the data source Read-only (rider_execute_console then rejects DML/DDL) — set it for production on the user's request. It cannot be lifted through MCP: the user unticks Read-only in the data source properties. " +
+            "action='open_console' (connectionId) opens the default SQL console and returns its file name for rider_execute_console(console=...). " +
+            "DBMS is matched fuzzily (PostgreSQL, MySQL, SQL Server/MSSQL, Oracle, SQLite, ClickHouse, ...) with URL-vs-driver validation. " +
+            "Credentials in URLs are masked in responses. Returns uniqueId (connectionId). " +
+            "Prefer over the built-in create_database_connection/edit_database_connection (broken MSSQL matching). Never executes SQL."
     )
     suspend fun rider_database_connection(
-        @McpDescription("Action: create (default), edit") action: String = "create",
+        @McpDescription("Action: create (default), edit, open_console") action: String = "create",
         @McpDescription("DBMS display name, e.g. 'PostgreSQL', 'SQL Server', 'MySQL' (required for create; fuzzy-matched, aliases mssql/postgres/maria/mongo accepted)") dbms: String? = null,
         @McpDescription("JDBC URL, must match the driver (required for create; e.g. driver sample URL is shown on mismatch)") url: String? = null,
         @McpDescription("Connection display name, must be unique (required for create)") name: String? = null,
         @McpDescription("DB username (optional)") user: String? = null,
         @McpDescription("DB password — stored in IDE credential store, never logged or echoed (optional)") password: String? = null,
-        @McpDescription("Connection uniqueId from create (required for edit)") connectionId: String? = null
+        @McpDescription("Connection uniqueId from create (required for edit/open_console)") connectionId: String? = null,
+        @McpDescription("true = mark the data source Read-only (create/edit). false is rejected when the flag is set: only the user can lift it in Rider") readOnly: Boolean? = null
     ): String {
         return when (action.lowercase()) {
-            "create" -> createConnection(dbms, url, name, user, password)
-            "edit" -> editConnection(connectionId, url, name, user, password)
-            else -> mcpFail("Unknown action '$action'. Use: create, edit")
+            "create" -> createConnection(dbms, url, name, user, password, readOnly)
+            "edit" -> editConnection(connectionId, url, name, user, password, readOnly)
+            "open_console" -> openConsole(connectionId)
+            else -> mcpFail("Unknown action '$action'. Use: create, edit, open_console")
         }
     }
 
-    private suspend fun createConnection(dbms: String?, url: String?, name: String?, user: String?, password: String?): String {
+    private suspend fun openConsole(connectionId: String?): String {
+        if (connectionId.isNullOrBlank()) mcpFail("connectionId is required for action='open_console'")
+        val project = coroutineContext.project
+        return runOnEdt {
+            val ds = LocalDataSourceManager.getInstance(project).dataSources.firstOrNull { it.uniqueId == connectionId }
+                ?: mcpFail("No connection found with id '$connectionId'. Use list_database_connections to see available connections.")
+            val dbDs = DbPsiFacade.getInstance(project).findDataSource(ds.uniqueId)
+                ?: mcpFail("Data source '${ds.name}' is not loaded in this project yet; retry in a moment.")
+            val file = DbVFSUtils.getInstance().getConsoleVirtualFile(dbDs)
+                ?: mcpFail("Rider did not create a console for '${ds.name}'. Open one via the Database tool window.")
+            FileEditorManager.getInstance(project).openFile(file, true)
+            buildJsonObject {
+                put("status", "opened")
+                put("console", file.name)
+                put("consoleRef", "${ds.name}/${file.name}")
+                put("dataSource", ds.name)
+                put("uniqueId", ds.uniqueId)
+                put("readOnly", ds.isReadOnly)
+                put("hint", "Run SQL with rider_execute_console(console='${ds.name}/${file.name}').")
+            }.toString()
+        }
+    }
+
+    private suspend fun createConnection(dbms: String?, url: String?, name: String?, user: String?, password: String?, readOnly: Boolean?): String {
         if (dbms.isNullOrBlank()) mcpFail("dbms is required for action='create'")
         if (url.isNullOrBlank()) mcpFail("url is required for action='create'")
         if (name.isNullOrBlank()) mcpFail("name is required for action='create'")
@@ -111,6 +139,7 @@ class DatabaseConnectionToolset : McpToolset {
                 dataSource.username = user
             }
             dataSource.isConfiguredByUrl = true
+            if (readOnly == true) dataSource.isReadOnly = true
 
             if (!password.isNullOrBlank()) {
                 DatabaseCredentials.getInstance().storePassword(dataSource, OneTimeString(password))
@@ -127,11 +156,12 @@ class DatabaseConnectionToolset : McpToolset {
             put("driver", driver.name)
             put("url", maskJdbcSecrets(url))
             if (!user.isNullOrBlank()) put("username", user)
-            put("hint", "Connection added to Database tool window. Open its console there, then use rider_list_db_consoles + rider_execute_console(console='<fileName>'); the built-in query tools take connectionId='${ds.uniqueId}'.")
+            put("readOnly", ds.isReadOnly)
+            put("hint", "Connection added to the Database tool window. Open its console with action='open_console', connectionId='${ds.uniqueId}', then rider_execute_console(console='<fileName>').")
         }.toString()
     }
 
-    private suspend fun editConnection(connectionId: String?, url: String?, name: String?, user: String?, password: String?): String {
+    private suspend fun editConnection(connectionId: String?, url: String?, name: String?, user: String?, password: String?, readOnly: Boolean?): String {
         if (connectionId.isNullOrBlank()) mcpFail("connectionId is required for action='edit'")
         val project = coroutineContext.project
 
@@ -139,6 +169,11 @@ class DatabaseConnectionToolset : McpToolset {
             LocalDataSourceManager.getInstance(project).dataSources
                 .firstOrNull { it.uniqueId == connectionId }
         } ?: mcpFail("No connection found with id '$connectionId'. Use list_database_connections to see available connections.")
+
+        // The guard must not be removable through the channel it guards: tightening only.
+        if (readOnly == false && ds.isReadOnly) {
+            mcpFail("'${ds.name}' is marked Read-only and that cannot be lifted through MCP. Ask the user to untick Read-only in the data source properties (Database tool window → Properties) if a write is really intended.")
+        }
 
         if (!url.isNullOrBlank()) {
             val known = runOnEdt {
@@ -162,6 +197,7 @@ class DatabaseConnectionToolset : McpToolset {
             if (!password.isNullOrBlank()) {
                 DatabaseCredentials.getInstance().storePassword(ds, OneTimeString(password))
             }
+            if (readOnly == true) ds.isReadOnly = true
             LocalDataSourceManager.getInstance(project).fireDataSourceUpdated(ds)
         }
 
@@ -171,6 +207,7 @@ class DatabaseConnectionToolset : McpToolset {
             put("uniqueId", ds.uniqueId)
             ds.url?.let { put("url", maskJdbcSecrets(it)) }
             ds.username?.takeIf { it.isNotBlank() }?.let { put("username", it) }
+            put("readOnly", ds.isReadOnly)
         }.toString()
     }
 }

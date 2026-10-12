@@ -31,7 +31,7 @@ class ConsoleResultsToolset : McpToolset {
     @McpTool
     @McpDescription("Reads what the USER ran in an open SQL console (Services → Database result tabs): every result grid of the console's last run as CSV with columns, rows loaded by the IDE and paging info, plus the Output log tail (PRINT/RAISERROR … WITH NOWAIT lines, 'N rows retrieved in …'). state=running while the console still executes — poll it, the console is never blocked. Use it when the user ran a long script themselves and asks about its results; #temp tables of the user's session are not reachable from rider_execute_console, but their final SELECTs are here. index picks one result tab (1-based, default all). hasMoreInIde=true means the IDE grid fetched only its first page — the remaining rows were never loaded; ask the user to raise the grid page size or re-run via rider_execute_console(outputFile=…). outputFile writes every grid to CSV/JSON and keeps the response small.")
     suspend fun rider_console_results(
-        @McpDescription("Console file name from rider_list_db_consoles (omit = selected console tab, else the first open console)") console: String? = null,
+        @McpDescription("consoleRef '<data source>/<file>' from rider_list_db_consoles (bare file name when unique; omit = selected console tab)") console: String? = null,
         @McpDescription("Result tab, 1-based (0 = all, default)") index: Int = 0,
         @McpDescription("Rows to skip in each grid") offset: Int = 0,
         @McpDescription("Rows per grid in the response, 1-5000, default 200") pageSize: Int = 200,
@@ -154,18 +154,10 @@ class ConsoleResultsToolset : McpToolset {
         return Snapshot(file.name, ds, if (running) "running" else "idle", grids.size, selected, output)
     }
 
-    private fun findConsole(project: Project, name: String?): Pair<VirtualFile, JdbcConsole> {
-        val fem = FileEditorManager.getInstance(project)
-        val consoles = fem.openFiles.mapNotNull { f ->
-            runCatching { JdbcConsoleProvider.getConsole(project, f) }.getOrNull()?.let { f to it }
-        }
-        if (consoles.isEmpty()) mcpFail("No open database console. The user's console tab must stay open for its results to be readable.")
-        if (!name.isNullOrBlank()) {
-            return consoles.firstOrNull { it.first.name.equals(name, ignoreCase = true) }
-                ?: mcpFail("Console '$name' is not open. Open consoles: ${consoles.map { it.first.name }}")
-        }
-        val selected = fem.selectedFiles.toSet()
-        return consoles.firstOrNull { it.first in selected } ?: consoles.first()
+    private fun findConsole(project: Project, name: String?): Pair<VirtualFile, JdbcConsole> = try {
+        DbConsoleReader.findConsole(project, name).let { it.file to it.console }
+    } catch (e: IllegalArgumentException) {
+        mcpFail(e.message ?: "Console not found")
     }
 
     /** A result grid: the IDE DataGrid when reachable, plus its Swing table as a fallback reader. */

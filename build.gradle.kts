@@ -79,3 +79,22 @@ tasks.register("checkToolDocs") {
 }
 
 tasks.findByName("check")?.dependsOn("checkToolDocs")
+
+// Isolated Rider for automated evals (notes/evals/auto/evals.py sandbox up): its own sandbox config,
+// so global data sources of the developer's IDE (production servers) never reach eval sessions,
+// and it always runs the plugin built from the current tree.
+val runIdeEvals by intellijPlatformTesting.runIde.registering {
+    // The developer's installed Rider (same version as daily work), with the task's own sandbox config.
+    providers.environmentVariable("EVAL_RIDER_PATH").orElse("/Applications/Rider.app").get()
+        .let { path -> if (file(path).exists()) localPath = file(path) }
+    task {
+        args(
+            providers.environmentVariable("EVAL_FIXTURE_SLN")
+                .orElse(System.getProperty("user.home") + "/Code/rider-mcp-eval-fixture/EvalSlim.sln")
+                .get()
+        )
+        jvmArgumentProviders += CommandLineArgumentProvider {
+            listOf("-Didea.trust.all.projects=true", "-Djb.consents.confirmation.enabled=false", "-Djb.privacy.policy.text=<!--999.999-->")
+        }
+    }
+}

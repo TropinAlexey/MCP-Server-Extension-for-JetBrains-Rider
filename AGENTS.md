@@ -31,7 +31,7 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 - Build → `rider_build` (actions: `start`, `cancel`) + `rider_get_output`
 - Publish → `rider_publish` (`configName?`) + `rider_get_output`
 - Run tests → `rider_tests` (actions: `run`, `run_and_wait`, `results`, `rerun_failed`) + `rider_get_output` (`configName` alone runs the whole config — scope with filters)
-- Create/edit DB connections → `rider_database_connection` (actions: `create`, `edit`)
+- Create/edit DB connections → `rider_database_connection` (actions: `create`, `edit`, `open_console`). Production source on the user's request → `readOnly=true`. The flag cannot be lifted through MCP (`readOnly=false` is rejected) — if a write is really intended, the user unticks Read-only in Rider. No console open for a connection → `action='open_console'` instead of asking the user to double-click
 - SQL in open DB consoles → `rider_list_db_consoles` + `rider_execute_console` (T-SQL scripts with `DECLARE @x …; … sp_executesql` run as one batch — split is by `GO` for MSSQL; slow scans → `timeoutSeconds`; huge cells → `maxCellLength`; next page → `offset` + `ORDER BY`)
   - Long queries (> ~40 s: cursors over databases, full scans) → `async=true` → `jobId`, then `rider_console_job(action='status', jobId, messagesOffset)` until `status != running`; cancel with `action='cancel'`. A sync call waits `waitSeconds` (default 50) and then cancels the server query (`onClientTimeout='cancel'`) or detaches it as a job (`'detach'`) — it never leaves an orphaned query behind. A busy console answers with its `jobId` at once.
   - Production / "read-only" requests → `readOnly=true` (forced for data sources marked Read-only — see `readOnly` in `rider_list_db_consoles`): DML/DDL rejected before sending, MSSQL runs in a rolled-back transaction, PostgreSQL in a read-only session; `#temp` / `@table` / `CREATE TEMP TABLE` allowed. Dynamic SQL must be literal (`sp_executesql N'…'`, `sp_MSforeachdb '… [?].sys.tables …'`) — SQL assembled in variables is rejected because it cannot be checked. Check `readOnlyEnforced` in the response.
@@ -50,9 +50,10 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 
 ## Database consoles playbook
 
-**Pick the database first.** `rider_list_db_consoles` → `consoles[]` (`currentDatabase`, `readOnly`, `busyJobId`) and `tableEditors[]` (open table/view tabs with `database`/`schema`/`object`; `selected=true` = active tab). When the user says "the open console/table", take database and schema from here — never guess between similarly named databases.
+**Pick the database first.** `rider_list_db_consoles` → `consoles[]` (`consoleRef`, `currentDatabase`, `readOnly`, `busyJobId`) and `tableEditors[]` (open table/view tabs with `database`/`schema`/`object`; `selected=true` = active tab). When the user says "the open console/table", take database and schema from here — never guess between similarly named databases.
 
 **Run SQL yourself:**
+- Always address consoles by `consoleRef` (`<data source>/<file>`): default consoles of different servers share the file name `console.sql`, and a bare ambiguous name is rejected.
 - Short query (< ~40 s) → `rider_execute_console(sql, console)`. The sync call waits `waitSeconds` (default 50, keep it below the MCP client tool timeout); on expiry `onClientTimeout='cancel'` cancels the server query, `'detach'` keeps it running as a job. Nothing is left orphaned on the server.
 - Long query (cursor over databases, full scans, `waitfor`) → `rider_execute_console(..., async=true, timeoutSeconds=<per batch>)` → `jobId`; poll `rider_console_job(action='status', jobId, messagesOffset=<nextMessagesOffset>)` every 5–30 s until `status != running`; the finished status carries `result`. Stop with `action='cancel'`.
 - Progress of long scripts: `raiserror('%s done', 0, 1, @x) with nowait` — appears in job `messages[]` with timestamps while running.

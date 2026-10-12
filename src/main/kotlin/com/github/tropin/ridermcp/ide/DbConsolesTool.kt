@@ -34,7 +34,7 @@ class DbConsolesToolset : McpToolset {
     @McpDescription("Executes SQL over the data source of an open console (names via rider_list_db_consoles) on a dedicated JDBC connection; returns CSV per result set, server errors with vendor code/SQLState, PRINT/RAISERROR in messages. T-SQL (MSSQL/Sybase) is split by GO lines, others by ';'. DB = console's currentDatabase unless database=. Long queries: async=true returns a jobId at once — poll rider_console_job; a sync call waits waitSeconds (default 50, below MCP client timeouts), then cancels the server query (onClientTimeout=cancel) or keeps it as a job (detach). A busy console answers with its jobId instead of queueing. readOnly (forced for Read-only data sources) rejects DML/DDL before sending and runs in a rolled-back transaction (MSSQL) or read-only session (PostgreSQL); #temp tables and @table vars stay allowed. maskSecrets (default on) hides password/secret/token columns and password= values. outputFile streams every result set to CSV/JSON and returns path + preview. hasMore=true: raise pageSize or page with offset + ORDER BY. Default to SELECT; confirm DML/DDL with the user first.")
     suspend fun rider_execute_console(
         @McpDescription("SQL script; see split for how it is cut into batches") sql: String,
-        @McpDescription("Open console file name from rider_list_db_consoles (omit = first open console)") console: String? = null,
+        @McpDescription("consoleRef '<data source>/<file>' from rider_list_db_consoles (a bare file name works when unique; omit = selected console tab)") console: String? = null,
         @McpDescription("Rows per result set, 1-5000, default 200") pageSize: Int = 200,
         @McpDescription("Execution database (omit = console's currentDatabase)") database: String? = null,
         @McpDescription("Rows to skip in each result set before the page (re-runs the query; pair with ORDER BY)") offset: Int = 0,
@@ -56,11 +56,11 @@ class DbConsolesToolset : McpToolset {
             "detach" -> true
             else -> mcpFail("Unknown onClientTimeout='$onClientTimeout'. Use cancel or detach.")
         }
-        val resolved = runOnEdt { DbConsoleReader.resolveConsole(project, console) }
-            ?: mcpFail(
-                if (console.isNullOrBlank()) "No open database console found. Open one in Rider first (double-click it in the Database tool window)."
-                else "Console '$console' is not open. Open consoles: ${runOnEdt { DbConsoleReader.openConsoleNames(project) }}"
-            )
+        val resolved = try {
+            runOnEdt { DbConsoleReader.resolveConsole(project, console) }
+        } catch (e: IllegalArgumentException) {
+            mcpFail(e.message ?: "Console not found")
+        }
         val ds = resolved.dataSource
         val targetDb = database?.takeIf { it.isNotBlank() } ?: resolved.currentDatabase
         val outputPath = outputFile?.takeIf { it.isNotBlank() }?.let { resolveOutputFile(it, project.basePath) }

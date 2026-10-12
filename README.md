@@ -130,7 +130,7 @@ MCP tools are synchronous (request → response). Long-running operations — bu
 ### Database
 | Tool | Args | Description |
 |---|---|---|
-| `rider_database_connection` | `action=create\|edit`, `dbms?`, `url?`, `name?`, `user?`, `password?`, `connectionId?` | Manage data sources (JDBC). Returns uniqueId. Prefer over built-in create/edit (MSSQL matching fixed) |
+| `rider_database_connection` | `action=create\|edit\|open_console`, `dbms?`, `url?`, `name?`, `user?`, `password?`, `connectionId?`, `readOnly?` | Manage data sources (JDBC), mark them Read-only, open the default console. Returns uniqueId. Prefer over built-in create/edit (MSSQL matching fixed) |
 | `rider_list_db_consoles` | — | Open SQL consoles with data source, currentDatabase, readOnly, busyJobId; `tableEditors` = open table/view tabs with database/schema/object. Call first |
 | `rider_execute_console` | `sql`, `console?`, `pageSize?`, `database?`, `offset?`, `timeoutSeconds?=60`, `maxCellLength?=4000`, `split?=auto`, `async?`, `waitSeconds?=50`, `onClientTimeout?=cancel\|detach`, `readOnly?`, `maskSecrets?=true`, `outputFile?` | Execute SQL on a dedicated JDBC connection → CSV per result set with rowCount/hasMore; server error text + code + SQLState; T-SQL split by `GO`; per-batch timeout with cancel; background jobs; read-only guard (forced for Read-only data sources); secret masking; CSV/JSON export. Prefer over built-in execute |
 | `rider_console_job` | `action=status\|result\|cancel\|list`, `jobId?`, `messagesOffset?` | Poll/cancel `rider_execute_console` jobs: status, timestamped PRINT/RAISERROR messages, final result |
@@ -268,6 +268,12 @@ gradlew.bat runIde
 - Running commands without confirmation is opt-in ("brave mode" in the MCP server settings) and stays off by default — keep it off unless you trust the agent. This is a security feature, not an inconvenience.
 
 ## What's New
+
+### v1.2.1
+
+- Fix: the plugin did not load on Rider 2026.1 — the test runner dependency (a separate plugin only since 2026.2) is now optional
+- Consoles are addressed as `<data source>/<file>` (`consoleRef` in `rider_list_db_consoles`): default consoles of different servers are all named `console.sql`, and a bare ambiguous name is now rejected instead of silently running on the first matching tab — possibly another server
+- `rider_database_connection`: `readOnly=true` marks a data source Read-only (cannot be lifted through MCP — only the user can, in Rider); `action=open_console` opens the default console and returns its `consoleRef`
 
 ### v1.2.0
 
