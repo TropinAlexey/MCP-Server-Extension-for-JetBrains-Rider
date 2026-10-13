@@ -133,7 +133,7 @@ MCP tools are synchronous (request → response). Long-running operations — bu
 | `rider_database_connection` | `action=create\|edit\|open_console\|open_table\|refresh`, `dbms?`, `url?`, `name?`, `user?`, `password?`, `connectionId?`, `readOnly?`, `table?` | Manage data sources (JDBC), mark them Read-only, open the default console or a table tab, re-introspect the model. Returns uniqueId. Prefer over built-in create/edit (MSSQL matching fixed) |
 | `rider_list_db_consoles` | — | Open SQL consoles with data source, currentDatabase, readOnly, busyJobId; `tableEditors` = open table/view tabs with database/schema/object. Call first |
 | `rider_execute_console` | `sql`, `console?`, `pageSize?`, `database?`, `offset?`, `timeoutSeconds?=60`, `maxCellLength?=4000`, `split?=auto`, `async?`, `waitSeconds?=50`, `onClientTimeout?=cancel\|detach`, `readOnly?`, `maskSecrets?=true`, `outputFile?` | Execute SQL on a dedicated JDBC connection → CSV per result set with rowCount/hasMore; server error text + code + SQLState; T-SQL split by `GO`; per-batch timeout with cancel; background jobs; read-only guard (forced for Read-only data sources); secret masking; CSV/JSON export. Prefer over built-in execute |
-| `rider_console_job` | `action=status\|result\|cancel\|list`, `jobId?`, `messagesOffset?` | Poll/cancel `rider_execute_console` jobs: status, timestamped PRINT/RAISERROR messages, final result |
+| `rider_console_job` | `action=status\|result\|cancel\|list`, `jobId?`, `messagesOffset?`, `waitSeconds?` (long-poll ≤40 s) | Poll/cancel `rider_execute_console` jobs: status, timestamped PRINT/RAISERROR messages, final result |
 | `rider_console_results` | `console?`, `index?`, `offset?`, `pageSize?`, `maxCellLength?`, `outputLines?`, `maskSecrets?`, `outputFile?` | Result grids + Output log of what the user ran in a console (Services → Database); `state=running` while executing |
 
 ### Profiling
@@ -268,6 +268,12 @@ gradlew.bat runIde
 - Running commands without confirmation is opt-in ("brave mode" in the MCP server settings) and stays off by default — keep it off unless you trust the agent. This is a security feature, not an inconvenience.
 
 ## What's New
+
+### v1.2.3
+
+- `rider_console_job(action='status', waitSeconds=N)` long-polls (≤40 s) until the job ends or new server messages arrive — eval S19: 32 → 6 calls for a 75 s script
+- `rider_console_results`: `output` holds only the Output log (the script editor's text no longer leaks in)
+- `rider_list_db_consoles` steers SQL to `rider_execute_console(console=consoleRef)` instead of the built-in `execute_sql_query`, which blocks on an IDE confirmation dialog
 
 ### v1.2.2
 

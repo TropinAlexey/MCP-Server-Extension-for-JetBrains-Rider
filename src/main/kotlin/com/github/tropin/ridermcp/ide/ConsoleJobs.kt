@@ -182,11 +182,12 @@ internal class ConsoleJobService(private val cs: CoroutineScope) {
 class ConsoleJobToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Polls and controls rider_execute_console jobs (async=true, or a sync call detached by onClientTimeout=detach). action='status' (default): status running|completed|failed|cancelled, elapsedMs, current batch, server messages (PRINT / RAISERROR … WITH NOWAIT) with timestamps since messagesOffset — pass back nextMessagesOffset to get only new ones — and, once finished, the same result object rider_execute_console returns. action='result': the result only (fails while running). action='cancel': cancels the statement on the server (force-closes the connection if the driver ignores the cancel) — the console is free again. action='list': recent jobs. Poll every 5-30 s; jobs are kept for 1 h.")
+    @McpDescription("Polls and controls rider_execute_console jobs (async=true, or a sync call detached by onClientTimeout=detach). action='status' (default): status running|completed|failed|cancelled, elapsedMs, current batch, server messages (PRINT / RAISERROR … WITH NOWAIT) with timestamps since messagesOffset — pass back nextMessagesOffset — and, once finished, the result rider_execute_console returns. waitSeconds (≤40) blocks until the job ends or new messages arrive — use it instead of polling in a loop. action='result': the result only (fails while running). action='cancel': cancels the statement on the server (force-closes the connection if the driver ignores the cancel) — the console is free again. action='list': recent jobs. Jobs are kept for 1 h.")
     suspend fun rider_console_job(
         @McpDescription("status (default) | result | cancel | list") action: String = "status",
         @McpDescription("Job id from rider_execute_console (not needed for list)") jobId: String? = null,
-        @McpDescription("Return server messages from this index (use nextMessagesOffset of the previous status)") messagesOffset: Int = 0
+        @McpDescription("Return server messages from this index (use nextMessagesOffset of the previous status)") messagesOffset: Int = 0,
+        @McpDescription("status: wait up to N s (0-40) for the job to finish or for new messages before answering; 0 = answer now") waitSeconds: Int = 0
     ): String {
         val service = ConsoleJobService.getInstance()
         val act = action.trim().lowercase()
@@ -212,7 +213,16 @@ class ConsoleJobToolset : McpToolset {
         val job = service.get(jobId.trim())
             ?: mcpFail("Unknown jobId '$jobId' (jobs are kept 1 h). Use action='list' to see jobs.")
         return when (act) {
-            "status" -> job.statusJson(messagesOffset).toString()
+            "status" -> {
+                // Long-poll; stays below the ~60 s after which the MCP server drops a pending call.
+                val wait = waitSeconds.coerceIn(0, 40) * 1000L
+                if (wait > 0 && job.status == "running") {
+                    withTimeoutOrNull(wait) {
+                        while (job.status == "running" && job.messageCount() <= messagesOffset) delay(500)
+                    }
+                }
+                job.statusJson(messagesOffset).toString()
+            }
             "result" -> when (job.status) {
                 "running" -> mcpFail("Job ${job.id} is still running (${job.elapsedMs / 1000}s). Poll action='status'.")
                 "completed" -> job.result.toString()

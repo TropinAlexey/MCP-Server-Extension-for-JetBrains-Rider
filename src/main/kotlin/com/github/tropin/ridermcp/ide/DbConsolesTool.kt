@@ -16,7 +16,7 @@ import kotlin.coroutines.coroutineContext
 class DbConsolesToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Lists open SQL consoles (editor tabs bound to a data source) with console file name, data source name + uniqueId (use as connectionId), DBMS, URL, currentDatabase (console toolbar, else the URL's database), readOnly (data source Read-only flag) and busyJobId when a rider_execute_console job runs there. tableEditors lists open table/view tabs with dataSource, database, schema, object and kind — use them when the user says 'the open table'; selected=true marks the active tab. Call FIRST when the user mentions an open console or table. Returns [] when nothing is open (open a console via double-click in the Database tool window first).")
+    @McpDescription("Lists open SQL consoles (editor tabs bound to a data source) with console file name, data source name + uniqueId (use as connectionId), DBMS, URL, currentDatabase (console toolbar, else the URL's database), readOnly (data source Read-only flag) and busyJobId when a rider_execute_console job runs there. tableEditors lists open table/view tabs with dataSource, database, schema, object and kind — use them when the user says 'the open table'; selected=true marks the active tab. Call FIRST when the user mentions an open console or table. Run SQL against any of them with rider_execute_console(console=consoleRef) — not the built-in execute_sql_query, which blocks on an IDE confirmation dialog. Returns [] when nothing is open (rider_database_connection(action='open_console')).")
     suspend fun rider_list_db_consoles(): String {
         val project = coroutineContext.project
         return runOnEdt {

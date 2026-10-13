@@ -55,7 +55,7 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 **Run SQL yourself:**
 - Always address consoles by `consoleRef` (`<data source>/<file>`): default consoles of different servers share the file name `console.sql`, and a bare ambiguous name is rejected.
 - Short query (< ~40 s) → `rider_execute_console(sql, console)`. The sync call waits `waitSeconds` (default 50, keep it below the MCP client tool timeout); on expiry `onClientTimeout='cancel'` cancels the server query, `'detach'` keeps it running as a job. Nothing is left orphaned on the server.
-- Long query (cursor over databases, full scans, `waitfor`) → `rider_execute_console(..., async=true, timeoutSeconds=<per batch>)` → `jobId`; poll `rider_console_job(action='status', jobId, messagesOffset=<nextMessagesOffset>)` every 5–30 s until `status != running`; the finished status carries `result`. Stop with `action='cancel'`.
+- Long query (cursor over databases, full scans, `waitfor`) → `rider_execute_console(..., async=true, timeoutSeconds=<per batch>)` → `jobId`; poll `rider_console_job(action='status', jobId, messagesOffset=<nextMessagesOffset>, waitSeconds=30)` until `status != running` — `waitSeconds` blocks until the job ends or new messages arrive, so no tight polling loop; the finished status carries `result`. Stop with `action='cancel'`.
 - Progress of long scripts: `raiserror('%s done', 0, 1, @x) with nowait` — appears in job `messages[]` with timestamps while running.
 - Busy console error ("busy: jobId=…") → poll or cancel that job; do not retry blindly.
 - Big outputs (thousands of rows, reports over many databases) → `outputFile='<path>.csv|.json'`, then read the file; the response keeps only path, rowCount and a 5-row preview.

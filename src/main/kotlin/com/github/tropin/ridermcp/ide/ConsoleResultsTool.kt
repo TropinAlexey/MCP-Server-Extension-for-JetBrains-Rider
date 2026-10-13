@@ -234,10 +234,12 @@ class ConsoleResultsToolset : McpToolset {
         else -> value.toString()
     }
 
+    /** Text of the Output log. Only read-only (viewer) editors count: the content also hosts the editable script editor. */
     private fun outputText(root: Component): List<String> {
         val lines = mutableListOf<String>()
         fun walk(c: Component) {
             if (c is EditorComponentImpl) {
+                if (!c.editor.isViewer) return
                 val text = ApplicationManager.getApplication().runReadAction<String> { c.editor.document.text }
                 lines.addAll(text.lines().filter { it.isNotBlank() })
                 return
