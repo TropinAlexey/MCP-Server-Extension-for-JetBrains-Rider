@@ -76,11 +76,13 @@ internal object DbConsoleReader {
         val jobs = ConsoleJobService.getInstance()
         val dataSources = LocalDataSourceManager.getInstance(project).dataSources.associateBy { it.uniqueId }
         val tableEditors = mutableListOf<JsonObject>()
+        // data source id → consoleRef of an open console, so a table tab can say how to query it
+        val consoleRefs = openConsoles(project).mapNotNull { c -> c.dataSource?.let { it.uniqueId to c.ref } }.toMap()
         val consoles = fem.openFiles.mapNotNull { file ->
             try {
                 val console = JdbcConsoleProvider.getConsole(project, file)
                 if (console == null) {
-                    describeTableEditor(file, dataSources, file in selected)?.let(tableEditors::add)
+                    describeTableEditor(file, dataSources, file in selected, consoleRefs)?.let(tableEditors::add)
                     return@mapNotNull null
                 }
                 val ds = try { console.dataSource } catch (_: Exception) { null }
@@ -127,7 +129,12 @@ internal object DbConsoleReader {
     }
 
     /** Table/view editor tab: its virtual path starts with the data source id, then kind/name pairs. */
-    private fun describeTableEditor(file: VirtualFile, dataSources: Map<String, LocalDataSource>, selected: Boolean): JsonObject? {
+    private fun describeTableEditor(
+        file: VirtualFile,
+        dataSources: Map<String, LocalDataSource>,
+        selected: Boolean,
+        consoleRefs: Map<String, String>
+    ): JsonObject? {
         val tab = DbEditorPaths.parse(file.path) ?: return null
         val ds = dataSources[tab.dataSourceId] ?: return null
         return buildJsonObject {
@@ -140,6 +147,14 @@ internal object DbConsoleReader {
             tab.schema?.let { put("schema", it) }
             tab.objectName?.let { put("object", it) }
             put("readOnly", runCatching { ds.isReadOnly }.getOrDefault(false))
+            val qualified = listOfNotNull(tab.database, tab.schema, tab.objectName).joinToString(".")
+            val ref = consoleRefs[ds.uniqueId]
+            if (ref != null) {
+                put("consoleRef", ref)
+                put("query", "rider_execute_console(console='$ref', sql='select … from $qualified')")
+            } else {
+                put("query", "no console of '${ds.name}' is open: rider_database_connection(action='open_console', connectionId='${ds.uniqueId}'), then rider_execute_console(console=<consoleRef>)")
+            }
         }
     }
 }

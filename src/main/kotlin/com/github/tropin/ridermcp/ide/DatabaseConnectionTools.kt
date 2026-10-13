@@ -7,7 +7,12 @@ import com.intellij.database.access.DatabaseCredentials
 import com.intellij.database.dataSource.DatabaseDriverManager
 import com.intellij.database.dataSource.LocalDataSource
 import com.intellij.database.dataSource.LocalDataSourceManager
+import com.intellij.database.model.ObjectKind
 import com.intellij.database.psi.DbPsiFacade
+import com.intellij.database.dataSource.DataSourceSyncManager
+import com.intellij.database.util.LoaderContext
+import com.intellij.database.util.ObjectPath
+import com.intellij.database.view.DbNavigationUtils
 import com.intellij.database.vfs.DbVFSUtils
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.mcpserver.McpToolset
@@ -15,6 +20,7 @@ import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.*
 import kotlin.coroutines.coroutineContext
 
@@ -25,27 +31,104 @@ class DatabaseConnectionToolset : McpToolset {
         "Manages IDE database connections (data sources). action='create' (default) requires dbms + JDBC url + name; optional user/password (password goes to the IDE credential store, never logged). " +
             "action='edit' requires connectionId; optional url/name/user/password. " +
             "readOnly=true marks the data source Read-only (rider_execute_console then rejects DML/DDL) — set it for production on the user's request. It cannot be lifted through MCP: the user unticks Read-only in the data source properties. " +
-            "action='open_console' (connectionId) opens the default SQL console and returns its file name for rider_execute_console(console=...). " +
+            "action='open_console' (connectionId) opens the default SQL console and returns its consoleRef for rider_execute_console(console=...). " +
+            "action='open_table' (connectionId, table='db.schema.table' or 'schema.table') opens a table/view data tab (like a double-click). " +
             "DBMS is matched fuzzily (PostgreSQL, MySQL, SQL Server/MSSQL, Oracle, SQLite, ClickHouse, ...) with URL-vs-driver validation. " +
             "Credentials in URLs are masked in responses. Returns uniqueId (connectionId). " +
             "Prefer over the built-in create_database_connection/edit_database_connection (broken MSSQL matching). Never executes SQL."
     )
     suspend fun rider_database_connection(
-        @McpDescription("Action: create (default), edit, open_console") action: String = "create",
+        @McpDescription("Action: create (default), edit, open_console, open_table, refresh (re-introspect the model, e.g. after 'Schema … not found' from model-based tools)") action: String = "create",
         @McpDescription("DBMS display name, e.g. 'PostgreSQL', 'SQL Server', 'MySQL' (required for create; fuzzy-matched, aliases mssql/postgres/maria/mongo accepted)") dbms: String? = null,
         @McpDescription("JDBC URL, must match the driver (required for create; e.g. driver sample URL is shown on mismatch)") url: String? = null,
         @McpDescription("Connection display name, must be unique (required for create)") name: String? = null,
         @McpDescription("DB username (optional)") user: String? = null,
         @McpDescription("DB password — stored in IDE credential store, never logged or echoed (optional)") password: String? = null,
         @McpDescription("Connection uniqueId from create (required for edit/open_console)") connectionId: String? = null,
-        @McpDescription("true = mark the data source Read-only (create/edit). false is rejected when the flag is set: only the user can lift it in Rider") readOnly: Boolean? = null
+        @McpDescription("true = mark the data source Read-only (create/edit). false is rejected when the flag is set: only the user can lift it in Rider") readOnly: Boolean? = null,
+        @McpDescription("open_table: 'database.schema.table' (MSSQL/PostgreSQL) or 'schema.table'; quoting not needed") table: String? = null
     ): String {
         return when (action.lowercase()) {
             "create" -> createConnection(dbms, url, name, user, password, readOnly)
             "edit" -> editConnection(connectionId, url, name, user, password, readOnly)
             "open_console" -> openConsole(connectionId)
-            else -> mcpFail("Unknown action '$action'. Use: create, edit, open_console")
+            "open_table" -> openTable(connectionId, table)
+            "refresh" -> refresh(connectionId)
+            else -> mcpFail("Unknown action '$action'. Use: create, edit, open_console, open_table, refresh")
         }
+    }
+
+    private suspend fun openTable(connectionId: String?, table: String?): String {
+        if (connectionId.isNullOrBlank()) mcpFail("connectionId is required for action='open_table'")
+        val parts = table?.split('.')?.map { it.trim().removeSurrounding("[", "]").removeSurrounding("\"") }?.filter { it.isNotEmpty() }
+        if (parts.isNullOrEmpty() || parts.size > 3) mcpFail("table must be 'database.schema.table' or 'schema.table', got '$table'")
+        val project = coroutineContext.project
+        val (ds, dbDs) = runOnEdt { loadedDataSource(project, connectionId) }
+        val containers = when (parts.size) {
+            3 -> ObjectPath.create(parts[0], ObjectKind.DATABASE).append(parts[1], ObjectKind.SCHEMA)
+            2 -> ObjectPath.create(parts[0], ObjectKind.SCHEMA)
+            else -> null
+        }
+        val name = parts.last()
+        val find = {
+            listOf(ObjectKind.TABLE, ObjectKind.VIEW, ObjectKind.MAT_VIEW).firstNotNullOfOrNull { kind ->
+                dbDs.findElement(containers?.append(name, kind) ?: ObjectPath.create(name, kind))
+            }
+        }
+        // Not in the model yet: refresh the data source once (Database tool window ⟳) and wait for introspection.
+        var element = runOnEdt(find)
+        var refreshed = false
+        if (element == null) {
+            runOnEdt { DataSourceSyncManager.getInstance().tryPerformAsync(LoaderContext.selectGeneralTask(project, ds), stopRunning = false, merge = true) }
+            refreshed = true
+            val deadline = System.currentTimeMillis() + REFRESH_WAIT_MS
+            while (element == null && System.currentTimeMillis() < deadline) {
+                delay(2000)
+                element = runOnEdt(find)
+            }
+        }
+        val found = element ?: mcpFail(
+            "'$table' is not in the model of '${ds.name}' yet. A refresh (introspection) was started — call open_table again in " +
+                "~30 s. If it still fails, the table does not exist or its database/schema is outside the introspection scope: " +
+                "ask the user to tick it in the data source Properties → Schemas."
+        )
+        return runOnEdt {
+            if (!DbNavigationUtils.canNavigateToData(found)) mcpFail("'$table' has no data view (kind ${found.kind}).")
+            DbNavigationUtils.navigateToData(found, true)
+            buildJsonObject {
+                put("status", "opened")
+                put("dataSource", ds.name)
+                put("table", parts.joinToString("."))
+                if (refreshed) put("refreshed", true)
+                put("hint", "The tab is listed by rider_list_db_consoles → tableEditors.")
+            }.toString()
+        }
+    }
+
+    /** Refreshes the IDE model of a data source (introspection with its current scope), like ⟳ in the Database tool window. */
+    private suspend fun refresh(connectionId: String?): String {
+        if (connectionId.isNullOrBlank()) mcpFail("connectionId is required for action='refresh'")
+        val project = coroutineContext.project
+        val ds = runOnEdt { loadedDataSource(project, connectionId).first }
+        runOnEdt { DataSourceSyncManager.getInstance().tryPerformAsync(LoaderContext.selectGeneralTask(project, ds), stopRunning = false, merge = true) }
+        return buildJsonObject {
+            put("status", "refresh started")
+            put("dataSource", ds.name)
+            put("hint", "Introspection runs in the background (seconds to minutes on big servers); model-based tools see new objects when it ends. Databases outside the data source's Schemas scope stay invisible — the user ticks them in Properties → Schemas.")
+        }.toString()
+    }
+
+    private fun loadedDataSource(project: com.intellij.openapi.project.Project, connectionId: String): Pair<com.intellij.database.dataSource.LocalDataSource, com.intellij.database.psi.DbDataSource> {
+        val ds = LocalDataSourceManager.getInstance(project).dataSources.firstOrNull { it.uniqueId == connectionId }
+            ?: mcpFail("No connection found with id '$connectionId'. Use list_database_connections to see available connections.")
+        val dbDs = DbPsiFacade.getInstance(project).findDataSource(ds.uniqueId)
+            ?: mcpFail("Data source '${ds.name}' is not loaded in this project yet; retry in a moment.")
+        return ds to dbDs
+    }
+
+    private companion object {
+        /** Stays well below the ~60 s after which the MCP server drops a pending call (HTTP 404). */
+        const val REFRESH_WAIT_MS = 40_000L
     }
 
     private suspend fun openConsole(connectionId: String?): String {

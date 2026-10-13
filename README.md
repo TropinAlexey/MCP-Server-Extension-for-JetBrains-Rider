@@ -130,7 +130,7 @@ MCP tools are synchronous (request → response). Long-running operations — bu
 ### Database
 | Tool | Args | Description |
 |---|---|---|
-| `rider_database_connection` | `action=create\|edit\|open_console`, `dbms?`, `url?`, `name?`, `user?`, `password?`, `connectionId?`, `readOnly?` | Manage data sources (JDBC), mark them Read-only, open the default console. Returns uniqueId. Prefer over built-in create/edit (MSSQL matching fixed) |
+| `rider_database_connection` | `action=create\|edit\|open_console\|open_table\|refresh`, `dbms?`, `url?`, `name?`, `user?`, `password?`, `connectionId?`, `readOnly?`, `table?` | Manage data sources (JDBC), mark them Read-only, open the default console or a table tab, re-introspect the model. Returns uniqueId. Prefer over built-in create/edit (MSSQL matching fixed) |
 | `rider_list_db_consoles` | — | Open SQL consoles with data source, currentDatabase, readOnly, busyJobId; `tableEditors` = open table/view tabs with database/schema/object. Call first |
 | `rider_execute_console` | `sql`, `console?`, `pageSize?`, `database?`, `offset?`, `timeoutSeconds?=60`, `maxCellLength?=4000`, `split?=auto`, `async?`, `waitSeconds?=50`, `onClientTimeout?=cancel\|detach`, `readOnly?`, `maskSecrets?=true`, `outputFile?` | Execute SQL on a dedicated JDBC connection → CSV per result set with rowCount/hasMore; server error text + code + SQLState; T-SQL split by `GO`; per-batch timeout with cancel; background jobs; read-only guard (forced for Read-only data sources); secret masking; CSV/JSON export. Prefer over built-in execute |
 | `rider_console_job` | `action=status\|result\|cancel\|list`, `jobId?`, `messagesOffset?` | Poll/cancel `rider_execute_console` jobs: status, timestamped PRINT/RAISERROR messages, final result |
@@ -268,6 +268,12 @@ gradlew.bat runIde
 - Running commands without confirmation is opt-in ("brave mode" in the MCP server settings) and stays off by default — keep it off unless you trust the agent. This is a security feature, not an inconvenience.
 
 ## What's New
+
+### v1.2.2
+
+- `rider_database_connection(action='open_table', table='db.schema.table')` opens a table/view data tab (like a double-click), refreshing the model first when the object is not introspected yet
+- `rider_database_connection(action='refresh')` re-introspects a data source — the fix for built-in model tools answering "Schema … is not found"
+- `rider_list_db_consoles` → `tableEditors[]` entries carry `query`: how to query the tab (`rider_execute_console` on the same data source's console, or how to open one)
 
 ### v1.2.1
 
