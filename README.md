@@ -258,7 +258,7 @@ gradlew.bat runIde
 - `rider_debug(action='evaluate')` runs code inside the debuggee (getters can have side effects) — dev/test instances only.
 - `OFFSET` paging without `ORDER BY` is nondeterministic — always pair them.
 - MCP calls longer than ~60 s are dropped by the MCP server (HTTP 404): tools that wait cap themselves at 50 s (`waitSeconds`) or 40 s (long-poll, `open_table`, `inIde`). Longer work → `async=true` + `rider_console_job`.
-- `rider_execute_console(inIde=true)` has no rolled-back transaction: on Read-only data sources it relies on the lexical guard (fail-closed on dynamic SQL) and the IDE's own Read-only handling.
+- `rider_execute_console(inIde=true)` is refused on Read-only data sources and with `readOnly=true`: the IDE console run has no rolled-back transaction or read-only session.
 - Agents still sometimes pick the built-in `execute_sql_query`, which waits for an IDE confirmation dialog. To rule it out, hide it under **Settings → Tools → MCP Server → Exposed Tools**.
 - Eval rounds R8–R10 (DB consoles, S4/S12–S21) run automatically in an isolated sandbox Rider against a docker fixture — never against real servers. Ship-gate per `CONTRACT.md`.
 
@@ -271,6 +271,11 @@ gradlew.bat runIde
 - Running commands without confirmation is opt-in ("brave mode" in the MCP server settings) and stays off by default — keep it off unless you trust the agent. This is a security feature, not an inconvenience.
 
 ## What's New
+
+### v1.2.5
+
+- Security: `rider_execute_console(inIde=true)` is refused on Read-only data sources and with `readOnly=true` — the IDE console run cannot roll changes back, so read-only rested on the lexical guard alone. The flag is re-checked at run time
+- `inIde` runs on the console resolved when the call was checked, not on whichever tab is selected later
 
 ### v1.2.4
 
