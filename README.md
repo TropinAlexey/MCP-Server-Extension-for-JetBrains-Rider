@@ -132,7 +132,7 @@ MCP tools are synchronous (request → response). Long-running operations — bu
 |---|---|---|
 | `rider_database_connection` | `action=create\|edit\|open_console\|open_table\|refresh`, `dbms?`, `url?`, `name?`, `user?`, `password?`, `connectionId?`, `readOnly?`, `table?` | Manage data sources (JDBC), mark them Read-only, open the default console or a table tab, re-introspect the model. Returns uniqueId. Prefer over built-in create/edit (MSSQL matching fixed) |
 | `rider_list_db_consoles` | — | Open SQL consoles with data source, currentDatabase, readOnly, busyJobId; `tableEditors` = open table/view tabs with database/schema/object. Call first |
-| `rider_execute_console` | `sql`, `console?`, `pageSize?`, `database?`, `offset?`, `timeoutSeconds?=60`, `maxCellLength?=4000`, `split?=auto`, `async?`, `waitSeconds?=50`, `onClientTimeout?=cancel\|detach`, `readOnly?`, `maskSecrets?=true`, `outputFile?` | Execute SQL on a dedicated JDBC connection → CSV per result set with rowCount/hasMore; server error text + code + SQLState; T-SQL split by `GO`; per-batch timeout with cancel; background jobs; read-only guard (forced for Read-only data sources); secret masking; CSV/JSON export. Prefer over built-in execute |
+| `rider_execute_console` | `sql`, `console?`, `pageSize?`, `database?`, `offset?`, `timeoutSeconds?=60`, `maxCellLength?=4000`, `split?=auto`, `async?`, `waitSeconds?=50`, `onClientTimeout?=cancel\|detach`, `readOnly?`, `maskSecrets?=true`, `outputFile?`, `inIde?` | Execute SQL on a dedicated JDBC connection → CSV per result set with rowCount/hasMore; server error text + code + SQLState; T-SQL split by `GO`; per-batch timeout with cancel; background jobs; read-only guard (forced for Read-only data sources); secret masking; CSV/JSON export; `inIde=true` runs it in the console itself (result tabs in the IDE). Prefer over built-in execute |
 | `rider_console_job` | `action=status\|result\|cancel\|list`, `jobId?`, `messagesOffset?`, `waitSeconds?` (long-poll ≤40 s) | Poll/cancel `rider_execute_console` jobs: status, timestamped PRINT/RAISERROR messages, final result |
 | `rider_console_results` | `console?`, `index?`, `offset?`, `pageSize?`, `maxCellLength?`, `outputLines?`, `maskSecrets?`, `outputFile?` | Result grids + Output log of what the user ran in a console (Services → Database); `state=running` while executing |
 
@@ -268,6 +268,11 @@ gradlew.bat runIde
 - Running commands without confirmation is opt-in ("brave mode" in the MCP server settings) and stays off by default — keep it off unless you trust the agent. This is a security feature, not an inconvenience.
 
 ## What's New
+
+### v1.2.4
+
+- `rider_execute_console(inIde=true)` runs the script in the console itself, like the user's Execute: result tabs and Output appear in the IDE, the console's session (`#temp` tables, `SET` options) is reused; read them with `rider_console_results`. The read-only guard applies; replacing the console text is undoable
+- Eval S15 (results of a user-run script) no longer needs a manual step
 
 ### v1.2.3
 
