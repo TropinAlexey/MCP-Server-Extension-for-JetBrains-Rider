@@ -257,7 +257,10 @@ gradlew.bat runIde
 - `rider_kill_process` matches by exact display name; ambiguous names fail — pass `pid` from the same listing.
 - `rider_debug(action='evaluate')` runs code inside the debuggee (getters can have side effects) — dev/test instances only.
 - `OFFSET` paging without `ORDER BY` is nondeterministic — always pair them.
-- Post-description-rewrite eval round (R7) is pending — see `notes/evals/runs.md`. Ship-gate per `CONTRACT.md`.
+- MCP calls longer than ~60 s are dropped by the MCP server (HTTP 404): tools that wait cap themselves at 50 s (`waitSeconds`) or 40 s (long-poll, `open_table`, `inIde`). Longer work → `async=true` + `rider_console_job`.
+- `rider_execute_console(inIde=true)` has no rolled-back transaction: on Read-only data sources it relies on the lexical guard (fail-closed on dynamic SQL) and the IDE's own Read-only handling.
+- Agents still sometimes pick the built-in `execute_sql_query`, which waits for an IDE confirmation dialog. To rule it out, hide it under **Settings → Tools → MCP Server → Exposed Tools**.
+- Eval rounds R8–R10 (DB consoles, S4/S12–S21) run automatically in an isolated sandbox Rider against a docker fixture — never against real servers. Ship-gate per `CONTRACT.md`.
 
 ## Limitations & Privacy
 
