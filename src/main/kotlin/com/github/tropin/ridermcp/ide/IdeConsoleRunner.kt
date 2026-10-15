@@ -22,11 +22,6 @@ import kotlinx.serialization.json.*
  */
 internal object IdeConsoleRunner {
 
-    fun editorText(project: Project, consoleName: String?): String {
-        val c = DbConsoleReader.findConsole(project, consoleName)
-        return editorOf(project, c).document.text
-    }
-
     suspend fun run(project: Project, consoleName: String?, sql: String, waitSeconds: Int): String {
         val started = System.currentTimeMillis()
         val (ref, console, replaced) = runOnEdt { start(project, consoleName, sql) }
@@ -63,6 +58,10 @@ internal object IdeConsoleRunner {
             DbConsoleReader.findConsole(project, consoleName)
         } catch (e: IllegalArgumentException) {
             mcpFail(e.message ?: "Console not found")
+        }
+        // Re-checked at run time: the flag may have been set after the caller's check.
+        if (runCatching { c.dataSource?.isReadOnly == true }.getOrDefault(true)) {
+            mcpFail("Console '${c.ref}' belongs to a Read-only data source: inIde=true is not available there.")
         }
         if (isRunning(c.console)) {
             mcpFail("Console '${c.ref}' is still running a script in the IDE. Poll rider_console_results(console='${c.ref}') until state=idle, or ask the user to stop it.")

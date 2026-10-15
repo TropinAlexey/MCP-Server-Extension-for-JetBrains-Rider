@@ -47,7 +47,7 @@ class DbConsolesToolset : McpToolset {
         @McpDescription("true = read-only mode (DML/DDL rejected, changes rolled back). Always on for data sources marked Read-only in Rider; false cannot lift that") readOnly: Boolean = false,
         @McpDescription("Mask secrets in cells and messages: password/pwd/secret/token/api_key columns → ***, password=… inside connection strings → password=***. Default true") maskSecrets: Boolean = true,
         @McpDescription("Write every result set to this file instead of the response: .csv or .json; later result sets go to <name>-<batch>-<result>.<ext>. Relative paths resolve against the project dir. Response keeps path, rowCount and a 5-row preview") outputFile: String? = null,
-        @McpDescription("true = run in the console itself like the user's Execute: sql replaces the console text (undoable; blank sql = run its current text), result tabs appear in the IDE, waits ≤40 s; read them with rider_console_results") inIde: Boolean = false
+        @McpDescription("true = run in the console itself like the user's Execute (not for Read-only data sources / readOnly=true): sql replaces the console text (undoable; blank sql = run its current text), result tabs appear in the IDE, waits ≤40 s; read them with rider_console_results") inIde: Boolean = false
     ): String {
         val project = coroutineContext.project
         val splitMode = SqlText.parseSplitMode(split)
@@ -66,13 +66,21 @@ class DbConsolesToolset : McpToolset {
         val targetDb = database?.takeIf { it.isNotBlank() } ?: resolved.currentDatabase
         val outputPath = outputFile?.takeIf { it.isNotBlank() }?.let { resolveOutputFile(it, project.basePath) }
 
-        // In the IDE the script is the console text: check what will actually run.
-        val script = if (inIde && sql.isBlank()) runOnEdt { IdeConsoleRunner.editorText(project, console) } else sql
         val dsReadOnly = runCatching { ds.isReadOnly }.getOrDefault(false)
         val enforceReadOnly = readOnly || dsReadOnly
+        // The IDE run has no rolled-back transaction or read-only session, so read-only cannot be enforced
+        // there: refuse instead of degrading to the lexical guard alone.
+        if (inIde && enforceReadOnly) {
+            mcpFail(
+                "inIde=true is not available in read-only mode (" +
+                    (if (dsReadOnly) "data source '${ds.name}' is marked Read-only" else "readOnly=true") +
+                    "): the IDE console cannot roll changes back. Run it with rider_execute_console without inIde, " +
+                    "or ask the user to run the script in the console and read it with rider_console_results."
+            )
+        }
         if (enforceReadOnly) {
             val tsql = runCatching { ds.dbms.isMicrosoft || ds.dbms.isSybase }.getOrDefault(true)
-            val verdict = SqlReadOnlyGuard.check(script, tsql)
+            val verdict = SqlReadOnlyGuard.check(sql, tsql)
             if (!verdict.allowed) {
                 val why = if (dsReadOnly) "data source '${ds.name}' is marked Read-only" else "readOnly=true"
                 mcpFail(
@@ -83,9 +91,8 @@ class DbConsolesToolset : McpToolset {
             }
         }
 
-        // The IDE run has no rolled-back transaction: read-only rests on the lexical guard above
-        // (fail-closed on dynamic SQL) plus the IDE's own Read-only data source handling.
-        if (inIde) return IdeConsoleRunner.run(project, console, sql, waitSeconds.coerceAtMost(40))
+        // Pin the console resolved above: a bare or omitted name could select another tab by now.
+        if (inIde) return IdeConsoleRunner.run(project, resolved.fileName, sql, waitSeconds.coerceAtMost(40))
 
         val opts = JdbcConsoleExecutor.Options(
             pageSize = pageSize.coerceIn(1, 5000),
