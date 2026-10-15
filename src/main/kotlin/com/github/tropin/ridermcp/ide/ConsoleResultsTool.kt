@@ -146,8 +146,7 @@ class ConsoleResultsToolset : McpToolset {
         if (index > grids.size) mcpFail("Result #$index not found: console '${file.name}' has ${grids.size} result tab(s): ${grids.map { it.first }}")
         val selected = grids.withIndex().filter { index <= 0 || it.index + 1 == index }.map { (i, g) -> readGrid(i + 1, g.first, g.second) }
 
-        // Via reflection: DatabaseSession drags grid-module types into the verifier's view.
-        val running = runCatching { call(call(console, "getSession")!!, "isIdle") == false }.getOrDefault(false)
+        val running = IdeConsoleRunner.isRunning(console)
         val output = outputContent?.component?.let { outputText(it) }.orEmpty()
             .let { lines -> if (outputLines == 0) emptyList() else lines.takeLast(outputLines) }
         val ds = runCatching { console.dataSource.name }.getOrNull()
@@ -192,40 +191,21 @@ class ConsoleResultsToolset : McpToolset {
     }
 
     private fun readDataGrid(index: Int, title: String, grid: Any): Grid {
-        val getModel = publicMethod(grid, "getDataModel", 1)
+        val getModel = DbConsoleReader.publicMethod(grid, "getDataModel", 1)
         @Suppress("UNCHECKED_CAST")
         val access = java.lang.Enum.valueOf(getModel.parameterTypes[0] as Class<out Enum<*>>, "DATA_WITH_MUTATIONS")
         val model = getModel.invoke(grid, access)!!
-        val columns = call(model, "getColumns") as List<*>
-        val names = columns.mapIndexed { i, c -> (runCatching { call(c!!, "getName") }.getOrNull() as? String) ?: "column${i + 1}" }
-        val numbers = columns.mapIndexed { i, c -> (runCatching { call(c!!, "getColumnNumber") }.getOrNull() as? Int) ?: i }
-        val getValue = { row: Any, n: Int -> publicMethod(row, "getValue", 1).invoke(row, n) }
-        val rows = (call(model, "getRows") as List<*>).map { row -> numbers.map { n -> cellText(getValue(row!!, n)) } }
-        val paging = runCatching { call(call(grid, "getDataHookup")!!, "getPageModel") }.getOrNull()
+        val columns = DbConsoleReader.call(model, "getColumns") as List<*>
+        val names = columns.mapIndexed { i, c -> (runCatching { DbConsoleReader.call(c!!, "getName") }.getOrNull() as? String) ?: "column${i + 1}" }
+        val numbers = columns.mapIndexed { i, c -> (runCatching { DbConsoleReader.call(c!!, "getColumnNumber") }.getOrNull() as? Int) ?: i }
+        val getValue = { row: Any, n: Int -> DbConsoleReader.publicMethod(row, "getValue", 1).invoke(row, n) }
+        val rows = (DbConsoleReader.call(model, "getRows") as List<*>).map { row -> numbers.map { n -> cellText(getValue(row!!, n)) } }
+        val paging = runCatching { DbConsoleReader.call(DbConsoleReader.call(grid, "getDataHookup")!!, "getPageModel") }.getOrNull()
         val total = paging?.let { p ->
-            runCatching { if (call(p, "isTotalRowCountPrecise") == true) call(p, "getTotalRowCount") as? Long else null }.getOrNull()
+            runCatching { if (DbConsoleReader.call(p, "isTotalRowCountPrecise") == true) DbConsoleReader.call(p, "getTotalRowCount") as? Long else null }.getOrNull()
         }
-        val hasMore = paging?.let { p -> runCatching { call(p, "isLastPage") == false }.getOrDefault(false) } ?: false
+        val hasMore = paging?.let { p -> runCatching { DbConsoleReader.call(p, "isLastPage") == false }.getOrDefault(false) } ?: false
         return Grid(index, title, names, rows, total, hasMore)
-    }
-
-    private fun call(target: Any, name: String): Any? = publicMethod(target, name, 0).invoke(target)
-
-    /** Finds [name] declared by a public class or interface of [target] so that invoke() is allowed. */
-    private fun publicMethod(target: Any, name: String, params: Int): java.lang.reflect.Method {
-        val types = ArrayDeque<Class<*>>().apply { add(target.javaClass) }
-        val visited = HashSet<Class<*>>()
-        while (types.isNotEmpty()) {
-            val type = types.removeFirst()
-            if (!visited.add(type)) continue
-            if (java.lang.reflect.Modifier.isPublic(type.modifiers)) {
-                type.declaredMethods.firstOrNull { it.name == name && it.parameterCount == params && java.lang.reflect.Modifier.isPublic(it.modifiers) }
-                    ?.let { return it }
-            }
-            type.superclass?.let(types::add)
-            types.addAll(type.interfaces)
-        }
-        throw NoSuchMethodException("${target.javaClass.name}.$name")
     }
 
     private fun cellText(value: Any?): String? = when (value) {

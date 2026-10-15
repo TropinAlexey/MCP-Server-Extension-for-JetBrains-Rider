@@ -157,4 +157,23 @@ internal object DbConsoleReader {
             }
         }
     }
+
+    fun call(target: Any, name: String): Any? = publicMethod(target, name, 0).invoke(target)
+
+    /** Finds [name] declared by a public class or interface of [target] so that invoke() is allowed. */
+    fun publicMethod(target: Any, name: String, params: Int): java.lang.reflect.Method {
+        val types = ArrayDeque<Class<*>>().apply { add(target.javaClass) }
+        val visited = HashSet<Class<*>>()
+        while (types.isNotEmpty()) {
+            val type = types.removeFirst()
+            if (!visited.add(type)) continue
+            if (java.lang.reflect.Modifier.isPublic(type.modifiers)) {
+                type.declaredMethods.firstOrNull { it.name == name && it.parameterCount == params && java.lang.reflect.Modifier.isPublic(it.modifiers) }
+                    ?.let { return it }
+            }
+            type.superclass?.let(types::add)
+            types.addAll(type.interfaces)
+        }
+        throw NoSuchMethodException("${target.javaClass.name}.$name")
+    }
 }

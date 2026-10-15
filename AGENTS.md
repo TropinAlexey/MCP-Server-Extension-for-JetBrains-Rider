@@ -76,6 +76,8 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 - The user's `#temp` tables live in their console session and are NOT reachable from `rider_execute_console` (separate connection) — read the final SELECTs via `rider_console_results`.
 - Do not use `list_recent_sql_queries` / `fetch_query_result` for console runs (no result set ids), nor `rider_tool_window(section=…)` on Services (titles repeat across runs and servers).
 
+**Run it in the user's console** (they want to see the grids in the IDE, or the script needs the console's own session — `#temp` tables, `SET` options): `rider_execute_console(console, sql, inIde=true)` puts `sql` into the console editor (undoable with ⌘Z; blank `sql` = run the console's current text) and runs the whole script like the user's Execute. It waits ≤40 s and returns `status=finished|running`; then read the grids with `rider_console_results`. The read-only guard applies (no rolled-back transaction in this mode); `async`/`outputFile`/`database`/`pageSize` are ignored. Ask before replacing a console text the user is editing.
+
 **When the agent cannot run it** (MCP client timeout too short, user prefers to run it): write the script (temp tables + final SELECTs + `raiserror … with nowait` progress, a header saying it is read-only), ask the user to run it in the console, then read it with `rider_console_results`.
 
 ## Polling Pattern
