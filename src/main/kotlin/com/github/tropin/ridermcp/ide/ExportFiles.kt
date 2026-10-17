@@ -1,9 +1,12 @@
 package com.github.tropin.ridermcp.ide
 
 import java.io.File
+import java.io.Writer
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.nio.file.StandardOpenOption
 
 /**
  * Target files for outputFile exports (rider_execute_console, rider_console_results): format by
@@ -30,7 +33,7 @@ internal object ExportFiles {
             .flatMap { it.split(File.pathSeparatorChar) }
         return (listOfNotNull(basePath, System.getProperty("java.io.tmpdir"), "/tmp") + extra)
             .mapNotNull { runCatching { Paths.get(it.trim()).takeIf { p -> it.isNotBlank() && p.isAbsolute } }.getOrNull() }
-            .map(::canonical)
+            .mapNotNull { runCatching { canonical(it) }.getOrNull() }
             .distinct()
     }
 
@@ -54,10 +57,23 @@ internal object ExportFiles {
     }
 
     fun checkWritable(path: Path, overwrite: Boolean) {
-        if (Files.isDirectory(path)) throw IllegalArgumentException("outputFile '$path' is a directory")
-        if (!overwrite && Files.exists(path)) {
+        // A link could point outside the allowed roots (a dangling one passes the containment check).
+        if (Files.isSymbolicLink(path)) throw IllegalArgumentException("outputFile '$path' is a symbolic link — choose a regular file path.")
+        if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) throw IllegalArgumentException("outputFile '$path' is a directory")
+        if (!overwrite && Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
             throw IllegalArgumentException("outputFile '$path' already exists — pass overwrite=true to replace it, or choose another name.")
         }
+    }
+
+    /**
+     * Opens [path] for writing without following a link at the last component; without [overwrite]
+     * the file must not exist (atomic CREATE_NEW).
+     */
+    fun newWriter(path: Path, overwrite: Boolean): Writer {
+        checkWritable(path, overwrite)
+        path.parent?.let { Files.createDirectories(it) }
+        val create = if (overwrite) arrayOf(StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING) else arrayOf(StandardOpenOption.CREATE_NEW)
+        return Files.newBufferedWriter(path, Charsets.UTF_8, *create, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)
     }
 
     /** `<stem><suffix>.<ext>` next to [base]. */
@@ -75,13 +91,20 @@ internal object ExportFiles {
 
     private val lineBreak = Regex("\r\n|\r|\n")
 
-    /** Real path of the nearest existing ancestor plus the not-yet-created tail (resolves /tmp → /private/tmp). */
+    /**
+     * Real path of the nearest existing ancestor plus the not-yet-created tail (resolves /tmp → /private/tmp).
+     * Links count as existing, so a dangling link is resolved (and rejected) instead of skipped.
+     */
     private fun canonical(p: Path): Path {
         val abs = p.toAbsolutePath().normalize()
         var existing: Path? = abs
-        while (existing != null && !Files.exists(existing)) existing = existing.parent
+        while (existing != null && !Files.exists(existing, LinkOption.NOFOLLOW_LINKS)) existing = existing.parent
         if (existing == null) return abs
-        val real = runCatching { existing.toRealPath() }.getOrDefault(existing)
+        val real = try {
+            existing.toRealPath()
+        } catch (e: java.io.IOException) {
+            throw IllegalArgumentException("outputFile path '$abs' goes through an unresolvable link '$existing'")
+        }
         return real.resolve(existing.relativize(abs)).normalize()
     }
 }

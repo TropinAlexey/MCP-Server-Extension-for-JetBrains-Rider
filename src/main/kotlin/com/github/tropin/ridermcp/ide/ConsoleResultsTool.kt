@@ -243,11 +243,10 @@ class ConsoleResultsToolset : McpToolset {
         val json = format == ExportFiles.Format.JSON
         val paths = grids.mapIndexed { i, g -> if (i == 0) target else ExportFiles.sibling(target, "-${g.index}") }
         paths.drop(1).forEach { ExportFiles.checkWritable(it, overwrite) }
-        target.parent?.let { Files.createDirectories(it) }
         return grids.withIndex().associate { (i, g) ->
             val path = paths[i]
             val kinds = if (mask) g.columns.map(SecretMasker::classifyColumn) else null
-            Files.newBufferedWriter(path, Charsets.UTF_8).use { w ->
+            ExportFiles.newWriter(path, overwrite).use { w ->
                 when (format) {
                     ExportFiles.Format.JSON -> w.write("[")
                     ExportFiles.Format.CSV -> w.write(g.columns.joinToString(",") { SqlText.csvField(it) } + "\n")

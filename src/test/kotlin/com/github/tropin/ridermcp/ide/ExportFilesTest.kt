@@ -5,6 +5,7 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ExportFilesTest {
@@ -40,6 +41,34 @@ class ExportFilesTest {
         val file = Files.writeString(root.resolve("r.csv"), "a\n")
         assertFailsWith<IllegalArgumentException> { ExportFiles.resolve(file.toString(), null, overwrite = false, roots = listOf(root)) }
         assertEquals(file, ExportFiles.resolve(file.toString(), null, overwrite = true, roots = listOf(root)))
+    }
+
+    @Test
+    fun `a dangling link inside the root pointing outside is rejected`() {
+        val root = tempRoot()
+        val outside = tempRoot().resolve("stolen.csv")
+        val link = Files.createSymbolicLink(root.resolve("out.csv"), outside)
+        assertFailsWith<IllegalArgumentException> { ExportFiles.resolve(link.toString(), null, overwrite = true, roots = listOf(root)) }
+        assertFailsWith<IllegalArgumentException> { ExportFiles.newWriter(link, overwrite = true) }
+        assertFalse(Files.exists(outside))
+    }
+
+    @Test
+    fun `a link to a file inside the root is rejected too`() {
+        val root = tempRoot()
+        val real = Files.writeString(root.resolve("real.csv"), "a\n")
+        val link = Files.createSymbolicLink(root.resolve("link.csv"), real)
+        assertFailsWith<IllegalArgumentException> { ExportFiles.resolve(link.toString(), null, overwrite = true, roots = listOf(root)) }
+    }
+
+    @Test
+    fun `newWriter without overwrite refuses an existing file`() {
+        val root = tempRoot()
+        val file = Files.writeString(root.resolve("r.txt"), "keep\n")
+        assertFailsWith<IllegalArgumentException> { ExportFiles.newWriter(file, overwrite = false) }
+        assertEquals("keep\n", Files.readString(file))
+        ExportFiles.newWriter(root.resolve("sub/new.txt"), overwrite = false).use { it.write("x") }
+        assertEquals("x", Files.readString(root.resolve("sub/new.txt")))
     }
 
     @Test

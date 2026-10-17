@@ -121,7 +121,7 @@ internal object JdbcConsoleExecutor {
             synchronized(messages) { if (messages.size < MAX_MESSAGES) messages.add(text) }
             listener.onMessage(text)
         }
-        val files = FileTargets(opts.outputFile, opts.overwrite)
+        val files = FileTargets(opts.outputFile)
         var skipped = 0
         var readOnlyMode: String? = null
         var sessionDb: String? = null
@@ -385,8 +385,7 @@ internal object JdbcConsoleExecutor {
         val previewCell = if (opts.maxCellLength in 1..FILE_PREVIEW_CELL) opts.maxCellLength else FILE_PREVIEW_CELL
         val masked = IntArray(1)
         var rows = 0
-        target.parent?.let { Files.createDirectories(it) }
-        Files.newBufferedWriter(target, Charsets.UTF_8).use { w ->
+        ExportFiles.newWriter(target, opts.overwrite).use { w ->
             when (format) {
                 ExportFiles.Format.JSON -> w.write("[")
                 ExportFiles.Format.CSV -> { w.write(cols.csvHeader()); w.write("\n") }
@@ -436,13 +435,13 @@ internal object JdbcConsoleExecutor {
     }
 
     /** First result set goes to the requested path, later ones to `<stem>-<batch>-<result>.<ext>`. */
-    private class FileTargets(private val base: Path?, private val overwrite: Boolean) {
+    private class FileTargets(private val base: Path?) {
         private var used = false
 
         fun next(batchIndex: Int, resultIndex: Int): Path? {
             val base = base ?: return null
             if (!used) { used = true; return base }
-            return ExportFiles.sibling(base, "-$batchIndex-$resultIndex").also { ExportFiles.checkWritable(it, overwrite) }
+            return ExportFiles.sibling(base, "-$batchIndex-$resultIndex")
         }
     }
 
