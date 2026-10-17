@@ -273,6 +273,12 @@ gradlew.bat runIde
 
 ## What's New
 
+### v1.2.6
+
+- `outputFile` accepts `.txt` (one line per row, no header — a ready list for scripts) in `rider_execute_console` and `rider_console_results`. Exports are limited to the project, temp/scratchpad dirs and `-Drider.mcp.exportDirs`; an existing file is replaced only with `overwrite=true`
+- SQL errors carry severity and line (MSSQL); failed batches of multi-batch runs get `errorCode`, `sqlState`, `severity`, `line`, `message`
+- Responses list `columns` and the session's real `database` (`DB_NAME()`); `rider_list_db_consoles` takes the login-default database from the model, `currentDatabaseSource` is `toolbar|url|login-default`
+
 ### v1.2.5
 
 - Security: `rider_execute_console(inIde=true)` is refused on Read-only data sources and with `readOnly=true` — the IDE console run cannot roll changes back, so read-only rested on the lexical guard alone. The flag is re-checked at run time
