@@ -273,6 +273,10 @@ gradlew.bat runIde
 
 ## What's New
 
+### v1.2.7
+
+- Security: `outputFile` exports no longer follow symbolic links — a dangling link inside the project could redirect the write outside the allowed directories. Links are rejected, and files are created atomically when `overwrite` is off
+
 ### v1.2.6
 
 - `outputFile` accepts `.txt` (one line per row, no header — a ready list for scripts) in `rider_execute_console` and `rider_console_results`. Exports are limited to the project, temp/scratchpad dirs and `-Drider.mcp.exportDirs`; an existing file is replaced only with `overwrite=true`
