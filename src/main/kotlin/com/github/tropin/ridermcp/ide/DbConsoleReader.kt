@@ -70,6 +70,13 @@ internal object DbConsoleReader {
         null
     }
 
+    /** The login's default database: the current root namespace of the introspected model (bold in the Database tree). */
+    private fun loginDefaultDatabase(ds: LocalDataSource): String? = try {
+        ds.model?.currentRootNamespace?.name?.takeIf { it.isNotBlank() }
+    } catch (_: Exception) {
+        null
+    }
+
     fun listOpenConsoles(project: Project): String {
         val fem = FileEditorManager.getInstance(project)
         val selected = fem.selectedFiles.toSet()
@@ -96,12 +103,13 @@ internal object DbConsoleReader {
                         put("dataSource", ds.name)
                         put("uniqueId", ds.uniqueId)
                         val url = try { ds.url } catch (_: Exception) { null }
-                        val fromConsole = currentPathName(console, ObjectKind.DATABASE)
-                        val currentDb = fromConsole ?: DbEditorPaths.databaseFromUrl(url)
+                        val fromToolbar = currentPathName(console, ObjectKind.DATABASE)
+                        val fromUrl = if (fromToolbar == null) DbEditorPaths.databaseFromUrl(url) else null
+                        val currentDb = fromToolbar ?: fromUrl ?: loginDefaultDatabase(ds)
                         currentDb?.let { put("currentDatabase", it) }
                         put("currentDatabaseSource", when {
-                            fromConsole != null -> "console"
-                            currentDb != null -> "url"
+                            fromToolbar != null -> "toolbar"
+                            fromUrl != null -> "url"
                             else -> "login-default"
                         })
                         currentPathName(console, ObjectKind.SCHEMA)?.let { put("currentSchema", it) }

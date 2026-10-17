@@ -120,32 +120,70 @@ internal object SqlText {
         return "timed out" in msg || "timeout" in msg
     }
 
-    /** Server error text with vendor code and SQLState, including chained exceptions; JDBC secrets masked. */
+    /** Structured fields of the first server error; null fields = the driver did not report them. */
+    data class ErrorInfo(
+        val message: String,
+        val errorCode: Int? = null,
+        val sqlState: String? = null,
+        val severity: Int? = null,
+        val line: Int? = null,
+        val exceptionClass: String
+    )
+
+    fun errorInfo(t: Throwable): ErrorInfo {
+        val sql = findSqlException(t)
+            ?: return ErrorInfo(message = maskJdbcSecrets(firstMessage(t) ?: "Unknown error"), exceptionClass = t.javaClass.name)
+        val (severity, line) = serverErrorDetails(sql)
+        return ErrorInfo(
+            message = maskJdbcSecrets(sql.message?.takeIf { it.isNotBlank() } ?: "Unknown error"),
+            errorCode = sql.errorCode.takeIf { it != 0 },
+            sqlState = sql.sqlState?.takeIf { it.isNotBlank() },
+            severity = severity,
+            line = line,
+            exceptionClass = sql.javaClass.name
+        )
+    }
+
+    /** Server error text with vendor code, SQLState, severity and line, including chained exceptions; JDBC secrets masked. */
     fun describe(t: Throwable): String = maskJdbcSecrets(describeRaw(t))
 
-    private fun describeRaw(t: Throwable): String {
-        val sql = findSqlException(t)
-        if (sql == null) {
-            var cur: Throwable? = t
-            while (cur != null) {
-                cur.message?.takeIf { it.isNotBlank() }?.let { return it }
-                cur = cur.cause
-            }
-            return t.javaClass.simpleName
+    private fun firstMessage(t: Throwable): String? {
+        var cur: Throwable? = t
+        while (cur != null) {
+            cur.message?.takeIf { it.isNotBlank() }?.let { return it }
+            cur = cur.cause
         }
+        return null
+    }
+
+    private fun describeRaw(t: Throwable): String {
+        val sql = findSqlException(t) ?: return firstMessage(t) ?: "Unknown error (${t.javaClass.name})"
         val parts = mutableListOf<String>()
         var e: SQLException? = sql
         while (e != null && parts.size < 5) {
+            val (severity, line) = serverErrorDetails(e)
             val code = buildList {
                 if (e!!.errorCode != 0) add("error ${e!!.errorCode}")
                 e!!.sqlState?.takeIf { it.isNotBlank() }?.let { add("SQLState $it") }
+                severity?.let { add("severity $it") }
+                line?.let { add("line $it") }
             }
-            val msg = e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName
+            val msg = e.message?.takeIf { it.isNotBlank() } ?: "Unknown error (${e.javaClass.name})"
             parts.add(if (code.isEmpty()) msg else "$msg [${code.joinToString(", ")}]")
             e = e.nextException?.takeIf { it !== e }
         }
         return parts.distinct().joinToString(" | ")
     }
+
+    /**
+     * Severity and line of an MSSQL error (SQLServerException.getSQLServerError()), read reflectively:
+     * the driver lives in another classloader and other drivers lack the method.
+     */
+    private fun serverErrorDetails(e: SQLException): Pair<Int?, Int?> = runCatching {
+        val err = e.javaClass.getMethod("getSQLServerError").invoke(e) ?: return null to null
+        fun int(name: String) = runCatching { (err.javaClass.getMethod(name).invoke(err) as? Number)?.toInt() }.getOrNull()
+        int("getErrorSeverity") to int("getLineNumber")?.takeIf { it > 0 }
+    }.getOrDefault(null to null)
 
     fun snippet(sql: String, max: Int = 200): String {
         val flat = sql.replace(Regex("\\s+"), " ").trim()

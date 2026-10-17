@@ -40,8 +40,10 @@ internal object JdbcConsoleExecutor {
         val splitMode: SqlText.SplitMode,
         val readOnly: Boolean = false,
         val maskSecrets: Boolean = true,
-        /** When set, every result set is streamed to this file (CSV, or JSON for a .json extension). */
-        val outputFile: Path? = null
+        /** When set, every result set is streamed to this file (format by extension: .csv, .json, .txt). */
+        val outputFile: Path? = null,
+        /** Replace existing export files (the first file is checked by the caller, siblings here). */
+        val overwrite: Boolean = false
     )
 
     /** Progress hooks for background jobs; all called from IO threads. */
@@ -63,7 +65,9 @@ internal object JdbcConsoleExecutor {
         val updateCount: Int? = null,
         val error: String? = null,
         val maskedCells: Int = 0,
-        val file: String? = null
+        val file: String? = null,
+        val columns: List<String>? = null,
+        val errorInfo: SqlText.ErrorInfo? = null
     )
 
     data class Outcome(
@@ -74,7 +78,9 @@ internal object JdbcConsoleExecutor {
         val splitMode: SqlText.SplitMode,
         val elapsedMs: Long,
         /** How read-only was enforced on the connection (null = not requested). */
-        val readOnlyMode: String? = null
+        val readOnlyMode: String? = null,
+        /** Database the session actually ran in (DB_NAME() / current_database()), null when unknown. */
+        val database: String? = null
     )
 
     suspend fun execute(
@@ -115,13 +121,15 @@ internal object JdbcConsoleExecutor {
             synchronized(messages) { if (messages.size < MAX_MESSAGES) messages.add(text) }
             listener.onMessage(text)
         }
-        val files = FileTargets(opts.outputFile)
+        val files = FileTargets(opts.outputFile, opts.overwrite)
         var skipped = 0
         var readOnlyMode: String? = null
+        var sessionDb: String? = null
         try {
             val conn = ref.get()
             listener.onConnected { runCatching { conn.remoteConnection.close() } }
             if (database != null) switchDatabase(conn, database, tsql, dbms.isMysql)
+            sessionDb = currentDatabase(conn, tsql, dbms.isPostgres || dbms.isRedshift || dbms.isGreenplum, dbms.isMysql)
             if (opts.readOnly) readOnlyMode = enforceReadOnly(conn, tsql, dbms.isPostgres || dbms.isRedshift || dbms.isGreenplum)
             for ((idx, batch) in batches.withIndex()) {
                 val batchIndex = idx + 1
@@ -155,7 +163,7 @@ internal object JdbcConsoleExecutor {
                             "(raise timeoutSeconds, or narrow with TOP / id ranges): ${SqlText.snippet(batch)}"
                     } else "Batch $batchIndex failed: ${SqlText.describe(e)} — ${SqlText.snippet(batch)}"
                     val resultIndex = entries.count { it.batchIndex == batchIndex } + 1
-                    entries.add(Entry(batchIndex, resultIndex, if (timedOut) "timeout" else "error", error = error))
+                    entries.add(Entry(batchIndex, resultIndex, if (timedOut) "timeout" else "error", error = error, errorInfo = SqlText.errorInfo(e)))
                     skipped = batches.size - batchIndex
                     break
                 } finally {
@@ -168,7 +176,7 @@ internal object JdbcConsoleExecutor {
                 runCatching { ref.close() }
             }
         }
-        return Outcome(entries, messages.toList(), batches.size, skipped, mode, System.currentTimeMillis() - started, readOnlyMode)
+        return Outcome(entries, messages.toList(), batches.size, skipped, mode, System.currentTimeMillis() - started, readOnlyMode, sessionDb)
     }
 
     /**
@@ -220,6 +228,29 @@ internal object JdbcConsoleExecutor {
             throw e
         } catch (e: Exception) {
             throw IllegalStateException("Cannot switch to database '$database': ${SqlText.describe(e)}", e)
+        }
+    }
+
+    /** Name of the session's current database; null for other dialects or when the query fails. */
+    private suspend fun currentDatabase(conn: DatabaseConnection, tsql: Boolean, postgres: Boolean, mysql: Boolean): String? {
+        val query = when {
+            tsql -> "SELECT DB_NAME()"
+            postgres -> "SELECT current_database()"
+            mysql -> "SELECT DATABASE()"
+            else -> return null
+        }
+        return try {
+            withContext(Dispatchers.IO) {
+                val stmt = conn.remoteConnection.createStatement()
+                try {
+                    val rs = stmt.executeQuery(query)
+                    try { if (rs.next()) rs.getString(1)?.takeIf { it.isNotBlank() } else null } finally { runCatching { rs.close() } }
+                } finally { runCatching { stmt.close() } }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -342,26 +373,35 @@ internal object JdbcConsoleExecutor {
             out.append('\n')
             rows++
         }
-        return Entry(batchIndex, resultIndex, "success", out.toString().trimEnd('\n'), rows, hasMore, truncated, maskedCells = masked[0])
+        return Entry(batchIndex, resultIndex, "success", out.toString().trimEnd('\n'), rows, hasMore, truncated, maskedCells = masked[0], columns = cols.labels)
     }
 
     /** Streams the whole result set (after offset) to [target]; the entry carries a short CSV preview. */
     private fun writeResultSet(rs: RemoteResultSet, batchIndex: Int, resultIndex: Int, opts: Options, target: Path): Entry {
         val cols = Columns(rs, opts.maskSecrets)
-        val json = target.fileName.toString().endsWith(".json", ignoreCase = true)
+        val format = ExportFiles.formatOf(target) ?: ExportFiles.Format.CSV
+        val json = format == ExportFiles.Format.JSON
         val preview = StringBuilder(cols.csvHeader()).append('\n')
         val previewCell = if (opts.maxCellLength in 1..FILE_PREVIEW_CELL) opts.maxCellLength else FILE_PREVIEW_CELL
         val masked = IntArray(1)
         var rows = 0
         target.parent?.let { Files.createDirectories(it) }
         Files.newBufferedWriter(target, Charsets.UTF_8).use { w ->
-            if (json) w.write("[") else { w.write(cols.csvHeader()); w.write("\n") }
+            when (format) {
+                ExportFiles.Format.JSON -> w.write("[")
+                ExportFiles.Format.CSV -> { w.write(cols.csvHeader()); w.write("\n") }
+                ExportFiles.Format.TXT -> {}
+            }
             var skippedRows = 0
             while (skippedRows < opts.offset && rs.next()) skippedRows++
             val row = arrayOfNulls<String>(cols.count)
             while (rs.next()) {
                 for (c in 1..cols.count) row[c - 1] = cols.cell(rs, c, masked)
-                if (json) writeJsonRow(w, cols.labels, row, rows == 0) else writeCsvRow(w, row)
+                when (format) {
+                    ExportFiles.Format.JSON -> writeJsonRow(w, cols.labels, row, rows == 0)
+                    ExportFiles.Format.CSV -> writeCsvRow(w, row)
+                    ExportFiles.Format.TXT -> { w.write(ExportFiles.txtLine(row.asList())); w.write("\n") }
+                }
                 if (rows < FILE_PREVIEW_ROWS) {
                     row.joinTo(preview, ",") { v -> v?.let { SqlText.csvField(SqlText.truncateCell(it, previewCell).first) }.orEmpty() }
                     preview.append('\n')
@@ -372,7 +412,7 @@ internal object JdbcConsoleExecutor {
         }
         return Entry(
             batchIndex, resultIndex, "success", preview.toString().trimEnd('\n'), rows,
-            hasMore = false, maskedCells = masked[0], file = target.toString()
+            hasMore = false, maskedCells = masked[0], file = target.toString(), columns = cols.labels
         )
     }
 
@@ -396,17 +436,13 @@ internal object JdbcConsoleExecutor {
     }
 
     /** First result set goes to the requested path, later ones to `<stem>-<batch>-<result>.<ext>`. */
-    private class FileTargets(private val base: Path?) {
+    private class FileTargets(private val base: Path?, private val overwrite: Boolean) {
         private var used = false
 
         fun next(batchIndex: Int, resultIndex: Int): Path? {
             val base = base ?: return null
             if (!used) { used = true; return base }
-            val name = base.fileName.toString()
-            val dot = name.lastIndexOf('.')
-            val stem = if (dot > 0) name.substring(0, dot) else name
-            val ext = if (dot > 0) name.substring(dot) else ".csv"
-            return base.resolveSibling("$stem-$batchIndex-$resultIndex$ext")
+            return ExportFiles.sibling(base, "-$batchIndex-$resultIndex").also { ExportFiles.checkWritable(it, overwrite) }
         }
     }
 

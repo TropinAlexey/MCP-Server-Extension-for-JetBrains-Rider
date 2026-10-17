@@ -22,14 +22,13 @@ import java.awt.Component
 import java.awt.Container
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.Paths
 import javax.swing.JTable
 import kotlin.coroutines.coroutineContext
 
 class ConsoleResultsToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Reads what the USER ran in an open SQL console (Services → Database result tabs): every result grid of the console's last run as CSV with columns, rows loaded by the IDE and paging info, plus the Output log tail (PRINT/RAISERROR … WITH NOWAIT lines, 'N rows retrieved in …'). state=running while the console still executes — poll it, the console is never blocked. Use it when the user ran a long script themselves and asks about its results; #temp tables of the user's session are not reachable from rider_execute_console, but their final SELECTs are here. index picks one result tab (1-based, default all). hasMoreInIde=true means the IDE grid fetched only its first page — the remaining rows were never loaded; ask the user to raise the grid page size or re-run via rider_execute_console(outputFile=…). outputFile writes every grid to CSV/JSON and keeps the response small.")
+    @McpDescription("Reads what the USER ran in an open SQL console (Services → Database result tabs): every result grid of the console's last run as CSV with columns, rows loaded by the IDE and paging info, plus the Output log tail (PRINT/RAISERROR … WITH NOWAIT lines, 'N rows retrieved in …'). state=running while the console still executes — poll it, the console is never blocked. Use it when the user ran a long script themselves and asks about its results; #temp tables of the user's session are not reachable from rider_execute_console, but their final SELECTs are here. index picks one result tab (1-based, default all). hasMoreInIde=true means the IDE grid fetched only its first page — the remaining rows were never loaded; ask the user to raise the grid page size or re-run via rider_execute_console(outputFile=…). outputFile writes every grid to .csv/.json/.txt and keeps the response small.")
     suspend fun rider_console_results(
         @McpDescription("consoleRef '<data source>/<file>' from rider_list_db_consoles (bare file name when unique; omit = selected console tab)") console: String? = null,
         @McpDescription("Result tab, 1-based (0 = all, default)") index: Int = 0,
@@ -38,21 +37,29 @@ class ConsoleResultsToolset : McpToolset {
         @McpDescription("Max chars per cell, '…[+N chars]' marks a cut; 0 = unlimited, default 4000") maxCellLength: Int = 4000,
         @McpDescription("Output log lines to return from the end, 0-2000, default 40") outputLines: Int = 40,
         @McpDescription("Mask password/secret/token columns and password= values, default true") maskSecrets: Boolean = true,
-        @McpDescription("Write each grid to this .csv/.json file (later grids → <name>-<index>.<ext>); relative = project dir. Response keeps path, rowCount and 5 preview rows") outputFile: String? = null
+        @McpDescription("Write each grid to this .csv/.json/.txt file (txt = one line per row, cells tab-separated, no header; later grids → <name>-<index>.<ext>); relative = project dir; allowed: project, temp/scratchpad dirs, -Drider.mcp.exportDirs. Response keeps path, rowCount and 5 preview rows") outputFile: String? = null,
+        @McpDescription("Replace outputFile (and its <name>-<index> siblings) when it already exists; default false = fail instead") overwrite: Boolean = false
     ): String {
         val project = coroutineContext.project
         val target = outputFile?.takeIf { it.isNotBlank() }?.let { value ->
-            val ext = value.substringAfterLast('.', "").lowercase()
-            if (ext != "csv" && ext != "json") mcpFail("outputFile must end with .csv or .json, got '$value'")
-            val p = Paths.get(value)
-            (if (p.isAbsolute || project.basePath == null) p else Paths.get(project.basePath!!).resolve(p)).normalize()
+            try {
+                ExportFiles.resolve(value, project.basePath, overwrite)
+            } catch (e: IllegalArgumentException) {
+                mcpFail(e.message ?: "Invalid outputFile '$value'")
+            }
         }
         val snapshot = runOnEdt { snapshot(project, console, index, outputLines.coerceIn(0, 2000)) }
 
         val cellLimit = maxCellLength.coerceAtLeast(0)
         val rowsPerGrid = pageSize.coerceIn(1, 5000)
         val skip = offset.coerceAtLeast(0)
-        val written = if (target != null) withContext(Dispatchers.IO) { writeFiles(snapshot.grids, target, maskSecrets) } else emptyMap()
+        val written = if (target != null) withContext(Dispatchers.IO) {
+            try {
+                writeFiles(snapshot.grids, target, maskSecrets, overwrite)
+            } catch (e: IllegalArgumentException) {
+                mcpFail(e.message ?: "Cannot write outputFile")
+            }
+        } else emptyMap()
 
         return buildJsonObject {
             put("console", snapshot.console)
@@ -231,21 +238,26 @@ class ConsoleResultsToolset : McpToolset {
     }
 
     /** Writes every grid; the first goes to [target], later ones to `<stem>-<index>.<ext>`. Returns index → (path, rows). */
-    private fun writeFiles(grids: List<Grid>, target: Path, mask: Boolean): Map<Int, Pair<String, Int>> {
-        val name = target.fileName.toString()
-        val dot = name.lastIndexOf('.')
-        val stem = name.substring(0, dot)
-        val ext = name.substring(dot)
-        val json = ext.equals(".json", ignoreCase = true)
+    private fun writeFiles(grids: List<Grid>, target: Path, mask: Boolean, overwrite: Boolean): Map<Int, Pair<String, Int>> {
+        val format = ExportFiles.formatOf(target) ?: ExportFiles.Format.CSV
+        val json = format == ExportFiles.Format.JSON
+        val paths = grids.mapIndexed { i, g -> if (i == 0) target else ExportFiles.sibling(target, "-${g.index}") }
+        paths.drop(1).forEach { ExportFiles.checkWritable(it, overwrite) }
         target.parent?.let { Files.createDirectories(it) }
         return grids.withIndex().associate { (i, g) ->
-            val path = if (i == 0) target else target.resolveSibling("$stem-${g.index}$ext")
+            val path = paths[i]
             val kinds = if (mask) g.columns.map(SecretMasker::classifyColumn) else null
             Files.newBufferedWriter(path, Charsets.UTF_8).use { w ->
-                if (json) w.write("[") else w.write(g.columns.joinToString(",") { SqlText.csvField(it) } + "\n")
+                when (format) {
+                    ExportFiles.Format.JSON -> w.write("[")
+                    ExportFiles.Format.CSV -> w.write(g.columns.joinToString(",") { SqlText.csvField(it) } + "\n")
+                    ExportFiles.Format.TXT -> {}
+                }
                 g.rows.forEachIndexed { r, row ->
                     val cells = row.mapIndexed { c, v -> if (v != null && kinds != null) SecretMasker.maskCell(v, kinds[c]).first else v }
-                    if (json) {
+                    if (format == ExportFiles.Format.TXT) {
+                        w.write(ExportFiles.txtLine(cells) + "\n")
+                    } else if (json) {
                         w.write(if (r == 0) "\n{" else ",\n{")
                         cells.forEachIndexed { c, v ->
                             if (c > 0) w.write(",")

@@ -104,6 +104,45 @@ class SqlTextTest {
         assertEquals("first [error 1, SQLState 42000] | second", SqlText.describe(first))
     }
 
+    /** Mimics com.microsoft.sqlserver.jdbc.SQLServerException, which is read reflectively. */
+    class FakeServerError(private val severity: Int, private val line: Int) {
+        fun getErrorSeverity(): Int = severity
+        fun getLineNumber(): Int = line
+    }
+
+    class FakeSqlServerException(msg: String, private val err: FakeServerError) : SQLException(msg, "S0001", 207) {
+        fun getSQLServerError(): FakeServerError = err
+    }
+
+    @Test
+    fun `describe adds MSSQL severity and line when the driver exposes them`() {
+        val e = FakeSqlServerException("Invalid column name 'identifier'.", FakeServerError(16, 3))
+        assertEquals("Invalid column name 'identifier'. [error 207, SQLState S0001, severity 16, line 3]", SqlText.describe(RuntimeException(e)))
+    }
+
+    @Test
+    fun `errorInfo returns structured fields of the server error`() {
+        val info = SqlText.errorInfo(RemoteException("x", FakeSqlServerException("Invalid column name 'identifier'.", FakeServerError(16, 1))))
+        assertEquals("Invalid column name 'identifier'.", info.message)
+        assertEquals(207, info.errorCode)
+        assertEquals("S0001", info.sqlState)
+        assertEquals(16, info.severity)
+        assertEquals(1, info.line)
+    }
+
+    @Test
+    fun `errorInfo without a SQLException keeps the message and exception class`() {
+        val info = SqlText.errorInfo(IllegalStateException())
+        assertEquals("Unknown error", info.message)
+        assertNull(info.errorCode)
+        assertEquals("java.lang.IllegalStateException", info.exceptionClass)
+    }
+
+    @Test
+    fun `describe names the exception class when no message exists`() {
+        assertEquals("Unknown error (java.lang.IllegalStateException)", SqlText.describe(IllegalStateException()))
+    }
+
     @Test
     fun `describe falls back to the first non-blank message in the cause chain`() {
         assertEquals("boom", SqlText.describe(RuntimeException("", IllegalStateException("boom"))))

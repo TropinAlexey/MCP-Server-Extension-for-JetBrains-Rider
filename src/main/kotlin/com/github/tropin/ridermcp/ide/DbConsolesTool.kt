@@ -9,14 +9,12 @@ import com.intellij.mcpserver.project
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.*
-import java.nio.file.Path
-import java.nio.file.Paths
 import kotlin.coroutines.coroutineContext
 
 class DbConsolesToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Lists open SQL consoles (editor tabs bound to a data source) with console file name, data source name + uniqueId (use as connectionId), DBMS, URL, currentDatabase (console toolbar, else the URL's database), readOnly (data source Read-only flag) and busyJobId when a rider_execute_console job runs there. tableEditors lists open table/view tabs with dataSource, database, schema, object and kind — use them when the user says 'the open table'; selected=true marks the active tab. Call FIRST when the user mentions an open console or table. Run SQL against any of them with rider_execute_console(console=consoleRef) — not the built-in execute_sql_query, which blocks on an IDE confirmation dialog. Returns [] when nothing is open (rider_database_connection(action='open_console')).")
+    @McpDescription("Lists open SQL consoles (editor tabs bound to a data source) with console file name, data source name + uniqueId (use as connectionId), DBMS, URL, currentDatabase + currentDatabaseSource (toolbar = picked in the console toolbar | url = the URL's database | login-default = the login's default database from the introspected model; no currentDatabase = unknown until the first rider_execute_console, whose response names the real database), readOnly (data source Read-only flag) and busyJobId when a rider_execute_console job runs there. tableEditors lists open table/view tabs with dataSource, database, schema, object and kind — use them when the user says 'the open table'; selected=true marks the active tab. Call FIRST when the user mentions an open console or table. Run SQL against any of them with rider_execute_console(console=consoleRef) — not the built-in execute_sql_query, which blocks on an IDE confirmation dialog. Returns [] when nothing is open (rider_database_connection(action='open_console')).")
     suspend fun rider_list_db_consoles(): String {
         val project = coroutineContext.project
         return runOnEdt {
@@ -31,7 +29,7 @@ class DbConsolesToolset : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Executes SQL over the data source of an open console (names via rider_list_db_consoles) on its own JDBC connection; returns CSV per result set, server errors with vendor code, PRINT/RAISERROR in messages. T-SQL (MSSQL/Sybase) is split by GO lines, others by ';'. DB = console's currentDatabase unless database=. Long queries: async=true returns a jobId at once — poll rider_console_job; a sync call waits waitSeconds (default 50), then cancels the server query (onClientTimeout=cancel) or keeps it as a job (detach). A busy console answers with its jobId instead of queueing. readOnly (forced for Read-only data sources) rejects DML/DDL before sending and runs in a rolled-back transaction (MSSQL) or read-only session (PostgreSQL); #temp tables and @table vars stay allowed. maskSecrets (default on) hides password/secret/token values. outputFile streams every result set to CSV/JSON and returns path + preview. hasMore=true: raise pageSize or page with offset + ORDER BY. inIde=true runs it in the console itself (user sees the result tabs). Default to SELECT; confirm DML/DDL with the user first.")
+    @McpDescription("Executes SQL over the data source of an open console (rider_list_db_consoles) on its own JDBC connection; returns CSV + columns per result set, database = the session's real DB, server errors with code/SQLState/severity/line, PRINT/RAISERROR in messages. T-SQL (MSSQL/Sybase) is split by GO lines, others by ';'. DB = console's currentDatabase unless database=. Long queries: async=true returns a jobId at once — poll rider_console_job; a sync call waits waitSeconds (default 50), then cancels the server query (onClientTimeout=cancel) or keeps it as a job (detach). A busy console answers with its jobId. readOnly (forced for Read-only data sources) rejects DML/DDL before sending, runs in a rolled-back transaction (MSSQL) / read-only session (PG); #temp and @table allowed. maskSecrets (on) hides password/secret/token values. outputFile streams all rows to .csv/.json/.txt (txt: row per line, no header) + preview. hasMore=true: raise pageSize (≤5000) or page with offset. inIde=true runs it in the console itself (result tabs in the IDE). Default to SELECT; confirm DML/DDL with the user.")
     suspend fun rider_execute_console(
         @McpDescription("SQL script; see split for how it is cut into batches") sql: String,
         @McpDescription("consoleRef '<data source>/<file>' from rider_list_db_consoles (a bare file name works when unique; omit = selected console tab)") console: String? = null,
@@ -46,7 +44,8 @@ class DbConsolesToolset : McpToolset {
         @McpDescription("Sync calls still running after waitSeconds: cancel (default, the server query is cancelled) | detach (keeps running as a job, returns jobId)") onClientTimeout: String = "cancel",
         @McpDescription("true = read-only mode (DML/DDL rejected, changes rolled back). Always on for data sources marked Read-only in Rider; false cannot lift that") readOnly: Boolean = false,
         @McpDescription("Mask secrets in cells and messages: password/pwd/secret/token/api_key columns → ***, password=… inside connection strings → password=***. Default true") maskSecrets: Boolean = true,
-        @McpDescription("Write every result set to this file instead of the response: .csv or .json; later result sets go to <name>-<batch>-<result>.<ext>. Relative paths resolve against the project dir. Response keeps path, rowCount and a 5-row preview") outputFile: String? = null,
+        @McpDescription("Write every result set (all rows, no page limit) to this file instead of the response: .csv, .json, or .txt (one line per row, cells tab-separated, no header — a ready list for scripts); later result sets go to <name>-<batch>-<result>.<ext>. Relative = project dir; allowed: project, temp/scratchpad dirs, -Drider.mcp.exportDirs. Response keeps path, rowCount, columns and a 5-row preview") outputFile: String? = null,
+        @McpDescription("Replace outputFile (and its <name>-<batch>-<result> siblings) when it already exists; default false = fail instead") overwrite: Boolean = false,
         @McpDescription("true = run in the console itself like the user's Execute (not for Read-only data sources / readOnly=true): sql replaces the console text (undoable; blank sql = run its current text), result tabs appear in the IDE, waits ≤40 s; read them with rider_console_results") inIde: Boolean = false
     ): String {
         val project = coroutineContext.project
@@ -64,7 +63,13 @@ class DbConsolesToolset : McpToolset {
         }
         val ds = resolved.dataSource
         val targetDb = database?.takeIf { it.isNotBlank() } ?: resolved.currentDatabase
-        val outputPath = outputFile?.takeIf { it.isNotBlank() }?.let { resolveOutputFile(it, project.basePath) }
+        val outputPath = outputFile?.takeIf { it.isNotBlank() }?.let {
+            try {
+                ExportFiles.resolve(it, project.basePath, overwrite)
+            } catch (e: IllegalArgumentException) {
+                mcpFail(e.message ?: "Invalid outputFile '$it'")
+            }
+        }
 
         val dsReadOnly = runCatching { ds.isReadOnly }.getOrDefault(false)
         val enforceReadOnly = readOnly || dsReadOnly
@@ -102,7 +107,8 @@ class DbConsolesToolset : McpToolset {
             splitMode = splitMode,
             readOnly = enforceReadOnly,
             maskSecrets = maskSecrets,
-            outputFile = outputPath
+            outputFile = outputPath,
+            overwrite = overwrite
         )
 
         val consoleKey = "${ds.uniqueId}|${resolved.fileName}"
@@ -163,11 +169,13 @@ class DbConsolesToolset : McpToolset {
         put("hint", hint)
     }.toString()
 
-    private fun resolveOutputFile(value: String, basePath: String?): Path {
-        val ext = value.substringAfterLast('.', "").lowercase()
-        if (ext != "csv" && ext != "json") mcpFail("outputFile must end with .csv or .json, got '$value'")
-        val p = Paths.get(value)
-        return (if (p.isAbsolute || basePath == null) p else Paths.get(basePath).resolve(p)).normalize()
+    private fun JsonObjectBuilder.putErrorInfo(info: SqlText.ErrorInfo) {
+        info.errorCode?.let { put("errorCode", it) }
+        info.sqlState?.let { put("sqlState", it) }
+        info.severity?.let { put("severity", it) }
+        info.line?.let { put("line", it) }
+        put("message", info.message)
+        if (info.errorCode == null && info.sqlState == null) put("exceptionClass", info.exceptionClass)
     }
 
     /** Builds the response object, or throws [ConsoleJobFailure] for a single failed batch. */
@@ -182,6 +190,7 @@ class DbConsolesToolset : McpToolset {
             put("status", r.status)
             if (r.error != null) {
                 put("error", r.error)
+                r.errorInfo?.let { putErrorInfo(it) }
                 return
             }
             if (r.updateCount != null) {
@@ -189,6 +198,7 @@ class DbConsolesToolset : McpToolset {
                 return
             }
             r.file?.let { put("file", it) }
+            r.columns?.let { cols -> putJsonArray("columns") { cols.forEach { add(it) } } }
             put("text", r.text)
             put("rowCount", r.rowCount)
             put("hasMore", r.hasMore)
@@ -199,7 +209,7 @@ class DbConsolesToolset : McpToolset {
         fun JsonObjectBuilder.putHeader() {
             put("console", consoleName)
             put("dataSource", dataSourceName)
-            targetDb?.let { put("database", it) }
+            (outcome.database ?: targetDb)?.let { put("database", it) }
             put("pageSize", opts.pageSize)
             if (opts.offset > 0) put("offset", opts.offset)
             put("readOnlyEnforced", outcome.readOnlyMode != null)
