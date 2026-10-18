@@ -9,12 +9,11 @@ import com.intellij.database.dataSource.LocalDataSource
 import com.intellij.database.dataSource.LocalDataSourceManager
 import com.intellij.database.model.ObjectKind
 import com.intellij.database.psi.DbPsiFacade
-import com.intellij.database.dataSource.DataSourceSyncManager
-import com.intellij.database.util.LoaderContext
 import com.intellij.database.util.ObjectPath
 import com.intellij.database.view.DbNavigationUtils
 import com.intellij.database.vfs.DbVFSUtils
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
@@ -79,7 +78,7 @@ class DatabaseConnectionToolset : McpToolset {
         var element = runOnEdt(find)
         var refreshed = false
         if (element == null) {
-            runOnEdt { DataSourceSyncManager.getInstance().tryPerformAsync(LoaderContext.selectGeneralTask(project, ds), stopRunning = false, merge = true) }
+            DataSourceRefresher.getInstance().start(project, ds)
             refreshed = true
             val deadline = System.currentTimeMillis() + REFRESH_WAIT_MS
             while (element == null && System.currentTimeMillis() < deadline) {
@@ -110,7 +109,7 @@ class DatabaseConnectionToolset : McpToolset {
         if (connectionId.isNullOrBlank()) mcpFail("connectionId is required for action='refresh'")
         val project = coroutineContext.project
         val ds = runOnEdt { loadedDataSource(project, connectionId).first }
-        runOnEdt { DataSourceSyncManager.getInstance().tryPerformAsync(LoaderContext.selectGeneralTask(project, ds), stopRunning = false, merge = true) }
+        DataSourceRefresher.getInstance().start(project, ds)
         return buildJsonObject {
             put("status", "refresh started")
             put("dataSource", ds.name)
@@ -141,7 +140,7 @@ class DatabaseConnectionToolset : McpToolset {
                 ?: mcpFail("Data source '${ds.name}' is not loaded in this project yet; retry in a moment.")
             val file = DbVFSUtils.getInstance().getConsoleVirtualFile(dbDs)
                 ?: mcpFail("Rider did not create a console for '${ds.name}'. Open one via the Database tool window.")
-            FileEditorManager.getInstance(project).openFile(file, true)
+            FileEditorManager.getInstance(project).openFileEditor(OpenFileDescriptor(project, file), true)
             buildJsonObject {
                 put("status", "opened")
                 put("console", file.name)
