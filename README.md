@@ -273,6 +273,10 @@ gradlew.bat runIde
 
 ## What's New
 
+### v1.2.9
+
+- `rider_database_connection` `open_console` no longer uses the `FileEditorManager` API deprecated in Rider 2026.3 (263)
+
 ### v1.2.8
 
 - Compatibility with Rider 2026.3 (263): data source refresh in `rider_database_connection` (`refresh`, `open_table`) no longer uses the `DataSourceSyncManager` API removed in 263; `open_console` drops the deprecated `FileEditorManager.openFile`
