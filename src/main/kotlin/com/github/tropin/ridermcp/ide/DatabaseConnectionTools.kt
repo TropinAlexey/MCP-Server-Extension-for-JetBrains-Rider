@@ -12,7 +12,6 @@ import com.intellij.database.psi.DbPsiFacade
 import com.intellij.database.util.ObjectPath
 import com.intellij.database.view.DbNavigationUtils
 import com.intellij.database.vfs.DbVFSUtils
-import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
@@ -140,7 +139,7 @@ class DatabaseConnectionToolset : McpToolset {
                 ?: mcpFail("Data source '${ds.name}' is not loaded in this project yet; retry in a moment.")
             val file = DbVFSUtils.getInstance().getConsoleVirtualFile(dbDs)
                 ?: mcpFail("Rider did not create a console for '${ds.name}'. Open one via the Database tool window.")
-            FileEditorManager.getInstance(project).openFileEditor(OpenFileDescriptor(project, file), true)
+            OpenFileDescriptor(project, file).navigate(true)
             buildJsonObject {
                 put("status", "opened")
                 put("console", file.name)
