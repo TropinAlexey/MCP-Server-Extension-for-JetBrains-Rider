@@ -19,6 +19,7 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 
 - Cursor, selection, open files, bookmarks → `rider_get_context`
 - Recently opened files → built-in `get_all_open_file_paths` (open editors) or VCS log for broader history
+- Paths for built-in file tools (`read_file`, `list_directory_tree`, …) are relative to `projectDir` from `rider_get_ide_state` (the solution root), not to the shell cwd; `/` is rejected — use `.` for the root
 - IDE readiness (indexing, busy) → `rider_get_ide_state` (call before heavy work)
 - IDE errors and warnings → `rider_get_output` (session output) or `rider_tool_window(action='content', windowId='Problems')`
 - Solution-wide error count that does not match the Problems panel → `rider_swea_errors`
@@ -28,7 +29,7 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 - TODO/FIXME/HACK in code → `rider_tool_window(action='content', windowId='TODO')`
 - API endpoints → built-in `search_symbol` or `get_service_map`; fallback: `rider_tool_window(action='content', windowId='Endpoints')`
 - IDE terminal commands → `rider_list_terminals` + `rider_send_terminal_input`
-- Build → `rider_build` (actions: `start`, `cancel`) + `rider_get_output`
+- Build → `rider_build` (actions: `start`, `cancel`) + `rider_get_output` — compile errors/warnings come as `error CODE: file(line,col): message` lines before the final `Build failed`/`succeeded`
 - Publish → `rider_publish` (`configName?`) + `rider_get_output`
 - Run tests → `rider_tests` (actions: `run`, `run_and_wait`, `results`, `rerun_failed`) + `rider_get_output` (`configName` alone runs the whole config — scope with filters)
 - Create/edit DB connections → `rider_database_connection` (actions: `create`, `edit`, `open_console`). Production source on the user's request → `readOnly=true`. The flag cannot be lifted through MCP (`readOnly=false` is rejected) — if a write is really intended, the user unticks Read-only in Rider. No console open for a connection → `action='open_console'` instead of asking the user to double-click. Show a table to the user → `action='open_table', table='db.schema.table'`. Built-in model tools answer "Schema … is not found" → `action='refresh'` (re-introspection; databases outside the source's Schemas scope stay invisible — the user ticks them)

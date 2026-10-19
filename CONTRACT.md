@@ -12,6 +12,58 @@ between releases.
 5. Exceptions (breaking changes) require a major version bump and a migration
    note in README What's New.
 
+## Tool names and actions
+
+Tool and action names are part of the contract: clients pin them in Exposed
+Tools allowlists, agent prompts and scripts.
+
+1. Renaming or removing a `rider_*` tool, or an `action=` value, is a breaking
+   change: major version bump + migration note (old → new name) in README What's New.
+2. A merge (two tools → one tool with actions) counts as removal of the old names.
+   Without a major bump the old tool stays registered for one minor release as a
+   thin alias that forwards to the new action and says in its description which
+   name replaces it.
+3. Adding a tool, an action or an optional parameter is additive and needs no major bump.
+4. History: the 09.2026 merges (`rider_run_tests` → `rider_tests(action=…)` etc.)
+   shipped in minor 1.1.x without aliases; this rule exists because of them.
+
+## IDE version lines
+
+The Marketplace serves each Rider build the newest plugin update whose
+`since-build`/`until-build` range contains it; older updates stay published.
+A Rider that a new line drops keeps getting the last update of the old line.
+
+1. A plugin line targets one Rider range: it compiles against the oldest Rider
+   of that range (`rider("…")` in `build.gradle.kts`), and `sinceBuild` matches it.
+2. While one build works on every supported Rider, keep a single line. Bridging an
+   API difference (e.g. the IDE action instead of `BuildParameters`, whose
+   constructor differs between 261 and 262) is preferred over splitting.
+3. A new line starts only with a major version. Planned: 2.0 = `sinceBuild = "262"`,
+   compiled against Rider 2026.2, together with the breaking tool renames/removals
+   of that release. 1.2.x stays for Rider 2026.1.
+4. When a line is split, the old one is frozen on `release/<major>.<minor>.x` with
+   `untilBuild` set (e.g. `"261.*"`); only critical fixes go there, released by a
+   `v*` tag from that branch. New features go to the current line only.
+5. Evals measure the line of the installed Rider (`runIdeEvals` uses it). A release
+   of the old line needs its own check on a Rider of that range.
+
+## DB layer boundary
+
+Our DB tools cover what the built-in database tools cannot do safely or at all;
+schema browsing stays with the built-in server.
+
+| Ours (`rider_*`) | Built-in (do not duplicate) |
+|---|---|
+| Executing SQL via an open console: `rider_execute_console` (own JDBC connection, T-SQL batches, server errors with code/SQLState, PRINT/RAISERROR, timeouts, file export) | Schema introspection: `list_database_schemas`, `list_schema_objects`, `get_database_object_description`, `introspect_schema` |
+| Safety: Read-only guard, rolled-back/read-only sessions, secret masking | Table preview: `preview_table_data` |
+| Long queries: `rider_console_job` (async, detach, cancel, progress messages) | Connection listing/testing: `list_database_connections`, `test_database_connection` |
+| What the user ran in the IDE: `rider_console_results`, `rider_list_db_consoles` | |
+| Data source management with working MSSQL matching, Read-only flag, open console/table: `rider_database_connection` | |
+
+Moratorium: no new DB tool until this table changes in a reviewed commit. A new DB
+need first goes into an action or recipe of the five tools above; if a built-in
+tool covers it, AGENTS.md routes to the built-in tool instead.
+
 ## Recipes over tools
 
 A scenario covered by a cookbook description in an existing tool does not get
