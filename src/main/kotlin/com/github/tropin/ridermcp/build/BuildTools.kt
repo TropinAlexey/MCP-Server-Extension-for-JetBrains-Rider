@@ -7,13 +7,28 @@ import com.intellij.mcpserver.mcpFail
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.wm.WindowManager
-import com.intellij.task.ProjectTaskManager
+import com.jetbrains.rd.util.lifetime.LifetimeDefinition
+import com.jetbrains.rider.build.BuildHost
+import com.jetbrains.rider.build.BuildEventsService
+import com.jetbrains.rider.model.BuildEventRef
+import com.jetbrains.rider.model.BuildEventKind
+import com.jetbrains.rider.model.BuildResultKind
 import com.jetbrains.rider.projectView.SolutionConfigurationManager
 import kotlinx.serialization.json.*
 import com.github.tropin.ridermcp.SessionManager
 import com.github.tropin.ridermcp.paginateLines
+import com.github.tropin.ridermcp.projectDir
+import com.github.tropin.ridermcp.relTo
+import com.github.tropin.ridermcp.runOnEdt
+import com.intellij.util.concurrency.AppExecutorUtil
+import java.nio.file.Path
+import java.util.concurrent.TimeUnit
 import kotlin.coroutines.coroutineContext
 import com.intellij.mcpserver.project
+
+private const val BUILD_SOLUTION_ACTION = "BuildWholeSolutionAction"
+private const val BUILD_START_TIMEOUT_S = 30L
+private const val MAX_BUILD_PROBLEMS = 50
 
 class BuildToolset : McpToolset {
 
@@ -21,7 +36,7 @@ class BuildToolset : McpToolset {
     @McpDescription(
         "Builds the .NET solution (MSBuild). action='start' (default) launches an async build and returns sessionId — poll it with rider_get_output until status != 'running'. " +
             "action='cancel' stops the running build. " +
-            "Use for compile errors; structured errors are also in rider_tool_window(windowId='Problems'). " +
+            "Use for compile errors: the session output lists them as 'error CS0029: src/A.cs(6,34): message' lines (warnings likewise) before the final status. " +
             "Do NOT use for running apps (use rider_start_debug), running tests (use rider_tests), or restoring packages (use rider_nuget action='restore'). " +
             "If the IDE is busy, check rider_get_ide_state first."
     )
@@ -49,23 +64,74 @@ class BuildToolset : McpToolset {
             // configuration manager may not be ready yet
         }
 
-        ProjectTaskManager.getInstance(project).buildAllModules()
-            .onSuccess { result ->
-                session.status = when {
-                    result.isAborted -> "cancelled"
-                    result.hasErrors() -> "failed"
-                    else -> "succeeded"
+        // Rider's own build host: ProjectTaskManager.buildAllModules() reports success there even when
+        // MSBuild fails, so the outcome comes from the BuildSession result. The build is triggered through
+        // the IDE action because BuildParameters' constructor differs between Rider versions.
+        val host = BuildHost.getInstance(project)
+        if (host.building.value) {
+            SessionManager.remove(session.id)
+            mcpFail("A build is already running. Wait for it (rider_get_ide_state) or cancel it with rider_build(action='cancel').")
+        }
+        val action = ActionManager.getInstance().getAction(BUILD_SOLUTION_ACTION)
+            ?: run { SessionManager.remove(session.id); mcpFail("Build action '$BUILD_SOLUTION_ACTION' not available in this IDE") }
+        val projectDir = project.projectDir()
+        val lifetime = LifetimeDefinition()
+        val previous = host.buildSession.value
+        runOnEdt {
+            host.buildSession.advise(lifetime) { buildSession ->
+                if (buildSession == null || buildSession === previous) return@advise
+                session.tag = buildSession
+                // Events live in the build's storage file; refs carry kind + offset to load them.
+                val problemRefs = mutableListOf<BuildEventRef>()
+                buildSession.buildEventRefs.advise(lifetime) { refs ->
+                    synchronized(problemRefs) {
+                        problemRefs += refs.filter { it.kind == BuildEventKind.Error || it.kind == BuildEventKind.Warning }
+                    }
                 }
-                session.exitCode = if (result.hasErrors()) 1 else 0
-                session.appendLine("Build ${session.status}")
+                buildSession.result.advise(lifetime) { result ->
+                    val events = BuildEventsService.getInstance(project)
+                    val refs = synchronized(problemRefs) { problemRefs.sortedBy { it.kind != BuildEventKind.Error }.toList() }
+                    session.appendLines(refs.take(MAX_BUILD_PROBLEMS).map { formatBuildEvent(it, events, projectDir) })
+                    if (refs.size > MAX_BUILD_PROBLEMS) {
+                        session.appendLine("[${refs.size - MAX_BUILD_PROBLEMS} more — see rider_tool_window(windowId='Build')]")
+                    }
+                    session.status = when (result.kind) {
+                        BuildResultKind.Successful, BuildResultKind.HasWarnings -> "succeeded"
+                        BuildResultKind.Canceled -> "cancelled"
+                        else -> "failed"
+                    }
+                    session.exitCode = if (session.status == "succeeded") 0 else 1
+                    session.appendLine("Build ${session.status}" + if (result.kind == BuildResultKind.Crashed) " (build host crashed)" else "")
+                    lifetime.terminate()
+                }
             }
-            .onError { error ->
+            val frame = WindowManager.getInstance().getFrame(project)
+            ActionManager.getInstance().tryToExecute(action, null, frame, "", true)
+        }
+        // The action is a no-op while the solution is still loading: do not leave the session running forever.
+        AppExecutorUtil.getAppScheduledExecutorService().schedule({
+            if (session.tag == null && session.status == "running") {
                 session.status = "failed"
                 session.exitCode = 1
-                session.appendLine("Build error: ${error.message}")
+                session.appendLine("Build did not start within ${BUILD_START_TIMEOUT_S}s (solution still loading?). Check rider_get_ide_state, then retry.")
+                lifetime.terminate()
             }
+        }, BUILD_START_TIMEOUT_S, TimeUnit.SECONDS)
 
         return buildJsonObject { put("sessionId", session.id) }.toString()
+    }
+
+    // "error CS0029: src/A.cs(6,34): message" — file and line relative to the project, like MSBuild output.
+    private fun formatBuildEvent(ref: BuildEventRef, events: BuildEventsService, projectDir: Path?): String {
+        val kind = if (ref.kind == BuildEventKind.Error) "error" else "warning"
+        val event = runCatching { events.getEvent(ref.offset) }.getOrNull()
+            ?: return "$kind: ${ref.customMessage ?: "(details in rider_tool_window(windowId='Build'))"}"
+        val code = event.code?.takeIf { it.isNotBlank() }?.let { " $it" } ?: ""
+        val location = event.filePath?.let { path ->
+            val pos = event.line?.let { line -> "($line${event.column?.let { ",$it" } ?: ""})" } ?: ""
+            " ${path.relTo(projectDir)}$pos:"
+        } ?: ""
+        return "$kind$code:$location ${event.message}"
     }
 
     @McpTool
