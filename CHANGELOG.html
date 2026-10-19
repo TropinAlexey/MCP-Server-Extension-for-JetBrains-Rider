@@ -1,3 +1,4 @@
+<b>v1.2.10</b>: rider_build reports the real build result (it said "Build succeeded" for broken solutions) and lists compile errors/warnings with file, line and code in the session output. The Debug window's Console section now reads the app's stdout from terminal-style consoles; availableSections has no duplicates.<br/>
 <b>v1.2.9</b>: rider_database_connection open_console no longer uses the FileEditorManager API deprecated in Rider 2026.3 (263).<br/>
 <b>v1.2.8</b>: Compatibility fix for Rider 2026.3 (263): data source refresh (rider_database_connection refresh/open_table) no longer calls the DataSourceSyncManager API removed in 263, and open_console no longer uses the deprecated FileEditorManager.openFile.<br/>
 <b>v1.2.7</b>: Security fix: outputFile exports no longer follow symbolic links (a dangling link inside the project could redirect the write outside the allowed directories); links are rejected and files are created atomically when overwrite is off.<br/>

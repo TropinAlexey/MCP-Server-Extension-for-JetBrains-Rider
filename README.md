@@ -69,7 +69,7 @@ MCP tools are synchronous (request → response). Long-running operations — bu
 ### Build & shared polling
 | Tool | Args | Description |
 |---|---|---|
-| `rider_build` | `action=start\|cancel` | Build solution (start returns sessionId) / cancel running build. Poll with `rider_get_output`; structured errors also in Problems panel |
+| `rider_build` | `action=start\|cancel` | Build solution (start returns sessionId) / cancel running build. Poll with `rider_get_output`: compile errors/warnings arrive as `error CODE: file(line,col): message` lines, then `Build failed`/`succeeded` |
 | `rider_get_output` | `sessionId`, `maxLines?`, `fromEnd?`, `pattern?`, `offset?`, `allLines?` | Poll any async session (build, test, restore, debug). Delta by default, `allLines=true` for full history; `fromEnd` = tail, `pattern` = regex grep, `offset` = paging |
 
 ### Solution analysis & workspace config
@@ -272,6 +272,11 @@ gradlew.bat runIde
 - Running commands without confirmation is opt-in ("brave mode" in the MCP server settings) and stays off by default — keep it off unless you trust the agent. This is a security feature, not an inconvenience.
 
 ## What's New
+
+### v1.2.10
+
+- `rider_build` no longer reports `Build succeeded` for a broken solution: the status now comes from Rider's own build result, and compile errors/warnings are listed in the session output as `error CS0029: src/A.cs(6,34): message`
+- `rider_tool_window(windowId='Debug', section='Console')` reads the app's stdout when Rider shows it in a terminal-style console (it used to come back empty); `availableSections` no longer repeats entries
 
 ### v1.2.9
 
