@@ -94,6 +94,16 @@ a new tool. A new `rider_*` tool is justified only when all of these hold:
   (History: separate `rider_run_tests` / `rider_run_tests_and_wait` tools merged into actions; same for
   `rider_start_build`+`rider_cancel_build` → `rider_build`, `rider_profiling_state`+`rider_profiling_control` → `rider_profiling`, etc.)
 
+- Built-in overlap audit, R13/R13b (10.2026, `evals.py run --hide`): agents never chose `rider_build`
+  (S1, 12 runs → built-in `build_solution_*`) nor `rider_debug`/`rider_breakpoint`/`rider_start_debug`
+  (S5 → built-in `xdebug_*`); hiding them kept 3/3 PASS. CANDIDATES FOR REMOVAL in 2.0 (breaking → major,
+  see "Tool names and actions"). `rider_tool_window` KEEP: hidden, agents fell back to a misroute.
+- Second audit, R14/R14b (10.2026): `rider_start_debug` (S23 → built-in `execute_run_configuration`),
+  `rider_send_terminal_input` + `rider_list_terminals` (S24 → built-in `execute_terminal_command`) never chosen;
+  hiding them kept 3/3 PASS. REMOVE in 2.0 together with `rider_build`, `rider_debug`, `rider_breakpoint`.
+  `rider_run_config` KEEP: after the `copyFrom` fix 3 calls vs 4–7 for the built-in workaround (hand-written XML
+  in `.idea/runConfigurations`).
+
 ## Response audit log
 
 - Empty-collection convention (09.2026): `rider_list_db_consoles` answers `[]`
