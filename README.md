@@ -27,31 +27,37 @@ The built-in MCP server covers files, search, and running things, but most of wh
 
 A programmer staring at Rider sees dozens of information surfaces simultaneously — Build Output streaming in real time, Problems panel lighting up with errors, test runner trees expanding, progress bars showing indexing status, notifications popping up about package restores. An MCP client sees none of this.
 
-When a build hangs, you see the output frozen at "Building Project7..." — your assistant sees nothing. When publish fails silently, you see a red notification balloon — your assistant sees nothing. When zombie MSBuild nodes eat CPU, you see Activity Monitor — your assistant sees nothing.
+When a build hangs, you see the output frozen at "Building Project7..." — your assistant sees nothing. When a test run or Publish is still going, you see the progress bar — your assistant only knows it started. When the app you are debugging prints an exception, you see it in the Debug console — your assistant sees the debugger, but not the app's output.
 
 This plugin bridges that gap. It gives any MCP-compatible client (Claude Code, Cursor, Windsurf, Continue, custom agents) the same situational awareness a programmer has — the ability to see what the IDE is doing, what it's showing, and what's happening in the background.
 
 ### What the stock MCP plugin provides vs. what this adds
 
+Rider 2026.2 ships a strong built-in MCP server. This plugin covers what it does not, and steers agents to the built-in tool where that one is the better choice (state as of Rider 2026.2):
+
 | Capability | Built-in MCP Server | This Extension |
 |---|---|---|
-| Read/edit files | ✅ (most clients do it natively) | — |
-| Build solution | ✅ start + final status | ✅ streaming output via sessionId + `rider_get_output`, cancel, progress |
-| See build errors | ✅ after build completes | ✅ real-time via Problems panel (`rider_tool_window`) + deep text extraction |
-| Process management | ❌ | ✅ list & kill IDE-managed processes |
-| IDE state/progress | ❌ | ✅ indexing, busy, runningSessions |
-| Tool windows | ❌ | ✅ read any tool window via `rider_tool_window(action=list/tabs/content)` |
-| Programmer context | Partial (open files, selection) | ✅ all-in-one: cursor, selection, surrounding code, open editors, bookmarks, unsaved files |
-| Test runner | Partial (run via configs) | ✅ `rider_tests(action=run/run_and_wait/results/rerun_failed)` with stack traces |
-| Run config CRUD | Partial (list & execute, built-in) | ✅ `rider_run_config(action=create/update/delete)` |
-| .NET debugger | Partial (xdebug only) | ✅ `rider_breakpoint` + `rider_start_debug` + `rider_debug(state/step/evaluate)` |
-| NuGet management | ❌ | ✅ `rider_nuget(action=list/add/remove/restore)` |
-| IDE settings | ❌ | ✅ `rider_inspections(action=list/toggle)` |
-| Terminal integration | Partial (execute commands) | ✅ list tabs, send input to specific terminals |
-| TODO / endpoints | ❌ | ✅ via `rider_tool_window` (TODO / Endpoints panels) |
-| DB consoles & SQL | Partial (built-in single-statement) | ✅ `rider_list_db_consoles` + multi-statement `rider_execute_console` with background jobs, read-only guard, secret masking, CSV/JSON export; `rider_console_results` for user-run results |
-| Cache invalidation | ❌ | ✅ invalidate caches & restart |
-| dotTrace / dotMemory | Partial (report analysis) | ✅ live session state + control |
+| Read/edit files, search, refactorings | ✅ `read_file`, `apply_patch`, `search_*`, `rename_refactoring`, `extract_method`, `safe_delete`, … | — |
+| Code analysis of files | ✅ `get_file_problems`, `lint_files`, `reformat_file` | — |
+| Build solution | ✅ `build_solution_start` + `build_solution_state` (result + problems with file/line) | — (raw build log via `rider_tool_window(windowId='Build')`) |
+| Problems / solution-wide errors | Partial: `get_project_problems` reads the Problems View | ✅ `rider_swea_errors`: Solution Wide Analysis counts per project, top codes, samples |
+| Run an app / run configurations | ✅ `get_run_configurations`, `execute_run_configuration` (output, exit code, one-time args/env) | ✅ `rider_run_config(action=create/update/delete)` — persistent configs, clone with args/env |
+| Debugger | ✅ `xdebug_*`: sessions, breakpoints, stack, evaluate, attach, memory | ✅ the debugged app's own stdout: `rider_tool_window(windowId='Debug', section='Console')` |
+| Test runner | Partial: run a test from a gutter run point via `execute_run_configuration`; `findTests` locates the test file | ✅ `rider_tests(action=run/run_and_wait/results/rerun_failed)`: scoped by filter/class/method, structured results with stack traces |
+| Publish | Partial: run a Publish configuration via `execute_run_configuration` | ✅ `rider_publish` streams the output and records Configuration/RID/publishDir for `rider_workspace_config` |
+| Workspace build configuration | ❌ | ✅ `rider_workspace_config`: Configuration, Platform, TargetFramework, exePath per runnable project |
+| NuGet | Partial: `get_project_dependencies` lists packages and references | ✅ `rider_nuget(action=list/add/remove/restore)`, outdated packages |
+| Terminal | ✅ `execute_terminal_command` | — (read the terminal text via `rider_tool_window`) |
+| IDE state / progress | ❌ | ✅ `rider_get_ide_state`: indexing, busy, running sessions |
+| Tool windows | ❌ | ✅ any panel as text: `rider_tool_window` (Run, Debug, Build, Problems, TODO, Endpoints, Services, …) |
+| Programmer context | Partial: `get_all_open_file_paths` | ✅ `rider_get_context`: cursor, selection, surrounding code, open editors, unsaved files, bookmarks |
+| IDE-managed processes | ❌ | ✅ `rider_list_processes` + `rider_kill_process` (processes started from Rider) |
+| Database | ✅ connections (create/edit/test; MSSQL URLs are rejected), schema introspection, table preview, `execute_sql_query` with paging and cancel (asks per schema in an IDE dialog unless always allowed) | ✅ open consoles and table tabs (`rider_list_db_consoles`); scripts with `GO` batches, background jobs with PRINT/RAISERROR progress, read-only guard, secret masking, CSV/JSON export (`rider_execute_console`); results of what the user ran (`rider_console_results`) |
+| Inspection settings | ❌ | ✅ `rider_inspections(action=list/toggle)` |
+| dotTrace / dotMemory | Partial: dotTrace snapshot analysis (call tree, timeline, report) | ✅ live dotTrace / dotMemory sessions: state, start/stop, snapshot (`rider_profiling`, `rider_memory`) |
+| OpenTelemetry (logs, spans, service map) | ✅ `get_log_records`, `get_spans`, `get_service_map` | — |
+| VCS | ✅ `git_status`, `get_repositories` | — |
+| Cache invalidation | ❌ | ✅ `rider_invalidate_caches` (invalidate + restart) |
 
 ## How It Works
 
@@ -117,7 +123,7 @@ MCP tools are synchronous (request → response). Long-running operations of thi
 ### Database
 | Tool | Args | Description |
 |---|---|---|
-| `rider_database_connection` | `action=create\|edit\|open_console\|open_table\|refresh`, `dbms?`, `url?`, `name?`, `user?`, `password?`, `connectionId?`, `readOnly?`, `table?` | Manage data sources (JDBC), mark them Read-only, open the default console or a table tab, re-introspect the model. Returns uniqueId. Prefer over built-in create/edit (MSSQL matching fixed) |
+| `rider_database_connection` | `action=create\|edit\|open_console\|open_table\|refresh`, `dbms?`, `url?`, `name?`, `user?`, `password?`, `connectionId?`, `readOnly?`, `table?` | Manage data sources (JDBC), mark them Read-only, open the default console or a table tab, re-introspect the model. Returns uniqueId. Prefer over built-in create/edit (they reject MSSQL JDBC URLs) |
 | `rider_list_db_consoles` | — | Open SQL consoles with data source, currentDatabase, readOnly, busyJobId; `tableEditors` = open table/view tabs with database/schema/object. Call first |
 | `rider_execute_console` | `sql`, `console?`, `pageSize?`, `database?`, `offset?`, `timeoutSeconds?=60`, `maxCellLength?=4000`, `split?=auto`, `async?`, `waitSeconds?=50`, `onClientTimeout?=cancel\|detach`, `readOnly?`, `maskSecrets?=true`, `outputFile?`, `inIde?` | Execute SQL on a dedicated JDBC connection → CSV per result set with rowCount/hasMore; server error text + code + SQLState; T-SQL split by `GO`; per-batch timeout with cancel; background jobs; read-only guard (forced for Read-only data sources); secret masking; CSV/JSON export; `inIde=true` runs it in the console itself (result tabs in the IDE). Prefer over built-in execute |
 | `rider_console_job` | `action=status\|result\|cancel\|list`, `jobId?`, `messagesOffset?`, `waitSeconds?` (long-poll ≤40 s) | Poll/cancel `rider_execute_console` jobs: status, timestamped PRINT/RAISERROR messages, final result |
@@ -244,7 +250,7 @@ gradlew.bat runIde
 - `OFFSET` paging without `ORDER BY` is nondeterministic — always pair them.
 - MCP calls longer than ~60 s are dropped by the MCP server (HTTP 404): tools that wait cap themselves at 50 s (`waitSeconds`) or 40 s (long-poll, `open_table`, `inIde`). Longer work → `async=true` + `rider_console_job`.
 - `rider_execute_console(inIde=true)` is refused on Read-only data sources and with `readOnly=true`: the IDE console run has no rolled-back transaction or read-only session.
-- Agents still sometimes pick the built-in `execute_sql_query`, which waits for an IDE confirmation dialog. To rule it out, hide it under **Settings → Tools → MCP Server → Exposed Tools**.
+- Agents still sometimes pick the built-in `execute_sql_query`, which waits for a per-schema IDE confirmation dialog ("Allow … to Read Database Data"). Either tick **Always allow** there (Settings → Tools → Database → AI Tools) or hide the tool under **Settings → Tools → MCP Server → Exposed Tools**.
 - Eval rounds R8–R10 (DB consoles, S4/S12–S21) run automatically in an isolated sandbox Rider against a docker fixture — never against real servers. Ship-gate per `CONTRACT.md`.
 
 ## Limitations & Privacy

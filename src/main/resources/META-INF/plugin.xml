@@ -4,8 +4,20 @@
     <vendor url="https://github.com/tropin">tropin</vendor>
 
     <description><![CDATA[
-        Extends the JetBrains MCP Server with IDE observability and control for Rider.
-        Build management, test runner, process control, IDE state monitoring, editor context.
+        <p>Extends the JetBrains MCP Server in Rider with the IDE surfaces the built-in tools do not cover.
+        Everything is prefixed with <code>rider_</code>; build, debugger, terminal, refactorings and search
+        stay with the built-in tools, and the tool descriptions point agents to them.</p>
+        <ul>
+          <li><b>Test runner</b>: scoped runs by filter/class/method, structured results with stack traces, rerun failed</li>
+          <li><b>Database consoles</b>: open consoles and table tabs, scripts with GO batches, background jobs with
+              PRINT/RAISERROR progress, read-only guard, secret masking, CSV/JSON export, results of user-run scripts</li>
+          <li><b>Tool windows</b>: any panel as text (Run, Debug app console, Build, Problems, TODO, Endpoints, Services)</li>
+          <li><b>IDE state and context</b>: indexing/busy, cursor, selection, open editors, unsaved files, bookmarks</li>
+          <li><b>Run configurations</b>: create, clone with args/env, update, delete</li>
+          <li><b>NuGet, Publish, workspace configuration</b>: add/remove/restore packages, Publish output and RID/publishDir</li>
+          <li><b>Solution Wide Analysis</b> error counts, inspection settings, IDE-managed processes, live dotTrace/dotMemory sessions, cache invalidation</li>
+        </ul>
+        <p>Requires Rider 2026.2+. On Rider 2026.1 the Marketplace installs the 1.2.x line.</p>
     ]]></description>
 
     <depends>com.intellij.modules.rider</depends>

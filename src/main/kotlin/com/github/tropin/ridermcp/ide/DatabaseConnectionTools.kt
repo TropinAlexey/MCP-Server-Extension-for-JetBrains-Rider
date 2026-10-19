@@ -33,7 +33,7 @@ class DatabaseConnectionToolset : McpToolset {
             "action='open_table' (connectionId, table='db.schema.table' or 'schema.table') opens a table/view data tab (like a double-click). " +
             "DBMS is matched fuzzily (PostgreSQL, MySQL, SQL Server/MSSQL, Oracle, SQLite, ClickHouse, ...) with URL-vs-driver validation. " +
             "Credentials in URLs are masked in responses. Returns uniqueId (connectionId). " +
-            "Prefer over the built-in create_database_connection/edit_database_connection (broken MSSQL matching). Never executes SQL."
+            "Prefer over the built-in create_database_connection/edit_database_connection (it rejects every MSSQL JDBC URL). Never executes SQL."
     )
     suspend fun rider_database_connection(
         @McpDescription("Action: create (default), edit, open_console, open_table, refresh (re-introspect the model, e.g. after 'Schema … not found' from model-based tools)") action: String = "create",

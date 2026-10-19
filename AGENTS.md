@@ -1,6 +1,6 @@
 # Rider MCP — Agent Guide
 
-MCP Server extension plugin for JetBrains Rider. Adds `rider_*` tools for full IDE control: build, test, debug, profiling, DB consoles, tool windows, terminals, and more.
+MCP Server extension plugin for JetBrains Rider. Adds `rider_*` tools for what the built-in MCP server does not cover: test runner, DB consoles, tool windows, IDE state and context, run config CRUD, NuGet, Publish, profiling sessions, and more. Build, debugger and terminal are the built-in tools.
 
 Per-tool documentation lives in each tool's description (visible on tool call). This file is the routing layer — which tool for which task.
 
@@ -10,7 +10,7 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 
 | Task | Use this | NOT this |
 |---|---|---|
-| Create DB connection | `rider_database_connection(action='create')` | `create_database_connection` (broken MSSQL matching, undocumented `dbms` enum) |
+| Create DB connection | `rider_database_connection(action='create')` | `create_database_connection` (rejects every MSSQL JDBC URL as of Rider 2026.2) |
 | Edit DB connection | `rider_database_connection(action='edit')` | `edit_database_connection` |
 | Execute SQL | `rider_execute_console` (via open console) | `execute_sql_query` (hides driver errors as "Unknown error", 10-row pages, no file export, no T-SQL batches, no timeout control, requires schema introspection — DMV/server queries fail with "Schema … is not found", and a database the login cannot access is reported the same way; use `rider_execute_console(database='master')`) |
 | Results the user ran in a console | `rider_console_results` | `list_recent_sql_queries` / `fetch_query_result` (no result set ids for console runs), `rider_tool_window(section=…)` on Services (ambiguous titles) |
