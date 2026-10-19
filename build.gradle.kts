@@ -26,6 +26,8 @@ intellijPlatform {
     pluginConfiguration {
         ideaVersion {
             sinceBuild = "261"
+            // Frozen line for Rider 2026.1 (CONTRACT.md → IDE version lines); 2.x serves 262+.
+            untilBuild = "261.*"
         }
         changeNotes = file("CHANGELOG.html").readText()
     }
