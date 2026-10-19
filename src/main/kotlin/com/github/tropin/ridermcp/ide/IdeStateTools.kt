@@ -135,7 +135,8 @@ class IdeStateToolset : McpToolset {
                 } ?: mcpFail("Tool window '$windowId' has no content. Open it in Rider first (View → Tool Windows → $windowId).")
 
                 val component = content.component
-                val actualSections = mutableListOf<String>().also { collectTabTitles(component, it) }
+                // Nested tab containers repeat their titles: keep the first occurrence only.
+                val actualSections = mutableListOf<String>().also { collectTabTitles(component, it) }.distinct()
                 val availableSections = actualSections.toMutableList()
                 if (isDebugWindow(windowId)) {
                     if (availableSections.none { it.equals("Console", ignoreCase = true) }) availableSections.add(0, "Console")
@@ -271,6 +272,7 @@ class IdeStateToolset : McpToolset {
             val consoleView = session.consoleView
             if (consoleView != null) {
                 consoleTextFromConsole(consoleView)?.takeIf { it.isNotBlank() }?.let { return it.lines().take(MAX_WINDOW_LINES) }
+                terminalText(consoleView.component)?.takeIf { it.isNotBlank() }?.let { return it.lines().takeLast(MAX_WINDOW_LINES) }
                 val swingLines = mutableListOf<String>()
                 extractText(consoleView.component, swingLines, MAX_WINDOW_LINES)
                 if (swingLines.any { it.isNotBlank() }) return swingLines
@@ -285,9 +287,36 @@ class IdeStateToolset : McpToolset {
         val console = descriptor.executionConsole
             ?: mcpFail("Debug session '${session.sessionName}' has no execution console")
         consoleTextFromConsole(console)?.takeIf { it.isNotBlank() }?.let { return it.lines().take(MAX_WINDOW_LINES) }
+        terminalText(console.component)?.takeIf { it.isNotBlank() }?.let { return it.lines().takeLast(MAX_WINDOW_LINES) }
         val lines = mutableListOf<String>()
         extractText(console.component, lines, MAX_WINDOW_LINES)
         return lines
+    }
+
+    // .NET run/debug consoles in Rider can be a terminal emulator (JediTerm) instead of an editor:
+    // read its scrollback history plus the visible screen.
+    private fun terminalText(component: java.awt.Component): String? {
+        val widget = findTerminalWidget(component) ?: return null
+        val buffer = widget.terminalTextBuffer
+        buffer.lock()
+        try {
+            return (-buffer.historyLinesCount until buffer.screenLinesCount)
+                .map { buffer.getLine(it).text.trimEnd() }
+                .dropLastWhile { it.isBlank() }
+                .joinToString("\n")
+        } finally {
+            buffer.unlock()
+        }
+    }
+
+    private fun findTerminalWidget(component: java.awt.Component): com.jediterm.terminal.ui.JediTermWidget? {
+        if (component is com.jediterm.terminal.ui.JediTermWidget) return component
+        if (component is java.awt.Container) {
+            for (i in 0 until component.componentCount) {
+                findTerminalWidget(component.getComponent(i))?.let { return it }
+            }
+        }
+        return null
     }
 
     private fun consoleTextFromConsole(console: ExecutionConsole): String? {
@@ -338,6 +367,9 @@ class IdeStateToolset : McpToolset {
     private fun extractText(component: java.awt.Component, lines: MutableList<String>, limit: Int) {
         if (lines.size >= limit) return
         when {
+            component is com.jediterm.terminal.ui.JediTermWidget -> {
+                terminalText(component)?.takeIf { it.isNotBlank() }?.lines()?.forEach { if (lines.size < limit) lines.add(it) }
+            }
             component is com.intellij.openapi.editor.impl.EditorComponentImpl -> {
                 val text = component.editor.document.text
                 if (text.isNotBlank()) text.lines().forEach { if (lines.size < limit) lines.add(it) }
