@@ -202,7 +202,7 @@ class DatabaseConnectionToolset : McpToolset {
         if (!driver.matchesUrl(url)) {
             mcpFail(
                 "URL '$url' is not valid for driver '${driver.name}'. " +
-                    "Expected format example: ${driver.sampleUrl ?: "(no sample available)"}"
+                    "Expected format example: ${driver.sampleUrl}"
             )
         }
 
@@ -287,7 +287,7 @@ class DatabaseConnectionToolset : McpToolset {
             put("name", ds.name)
             put("uniqueId", ds.uniqueId)
             ds.url?.let { put("url", maskJdbcSecrets(it)) }
-            ds.username?.takeIf { it.isNotBlank() }?.let { put("username", it) }
+            ds.username.takeIf { it.isNotBlank() }?.let { put("username", it) }
             put("readOnly", ds.isReadOnly)
         }.toString()
     }

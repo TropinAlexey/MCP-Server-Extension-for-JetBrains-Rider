@@ -5,11 +5,13 @@ plugins {
 
 dependencies {
     intellijPlatform {
-        rider("2026.1") {
+        rider("2026.2.3.1") {
             useInstaller = false
         }
         bundledPlugin("com.intellij.mcpServer")
         bundledPlugin("com.intellij.database")
+        // 262 moved SolutionAnalysisHost and project.solution into this product module.
+        bundledModule("intellij.rider.rdclient.dotnet")
         testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
     }
     compileOnly("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
@@ -25,7 +27,7 @@ tasks.withType<Test> {
 intellijPlatform {
     pluginConfiguration {
         ideaVersion {
-            sinceBuild = "261"
+            sinceBuild = "262"
         }
         changeNotes = file("CHANGELOG.html").readText()
     }
@@ -45,7 +47,7 @@ intellijPlatform {
             // 1.2.7 on the 263 EAP, which the local IDE alone does not catch.
             // Rider ships as maven artifacts only (no installer): list versions explicitly and bump the EAP.
             if (providers.gradleProperty("verifyAllRiders").isPresent) {
-                for (version in listOf("2026.1", "2026.2.3.1", "2026.3-EAP7-SNAPSHOT")) {
+                for (version in listOf("2026.2.3.1", "2026.3-EAP7-SNAPSHOT")) {
                     create(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.Rider, version) {
                         useInstaller = false
                     }

@@ -72,7 +72,7 @@ internal object DbConsoleReader {
 
     /** The login's default database: the current root namespace of the introspected model (bold in the Database tree). */
     private fun loginDefaultDatabase(ds: LocalDataSource): String? = try {
-        ds.model?.currentRootNamespace?.name?.takeIf { it.isNotBlank() }
+        ds.model.currentRootNamespace?.name?.takeIf { it.isNotBlank() }
     } catch (_: Exception) {
         null
     }
@@ -116,11 +116,11 @@ internal object DbConsoleReader {
                         put("readOnly", runCatching { ds.isReadOnly }.getOrDefault(false))
                         jobs.running("${ds.uniqueId}|${ds.name}/${file.name}")?.let { put("busyJobId", it.id) }
                         try {
-                            ds.dbms?.name?.takeIf { it.isNotBlank() }?.let { put("dbms", it) }
+                            ds.dbms.name.takeIf { it.isNotBlank() }?.let { put("dbms", it) }
                         } catch (_: Exception) {}
                         url?.takeIf { it.isNotBlank() }?.let { put("url", com.github.tropin.ridermcp.maskJdbcSecrets(it)) }
                         try {
-                            ds.username?.takeIf { it.isNotBlank() }?.let { put("username", it) }
+                            ds.username.takeIf { it.isNotBlank() }?.let { put("username", it) }
                         } catch (_: Exception) {}
                     }
                 }

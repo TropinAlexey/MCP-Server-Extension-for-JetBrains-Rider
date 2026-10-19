@@ -108,8 +108,8 @@ class PublishToolset : McpToolset {
 
     private fun isPublishConfig(settings: RunnerAndConfigurationSettings): Boolean {
         return settings.configuration is PublishRunConfiguration<*> ||
-            settings.type?.displayName?.contains("Publish", ignoreCase = true) == true ||
-            settings.type?.id?.contains("Publish", ignoreCase = true) == true
+            settings.type.displayName.contains("Publish", ignoreCase = true) ||
+            settings.type.id.contains("Publish", ignoreCase = true)
     }
 
     internal fun capturePublishMetadata(

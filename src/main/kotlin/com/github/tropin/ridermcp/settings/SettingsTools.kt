@@ -1,6 +1,5 @@
 package com.github.tropin.ridermcp.settings
 
-import com.intellij.codeInspection.ex.InspectionProfileImpl
 import com.intellij.codeInspection.ex.ScopeToolState
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
@@ -36,8 +35,7 @@ class SettingsToolset : McpToolset {
 
     private suspend fun listInspections(filter: String?, enabledOnly: Boolean, limit: Int): String {
         val project = coroutineContext.project
-        val profile = InspectionProjectProfileManager.getInstance(project).currentProfile as? InspectionProfileImpl
-            ?: mcpFail("Cannot access inspection profile")
+        val profile = InspectionProjectProfileManager.getInstance(project).currentProfile
 
         var tools: List<ScopeToolState> = profile.getAllTools()
 
@@ -74,8 +72,7 @@ class SettingsToolset : McpToolset {
     private suspend fun toggleInspection(shortName: String?, enabled: Boolean): String {
         if (shortName.isNullOrBlank()) mcpFail("shortName is required for action='toggle'")
         val project = coroutineContext.project
-        val profile = InspectionProjectProfileManager.getInstance(project).currentProfile as? InspectionProfileImpl
-            ?: mcpFail("Cannot access inspection profile")
+        val profile = InspectionProjectProfileManager.getInstance(project).currentProfile
 
         profile.getToolsOrNull(shortName, null)
             ?: mcpFail("Inspection '$shortName' not found. Use rider_inspections(action='list') to find the shortName.")

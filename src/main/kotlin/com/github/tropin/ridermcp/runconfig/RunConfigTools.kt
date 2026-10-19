@@ -10,7 +10,6 @@ import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
 import com.jetbrains.rider.run.configurations.RiderConfigurationParametersAware
-import com.jetbrains.rider.run.configurations.exe.ExeConfigurationParameters
 import kotlinx.serialization.json.*
 import kotlin.coroutines.coroutineContext
 
@@ -52,7 +51,7 @@ class RunConfigToolset : McpToolset {
         val settings = if (!copyFrom.isNullOrBlank()) {
             val source = runManager.allSettings.find { it.name == copyFrom }
                 ?: mcpFail("Configuration '$copyFrom' not found. Existing: ${runManager.allSettings.map { it.name }}")
-            runManager.createConfiguration(source.configuration.clone() as RunConfiguration, source.factory!!)
+            runManager.createConfiguration(source.configuration.clone(), source.factory)
                 .also { it.name = name }
         } else {
             val types = ConfigurationType.CONFIGURATION_TYPE_EP.extensionList
@@ -136,8 +135,8 @@ class RunConfigToolset : McpToolset {
                 programArgs?.let { config.programParameters = it; changes.add("programArgs") }
                 env?.let { config.envs = parseEnvString(it); changes.add("env") }
             }
-            config is RiderConfigurationParametersAware<*> && config.parameters is ExeConfigurationParameters -> {
-                val params = config.parameters as ExeConfigurationParameters
+            config is RiderConfigurationParametersAware<*> -> {
+                val params = config.parameters
                 programArgs?.let { params.programParameters = it; changes.add("programArgs") }
                 env?.let { params.envs = parseEnvString(it); changes.add("env") }
             }

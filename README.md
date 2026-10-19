@@ -9,7 +9,7 @@
   <a href="https://plugins.jetbrains.com/plugin/34264-mcp-server-extension"><img src="https://img.shields.io/jetbrains/plugin/d/34264?style=flat-square&label=downloads" alt="Downloads"></a>
   <a href="https://github.com/TropinAlexey/MCP-Server-Extension-for-JetBrains-Rider/releases/latest"><img src="https://img.shields.io/github/v/release/TropinAlexey/MCP-Server-Extension-for-JetBrains-Rider?style=flat-square&label=version" alt="Version"></a>
   <a href="https://github.com/TropinAlexey/MCP-Server-Extension-for-JetBrains-Rider/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/TropinAlexey/MCP-Server-Extension-for-JetBrains-Rider/build.yml?style=flat-square" alt="Build"></a>
-  <img src="https://img.shields.io/badge/Rider-2026.1%2B-blue?style=flat-square&logo=jetbrains" alt="Rider 2026.1+">
+  <img src="https://img.shields.io/badge/Rider-2026.2%2B-blue?style=flat-square&logo=jetbrains" alt="Rider 2026.2+">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="MIT License"></a>
 </p>
 
@@ -175,7 +175,7 @@ Recipes:
 ## Installation
 
 ### Prerequisites
-- JetBrains Rider 2026.1+ (the MCP server is built in — no separate plugin to install)
+- JetBrains Rider 2026.2+ (the MCP server is built in — no separate plugin to install). On Rider 2026.1 the Marketplace installs the 1.2.x line
 - An MCP-compatible client: Claude Code, Cursor, Windsurf, Continue, or a custom agent
 
 ### From Marketplace

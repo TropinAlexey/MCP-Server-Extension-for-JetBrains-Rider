@@ -163,8 +163,8 @@ internal object SqlText {
         while (e != null && parts.size < 5) {
             val (severity, line) = serverErrorDetails(e)
             val code = buildList {
-                if (e!!.errorCode != 0) add("error ${e!!.errorCode}")
-                e!!.sqlState?.takeIf { it.isNotBlank() }?.let { add("SQLState $it") }
+                if (e.errorCode != 0) add("error ${e.errorCode}")
+                e.sqlState?.takeIf { it.isNotBlank() }?.let { add("SQLState $it") }
                 severity?.let { add("severity $it") }
                 line?.let { add("line $it") }
             }
