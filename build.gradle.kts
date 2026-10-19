@@ -41,6 +41,16 @@ intellijPlatform {
         )
         ides {
             local("/Applications/Rider.app/Contents")
+            // Every Rider line the plugin claims (sinceBuild..EAP): the Marketplace verifier rejected
+            // 1.2.7 on the 263 EAP, which the local IDE alone does not catch.
+            // Rider ships as maven artifacts only (no installer): list versions explicitly and bump the EAP.
+            if (providers.gradleProperty("verifyAllRiders").isPresent) {
+                for (version in listOf("2026.1", "2026.2.3.1", "2026.3-EAP7-SNAPSHOT")) {
+                    create(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.Rider, version) {
+                        useInstaller = false
+                    }
+                }
+            }
         }
     }
 }
