@@ -43,7 +43,7 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
   - "The open table" / "the tab I have open" → `rider_list_db_consoles` → `tableEditors` (dataSource, database, schema, object; `selected=true` = active tab)
 - Results of a script the USER ran in a console (Services → Database result tabs) → `rider_console_results(console, index?, outputFile?)`; `state=running` while it executes — poll it, the console is not blocked. `hasMoreInIde=true` = the IDE grid fetched only its first page
 - NuGet packages → `rider_nuget` (actions: `list`, `add`, `remove`, `restore`)
-- Run/Debug configurations → `rider_run_config` (actions: `create`, `update`, `delete`; type IDs from built-in `get_run_configurations` or IDE Run → Edit Configurations; launches via `rider_start_debug` / `rider_tests`)
+- Run/Debug configurations → `rider_run_config` (actions: `create`, `update`, `delete`). New config for a .NET app with args/env → `create` with `copyFrom='<existing config of that project>'` + `programArgs`/`env` (a bare `typeId='DotNetProject'` config has no project and won't run; an unknown `typeId` lists the valid IDs). Built-in `get_run_configurations` lists existing configs with their args/env; launch with built-in `execute_run_configuration` (run) or `rider_start_debug` (debug), tests via `rider_tests`
 - Debugging → `rider_breakpoint` (actions: `set`, `remove`) / `rider_start_debug` / `rider_debug` (actions: `state`, `stepOver`, `stepInto`, `stepOut`, `resume`, `pause`, `stop`, `evaluate`)
 - IDE processes → `rider_list_processes` / `rider_kill_process`
 - Code inspections → `rider_inspections` (actions: `list`, `toggle`)
