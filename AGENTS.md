@@ -28,8 +28,8 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 - Debugged app stdout (NOT the debugger trace) → `rider_tool_window(action='content', windowId='Debug', section='Console', fromEnd=true)`
 - TODO/FIXME/HACK in code → `rider_tool_window(action='content', windowId='TODO')`
 - API endpoints → built-in `search_symbol` or `get_service_map`; fallback: `rider_tool_window(action='content', windowId='Endpoints')`
-- IDE terminal commands → `rider_list_terminals` + `rider_send_terminal_input`
-- Build → `rider_build` (actions: `start`, `cancel`) + `rider_get_output` — compile errors/warnings come as `error CODE: file(line,col): message` lines before the final `Build failed`/`succeeded`
+- IDE terminal commands → built-in `execute_terminal_command` (returns the output)
+- Build → built-in `build_solution_start` + `build_solution_state` (errors with file/line). Files just written outside the IDE: check `get_file_problems` on them first — a build fired before the IDE sees the file can report success
 - Publish → `rider_publish` (`configName?`) + `rider_get_output`
 - Run tests → `rider_tests` (actions: `run`, `run_and_wait`, `results`, `rerun_failed`) + `rider_get_output` (`configName` alone runs the whole config — scope with filters)
 - Create/edit DB connections → `rider_database_connection` (actions: `create`, `edit`, `open_console`). Production source on the user's request → `readOnly=true`. The flag cannot be lifted through MCP (`readOnly=false` is rejected) — if a write is really intended, the user unticks Read-only in Rider. No console open for a connection → `action='open_console'` instead of asking the user to double-click. Show a table to the user → `action='open_table', table='db.schema.table'`. Built-in model tools answer "Schema … is not found" → `action='refresh'` (re-introspection; databases outside the source's Schemas scope stay invisible — the user ticks them)
@@ -43,8 +43,9 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
   - "The open table" / "the tab I have open" → `rider_list_db_consoles` → `tableEditors` (dataSource, database, schema, object; `selected=true` = active tab)
 - Results of a script the USER ran in a console (Services → Database result tabs) → `rider_console_results(console, index?, outputFile?)`; `state=running` while it executes — poll it, the console is not blocked. `hasMoreInIde=true` = the IDE grid fetched only its first page
 - NuGet packages → `rider_nuget` (actions: `list`, `add`, `remove`, `restore`)
-- Run/Debug configurations → `rider_run_config` (actions: `create`, `update`, `delete`). New config for a .NET app with args/env → `create` with `copyFrom='<existing config of that project>'` + `programArgs`/`env` (a bare `typeId='DotNetProject'` config has no project and won't run; an unknown `typeId` lists the valid IDs). Built-in `get_run_configurations` lists existing configs with their args/env; launch with built-in `execute_run_configuration` (run) or `rider_start_debug` (debug), tests via `rider_tests`
-- Debugging → `rider_breakpoint` (actions: `set`, `remove`) / `rider_start_debug` / `rider_debug` (actions: `state`, `stepOver`, `stepInto`, `stepOut`, `resume`, `pause`, `stop`, `evaluate`)
+- Run/Debug configurations → `rider_run_config` (actions: `create`, `update`, `delete`). New config for a .NET app with args/env → `create` with `copyFrom='<existing config of that project>'` + `programArgs`/`env` (a bare `typeId='DotNetProject'` config has no project and won't run; an unknown `typeId` lists the valid IDs). Built-in `get_run_configurations` lists existing configs with their args/env; launch with built-in `execute_run_configuration` (run) or `xdebug_start_debugger_session` (debug), tests via `rider_tests`
+- Debugging → built-in `xdebug_*` (`xdebug_start_debugger_session`, `xdebug_set_breakpoint`, `xdebug_control_session`, `xdebug_get_frame_values`, `xdebug_evaluate_expression`). Remove the breakpoints you set (`xdebug_remove_breakpoint`) and resume the process before answering. App stdout of a debug session → `rider_tool_window(windowId='Debug', section='Console')`
+- Run an app and read its output → built-in `execute_run_configuration` (`waitForExit=true` + `timeout` for a snapshot of a long-running app)
 - IDE processes → `rider_list_processes` / `rider_kill_process`
 - Code inspections → `rider_inspections` (actions: `list`, `toggle`)
 - IDE caches → `rider_invalidate_caches`
@@ -86,7 +87,7 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 
 ## Polling Pattern
 
-`rider_build(action='start')`, `rider_tests(action='run')`, `rider_nuget(action='restore')`, `rider_start_debug`, `rider_tests(action='rerun_failed')` return `sessionId` — poll via `rider_get_output` until `status != "running"`.
+`rider_tests(action='run')`, `rider_tests(action='rerun_failed')`, `rider_nuget(action='restore')`, `rider_publish` return `sessionId` — poll via `rider_get_output` until `status != "running"`.
 
 `rider_execute_console(async=true)` (or a sync call detached by `onClientTimeout='detach'`) returns `jobId` — poll via `rider_console_job(action='status')` until `status != "running"`.
 
@@ -124,8 +125,8 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 // Page through output: lines 200-250
 { "windowId": "Debug", "offset": 200, "maxLines": 50 }
 
-// After a build: get all accumulated output, last 30 lines
-{ "sessionId": "build_1", "maxLines": 30, "fromEnd": true, "allLines": true }
+// After a Publish: get all accumulated output, last 30 lines
+{ "sessionId": "publish_1", "maxLines": 30, "fromEnd": true, "allLines": true }
 
 // Search for a specific class in test output
 { "sessionId": "test_1", "pattern": "MyService", "allLines": true }

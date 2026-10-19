@@ -15,7 +15,7 @@ class WorkspaceConfigToolset : McpToolset {
 
     @McpTool
     @McpDescription(
-        "Read-only snapshot of the active workspace/build configuration: per-project runnable-project outputs (Configuration, Platform, TargetFramework, exePath, workingDirectory) and the last rider_* build/publish/test operation captured by this extension. " +
+        "Read-only snapshot of the active workspace/build configuration: per-project runnable-project outputs (Configuration, Platform, TargetFramework, exePath, workingDirectory) and the last rider_* publish/test operation captured by this extension. " +
             "Use to diagnose phantom errors after Publish, mismatched RIDs, or design-time vs real-build property differences. " +
             "Does NOT start any builds; properties come from Rider's cached runnable-project model and may be stale while the backend is loading."
     )

@@ -36,7 +36,7 @@ class NuGetToolset : McpToolset {
             "action='add' installs (requires name; optional version/projectPath). action='remove' uninstalls (requires name; optional projectPath). " +
             "add/remove mutate project files — confirm with the user first. " +
             "action='restore' runs 'dotnet restore' async and returns sessionId — poll with rider_get_output. " +
-            "projectPath must stay inside the project dir. Do NOT use for building (rider_build) or running tests (rider_tests)."
+            "projectPath must stay inside the project dir. Do NOT use for building (built-in build_solution_start) or running tests (rider_tests)."
     )
     suspend fun rider_nuget(
         @McpDescription("Action: list (default), add, remove, restore (restore returns sessionId)") action: String = "list",

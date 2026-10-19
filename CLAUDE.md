@@ -18,7 +18,7 @@ Each tool:
 3. Toolset registered in `src/main/resources/META-INF/plugin.xml` via `mcpServer.mcpToolset`
 4. Returns a JSON string (built with `kotlinx.serialization.json`); errors via `mcpFail(...)`
 
-For long-running operations (build, test run) — **polling pattern**:
+For long-running operations (test run, NuGet restore, publish) — **polling pattern**:
 - `start_*` → creates `OutputSession` via `SessionManager`, returns `sessionId`
 - `get_*_output(sessionId)` → returns new lines since last call
 - Client polls until `status != "running"`
@@ -28,12 +28,11 @@ For long-running operations (build, test run) — **polling pattern**:
 ```
 src/main/kotlin/com/github/tropin/ridermcp/
 ├── SessionManager.kt       # Shared polling session infrastructure
-├── build/                   # P0: Build observability
+├── session/                 # rider_get_output: polling for test/NuGet/publish sessions
 ├── process/                 # P0: Process management
-├── ide/                     # P0+P4: IDE state, tool windows, terminals, TODO, endpoints, DB consoles
+├── ide/                     # P0+P4: IDE state, tool windows, TODO, endpoints, DB consoles
 ├── context/                 # P1: Programmer context (editors, cursor, selection)
 ├── testing/                 # P1: Test runner (run/wait/tree/rerun/filter)
-├── debugger/                # P2: .NET debugger (breakpoints, evaluate, step)
 ├── runconfig/               # Run/Debug configuration CRUD
 ├── nuget/                   # P2: NuGet management
 ├── settings/                # P3: IDE inspections

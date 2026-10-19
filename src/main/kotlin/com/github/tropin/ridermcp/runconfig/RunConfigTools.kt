@@ -18,7 +18,7 @@ class RunConfigToolset : McpToolset {
 
     @McpTool
     @McpDescription(
-        "CRUD for IDE run/debug configurations (does NOT launch anything — launch with rider_start_debug, rider_tests, or the built-in execute tools). " +
+        "CRUD for IDE run/debug configurations (does NOT launch anything — launch with the built-in execute_run_configuration / xdebug_start_debugger_session, or rider_tests). " +
             "action='create' (default) requires name + either copyFrom (an existing config to clone — the way to get a .NET project config with its project set, e.g. copyFrom='MyApp') or typeId (an unknown typeId lists the valid ones); optional programArgs/env for runnable and .NET project/exe configs (env values with commas must be double-quoted). " +
             "action='update' requires name; optional programArgs/env/newName (at least one required). " +
             "action='delete' removes the config by exact name (confirm with the user — re-creation is manual)."

@@ -32,7 +32,7 @@ class PublishToolset : McpToolset {
         "Publishes a .NET project using an existing Publish run configuration (the ones created by Rider under Run → Edit Configurations). " +
             "Returns a sessionId — poll with rider_get_output until status != 'running'. " +
             "Use when you need to trigger a Publish (e.g. to reproduce phantom errors after Publish) or to capture its Configuration/Platform/PublishProfile metadata. " +
-            "Do NOT use for regular builds (rider_build) or tests (rider_tests)."
+            "Do NOT use for regular builds (built-in build_solution_start) or tests (rider_tests)."
     )
     suspend fun rider_publish(
         @McpDescription("Exact name of an existing Publish run configuration; omit if there is only one") configName: String? = null

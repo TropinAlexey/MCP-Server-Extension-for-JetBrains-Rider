@@ -41,7 +41,7 @@ class TestToolset : McpToolset {
             "Scope with filter (raw 'dotnet test --filter' expr) or className/methodName — a filter run bypasses run configs and auto-resolves the .sln/.csproj. " +
             "WARNING: a bare configName — or no filters at all — ALWAYS runs the ENTIRE configuration (can be thousands of tests). " +
             "On a vague prompt like \"run tests\", NEVER pass a bare configName: scope with filter/className/methodName. " +
-            "Do NOT use for building (rider_build) or debugging (rider_start_debug). " +
+            "Do NOT use for building (built-in build_solution_start) or debugging (built-in xdebug_start_debugger_session). " +
             "If the IDE is busy, check rider_get_ide_state first."
     )
     suspend fun rider_tests(

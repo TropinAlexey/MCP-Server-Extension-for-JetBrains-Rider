@@ -58,25 +58,24 @@ This plugin bridges that gap. It gives any MCP-compatible client (Claude Code, C
 This is a companion to the built-in MCP server — not a replacement and not a fork. Install it, and your MCP client sees all of their tools as one unified set. Everything this plugin adds is prefixed with `rider_`, so there are no naming conflicts.
 
 ### Polling Pattern for Async Operations
-MCP tools are synchronous (request → response). Long-running operations — builds, test runs, package restores, debug sessions — use a polling pattern instead of blocking:
+MCP tools are synchronous (request → response). Long-running operations of this plugin — test runs, package restores, Publish — use a polling pattern instead of blocking:
 
-1. `rider_build(action='start')` / `rider_tests(action='run')` / `rider_nuget(action='restore')` / `rider_start_debug` → returns `{"sessionId": "build_1"}`
-2. `rider_get_output("build_1")` → returns new lines since the last call, plus current status
+1. `rider_tests(action='run')` / `rider_nuget(action='restore')` / `rider_publish` → returns `{"sessionId": "test_1"}`
+2. `rider_get_output("test_1")` → returns new lines since the last call, plus current status
 3. Repeat until `status` is no longer `"running"` (`allLines=true` re-reads full history; `rider_tests(action='results', sessionId=...)` gives the structured test tree)
 
-## Available Tools (25)
+## Available Tools (21)
 
-### Build & shared polling
+### Session polling
 | Tool | Args | Description |
 |---|---|---|
-| `rider_build` | `action=start\|cancel` | Build solution (start returns sessionId) / cancel running build. Poll with `rider_get_output`: compile errors/warnings arrive as `error CODE: file(line,col): message` lines, then `Build failed`/`succeeded` |
-| `rider_get_output` | `sessionId`, `maxLines?`, `fromEnd?`, `pattern?`, `offset?`, `allLines?` | Poll any async session (build, test, restore, debug). Delta by default, `allLines=true` for full history; `fromEnd` = tail, `pattern` = regex grep, `offset` = paging |
+| `rider_get_output` | `sessionId`, `maxLines?`, `fromEnd?`, `pattern?`, `offset?`, `allLines?` | Poll a session of `rider_tests`, `rider_nuget(action='restore')` or `rider_publish`. Delta by default, `allLines=true` for full history; `fromEnd` = tail, `pattern` = regex grep, `offset` = paging |
 
 ### Solution analysis & workspace config
 | Tool | Args | Description |
 |---|---|---|
 | `rider_swea_errors` | `maxExamples?=50` | Solution Wide Analysis error/warning counts per project, top error codes, and sample issues. Use when the solution-wide error count does not match the Problems panel |
-| `rider_workspace_config` | — | Read-only snapshot of runnable-project outputs (Configuration, Platform, TargetFramework, exePath, workingDirectory) and the last `rider_*` build/publish/test operation metadata. Use to diagnose phantom errors after Publish or mismatched RIDs |
+| `rider_workspace_config` | — | Read-only snapshot of runnable-project outputs (Configuration, Platform, TargetFramework, exePath, workingDirectory) and the last `rider_*` publish/test operation metadata. Use to diagnose phantom errors after Publish or mismatched RIDs |
 
 ### Publish
 | Tool | Args | Description |
@@ -92,7 +91,7 @@ MCP tools are synchronous (request → response). Long-running operations — bu
 | Tool | Args | Description |
 |---|---|---|
 | `rider_list_processes` | `type?` (build/test/run) | Live IDE-managed processes with PID, command line, display name |
-| `rider_kill_process` | `processName` (exact, from list) | Force-kill a hung process; prefer native stop (`rider_build cancel`, `rider_debug stop`) when applicable |
+| `rider_kill_process` | `processName` (exact, from list) | Force-kill a hung process; prefer native stop (built-in `xdebug_control_session` for debug sessions) when applicable |
 
 ### IDE state & tool windows
 | Tool | Args | Description |
@@ -103,14 +102,7 @@ MCP tools are synchronous (request → response). Long-running operations — bu
 ### Run configurations
 | Tool | Args | Description |
 |---|---|---|
-| `rider_run_config` | `action=create\|update\|delete`, `name`, `copyFrom?`, `typeId?`, `programArgs?`, `env?`, `newName?` | CRUD for run/debug configs (does not launch; launch via built-in `execute_run_configuration`, `rider_start_debug`, `rider_tests`). `create` clones `copyFrom` (keeps the project) or makes an empty `typeId` config; args/env work for .NET project/exe configs |
-
-### .NET debugger
-| Tool | Args | Description |
-|---|---|---|
-| `rider_breakpoint` | `action=set\|remove`, `filePath`, `line` | Arm/disarm line breakpoint (1-indexed) before debugging |
-| `rider_start_debug` | `configName?` | Launch app under debugger, returns sessionId |
-| `rider_debug` | `action=state\|stepOver\|stepInto\|stepOut\|resume\|pause\|stop\|evaluate`, `expression?` | Inspect state/stack, step, evaluate (must be paused). App stdout via `rider_get_output` or Debug Console section |
+| `rider_run_config` | `action=create\|update\|delete`, `name`, `copyFrom?`, `typeId?`, `programArgs?`, `env?`, `newName?` | CRUD for run/debug configs (does not launch; launch via built-in `execute_run_configuration` / `xdebug_start_debugger_session`, or `rider_tests`). `create` clones `copyFrom` (keeps the project) or makes an empty `typeId` config; args/env work for .NET project/exe configs |
 
 ### NuGet
 | Tool | Args | Description |
@@ -121,12 +113,6 @@ MCP tools are synchronous (request → response). Long-running operations — bu
 | Tool | Args | Description |
 |---|---|---|
 | `rider_inspections` | `action=list\|toggle`, `filter?`, `enabledOnly?`, `limit?`, `shortName?`, `enabled?` | Catalog of static-analysis rules (not the Problems panel) |
-
-### Terminal
-| Tool | Args | Description |
-|---|---|---|
-| `rider_list_terminals` | — | IDE terminal tabs (index + name) |
-| `rider_send_terminal_input` | `text`, `tab?=0` | Execute shell input in a terminal tab (not for run/debug consoles) |
 
 ### Database
 | Tool | Args | Description |
@@ -160,7 +146,7 @@ Navigate in three steps: `rider_tool_window(action='list')` → `rider_tool_wind
 | `Run` | One tab per active execution (tab = descriptor name, e.g. `e2e tests`) | Process stdout/stderr console |
 | `Build` | Build sessions | Compiler output; structured errors are also in `Problems` |
 | `Problems` | Current file / project scope | Errors and warnings tree |
-| `Terminal` | One tab per terminal | Shell console (read via content, write via `rider_send_terminal_input`) |
+| `Terminal` | One tab per terminal | Shell console (read via content; run commands with built-in `execute_terminal_command`) |
 | `TODO` | Scope filter | TODO/FIXME/HACK tree |
 | `Endpoints` | — | HTTP routes tree/list |
 | `Services` | Run dashboard entries | Service/run consoles. May report `has no content` until opened once in Rider (`View → Tool Windows → Services`) |
@@ -240,10 +226,9 @@ gradlew.bat runIde
 | "No endpoints found..." | Check `rider_get_ide_state` for indexing/build progress and retry when idle; if idle and still empty, verify in Rider via View → Tool Windows → Endpoints (panel has no detected routes). Fallback: text search for route attributes |
 | "No test configurations found" | Create a test run configuration (Run → Edit Configurations → +), or bypass configs by passing `filter`/`className`/`methodName` to run `dotnet test --filter` directly |
 | "Multiple test configs found" | Pass `configName` to pick one |
-| "No active debug session" | Start one with `rider_start_debug` |
+| "No active debug session" | Start one with built-in `xdebug_start_debugger_session` (or Debug in Rider) |
 | "Debugger is not paused..." | Pause first — evaluating/stepping require a paused debugger (pausing freezes the live process; prefer a dev/test instance) |
 | Debug console is empty | The session produced no application output (the debugger trace is still in `Debug Output`) |
-| Terminal "not ready" | The tab has no attached process yet — open a terminal in Rider and retry |
 | "Configuration '…' not found" | Names must match exactly — list them with the built-in `get_run_configurations` (or IDE Run → Edit Configurations) |
 | `rider_list_db_consoles` returns `[]` | Open the console in an editor tab first (double-click it in the Database tool window) |
 | A tool returns a file path you cannot read | Read only paths from `rider_get_context` (project-relative, always readable); absolute local path as fallback. Never feed one tool's path into another tool blindly |
@@ -254,9 +239,8 @@ gradlew.bat runIde
 ## Known limits (accepted, not hidden)
 
 - Tool-window reads run on the EDT and are capped at 20000 lines with a truncation marker — huge consoles don't freeze the IDE, but page with `section`/`pattern`/`maxLines` instead of dumping.
-- `rider_send_terminal_input` is fire-and-forget: terminal scrollback has no reliable read-back via tools. Need output? Use `rider_build` / `rider_tests` / `rider_nuget`.
 - `rider_kill_process` matches by exact display name; ambiguous names fail — pass `pid` from the same listing.
-- `rider_debug(action='evaluate')` runs code inside the debuggee (getters can have side effects) — dev/test instances only.
+- Evaluating expressions in a debug session (built-in `xdebug_evaluate_expression`) runs code inside the debuggee (getters can have side effects) — dev/test instances only.
 - `OFFSET` paging without `ORDER BY` is nondeterministic — always pair them.
 - MCP calls longer than ~60 s are dropped by the MCP server (HTTP 404): tools that wait cap themselves at 50 s (`waitSeconds`) or 40 s (long-poll, `open_table`, `inIde`). Longer work → `async=true` + `rider_console_job`.
 - `rider_execute_console(inIde=true)` is refused on Read-only data sources and with `readOnly=true`: the IDE console run has no rolled-back transaction or read-only session.

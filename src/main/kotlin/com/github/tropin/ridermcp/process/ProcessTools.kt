@@ -44,7 +44,7 @@ class ProcessToolset : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Kills an IDE-managed process by exact display name from rider_list_processes (use it first — names must match exactly; confirm with the user before killing). Pass pid from the same listing to disambiguate when several processes share a name; without pid, an ambiguous name fails instead of killing the first match. Prefer the tool-native stop when applicable (rider_build action='cancel', rider_debug action='stop'). Fails when already terminated.")
+    @McpDescription("Kills an IDE-managed process by exact display name from rider_list_processes (use it first — names must match exactly; confirm with the user before killing). Pass pid from the same listing to disambiguate when several processes share a name; without pid, an ambiguous name fails instead of killing the first match. Prefer the tool-native stop when applicable (built-in xdebug_control_session for debug sessions). Fails when already terminated.")
     suspend fun rider_kill_process(
         @McpDescription("Process display name, exact match from rider_list_processes") processName: String,
         @McpDescription("Process ID from rider_list_processes (optional; required when the name is ambiguous)") pid: Long? = null
