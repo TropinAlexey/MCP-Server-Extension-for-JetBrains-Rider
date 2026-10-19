@@ -103,7 +103,7 @@ MCP tools are synchronous (request → response). Long-running operations — bu
 ### Run configurations
 | Tool | Args | Description |
 |---|---|---|
-| `rider_run_config` | `action=create\|update\|delete`, `name`, `typeId?`, `programArgs?`, `env?`, `newName?` | CRUD for run/debug configs (does not launch; launch via `rider_start_debug`/`rider_tests`). `typeId` from built-in `get_run_configurations` (or IDE Run → Edit Configurations) |
+| `rider_run_config` | `action=create\|update\|delete`, `name`, `copyFrom?`, `typeId?`, `programArgs?`, `env?`, `newName?` | CRUD for run/debug configs (does not launch; launch via built-in `execute_run_configuration`, `rider_start_debug`, `rider_tests`). `create` clones `copyFrom` (keeps the project) or makes an empty `typeId` config; args/env work for .NET project/exe configs |
 
 ### .NET debugger
 | Tool | Args | Description |
@@ -272,6 +272,11 @@ gradlew.bat runIde
 - Running commands without confirmation is opt-in ("brave mode" in the MCP server settings) and stays off by default — keep it off unless you trust the agent. This is a security feature, not an inconvenience.
 
 ## What's New
+
+### v1.2.11
+
+- `rider_run_config` can create a working .NET app configuration with arguments and environment variables: `action='create'` with the new `copyFrom` clones an existing configuration (project, framework, working directory) and applies `programArgs`/`env` — these used to be rejected for .NET project configs
+- An unknown `typeId` now lists the valid type IDs; a .NET project config created without a project carries a warning
 
 ### v1.2.10
 
