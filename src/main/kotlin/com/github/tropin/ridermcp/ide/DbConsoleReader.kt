@@ -128,7 +128,6 @@ internal object DbConsoleReader {
                 null
             }
         }
-        if (consoles.isEmpty() && tableEditors.isEmpty()) return "[]"
         return buildJsonObject {
             put("count", consoles.size)
             putJsonArray("consoles") { consoles.forEach { add(it) } }

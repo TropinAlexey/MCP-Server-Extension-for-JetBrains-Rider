@@ -106,9 +106,12 @@ a new tool. A new `rider_*` tool is justified only when all of these hold:
 
 ## Response audit log
 
-- Empty-collection convention (09.2026): `rider_list_db_consoles` answers `[]`
-  (bare array) when no console is open, otherwise `{"count", "consoles": [...]}`.
-  `rider_tool_window(action='content')` answers an object with `text` (`"(empty)"`
-  when blank) plus `availableSections`/`otherTabs` for navigation. Consumers must
-  handle both shapes. Changing them would break released clients, so they stay.
+- Empty-collection convention (09.2026): `rider_list_db_consoles` answered `[]`
+  (bare array) when no console was open, otherwise `{"count", "consoles": [...]}`;
+  `rider_tool_window(action='content')` answered `text: "(empty)"` when blank.
+  Kept through 1.2.x so released clients did not break.
+- Aligned in 2.0 (10.2026): `rider_list_db_consoles` always answers an object
+  (`{"count": 0, "consoles": []}` when nothing is open; `tableEditors` only when present),
+  and a lookup failure is reported as an error instead of a silent `[]`.
+  `rider_tool_window` returns `text: ""` for a blank window; `totalLines` tells emptiness.
   (History: `rider_get_todos` merged into `rider_tool_window(windowId='TODO')`; `rider_get_endpoints` into `windowId='Endpoints'`.)

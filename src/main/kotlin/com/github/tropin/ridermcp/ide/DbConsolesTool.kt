@@ -11,19 +11,20 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.*
 import kotlin.coroutines.coroutineContext
 
+// Same shape as a populated list, so clients never branch on an array vs an object.
+private const val EMPTY_CONSOLE_LIST = """{"count":0,"consoles":[]}"""
+
 class DbConsolesToolset : McpToolset {
 
     @McpTool
-    @McpDescription("Lists open SQL consoles (editor tabs bound to a data source) with console file name, data source name + uniqueId (use as connectionId), DBMS, URL, currentDatabase + currentDatabaseSource (toolbar = picked in the console toolbar | url = the URL's database | login-default = the login's default database from the introspected model; no currentDatabase = unknown until the first rider_execute_console, whose response names the real database), readOnly (data source Read-only flag) and busyJobId when a rider_execute_console job runs there. tableEditors lists open table/view tabs with dataSource, database, schema, object and kind — use them when the user says 'the open table'; selected=true marks the active tab. Call FIRST when the user mentions an open console or table. Run SQL against any of them with rider_execute_console(console=consoleRef) — not the built-in execute_sql_query, which blocks on an IDE confirmation dialog. Returns [] when nothing is open (rider_database_connection(action='open_console')).")
+    @McpDescription("Lists open SQL consoles (editor tabs bound to a data source) with console file name, data source name + uniqueId (use as connectionId), DBMS, URL, currentDatabase + currentDatabaseSource (toolbar = picked in the console toolbar | url = the URL's database | login-default = the login's default database from the introspected model; no currentDatabase = unknown until the first rider_execute_console, whose response names the real database), readOnly (data source Read-only flag) and busyJobId when a rider_execute_console job runs there. tableEditors lists open table/view tabs with dataSource, database, schema, object and kind — use them when the user says 'the open table'; selected=true marks the active tab. Call FIRST when the user mentions an open console or table. Run SQL against any of them with rider_execute_console(console=consoleRef) — not the built-in execute_sql_query, which waits for a per-schema IDE confirmation dialog. count=0 when nothing is open (rider_database_connection(action='open_console')).")
     suspend fun rider_list_db_consoles(): String {
         val project = coroutineContext.project
         return runOnEdt {
             try {
                 DbConsoleReader.listOpenConsoles(project)
             } catch (_: NoClassDefFoundError) {
-                "[]"
-            } catch (_: Exception) {
-                "[]"
+                EMPTY_CONSOLE_LIST
             }
         }
     }

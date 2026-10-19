@@ -170,13 +170,9 @@ class IdeStateToolset : McpToolset {
                         put("from", page.returnedFrom)
                         put("to", page.returnedTo)
                     }
-                    if (page.lines.isEmpty()) {
-                        put("text", "(empty)")
-                    } else {
-                        put("text", page.lines.joinToString("\n"))
-                        if (page.truncated) put("truncated", true)
-                        page.matchedLines?.let { put("matchedLines", it) }
-                    }
+                    put("text", page.lines.joinToString("\n"))
+                    if (page.truncated) put("truncated", true)
+                    page.matchedLines?.let { put("matchedLines", it) }
                     val tabs = cm.contents.map { it.displayName ?: "" }
                     if (tabs.size > 1) putJsonArray("otherTabs") { tabs.filter { it != (content.displayName ?: "") }.forEach { add(it) } }
                 }.toString()
