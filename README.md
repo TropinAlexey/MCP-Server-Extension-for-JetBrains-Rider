@@ -263,6 +263,28 @@ gradlew.bat runIde
 
 ## What's New
 
+### v2.0.0
+
+**Requires Rider 2026.2+.** On Rider 2026.1 the Marketplace keeps serving 1.2.11 (the 1.2.x line gets critical fixes only).
+
+Six tools that duplicated the built-in JetBrains MCP tools are removed. In eval rounds agents never chose them over the built-ins, and hiding them did not change any result. Migration:
+
+| Removed (1.2.x) | Use instead (built-in) |
+|---|---|
+| `rider_build` | `build_solution_start` + `build_solution_state`; `get_file_problems` for a single file |
+| `rider_start_debug` | `xdebug_start_debugger_session(configurationName=...)` |
+| `rider_debug` | `xdebug_control_session`, `xdebug_get_debugger_status`, `xdebug_evaluate_expression`, `xdebug_get_frame_values` |
+| `rider_breakpoint` | `xdebug_set_breakpoint`, `xdebug_list_breakpoints`, `xdebug_remove_breakpoint` |
+| `rider_list_terminals`, `rider_send_terminal_input` | `execute_terminal_command` |
+
+The app's own output in a debug session is still read with `rider_tool_window(windowId='Debug', section='Console')`; to run an app use the built-in `execute_run_configuration` (create the configuration with `rider_run_config`).
+
+Response changes:
+
+- `rider_list_db_consoles` always answers an object: `{"count": 0, "consoles": []}` when nothing is open (was a bare `[]`); a failure to read the consoles is reported as an error instead of an empty list
+- `rider_tool_window` returns `"text": ""` for an empty window (was `"(empty)"`); check `totalLines`
+- `rider_get_output` polls sessions of `rider_tests`, `rider_nuget(action='restore')` and `rider_publish`
+
 ### v1.2.11
 
 - `rider_run_config` can create a working .NET app configuration with arguments and environment variables: `action='create'` with the new `copyFrom` clones an existing configuration (project, framework, working directory) and applies `programArgs`/`env` — these used to be rejected for .NET project configs
