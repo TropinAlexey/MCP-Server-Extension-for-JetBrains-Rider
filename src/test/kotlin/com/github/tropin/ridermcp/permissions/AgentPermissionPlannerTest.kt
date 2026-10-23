@@ -13,7 +13,7 @@ class AgentPermissionPlannerTest {
 
     private val home: Path = Files.createTempDirectory("home")
     private val project: Path = Files.createTempDirectory("project")
-    private val planner = AgentPermissionPlanner(project, home, listOf("rider_get_context"))
+    private val planner = AgentPermissionPlanner(project, home, listOf("rider_get_context"), idePort = 1)
 
     private fun put(path: Path, text: String) = path.apply { Files.createDirectories(parent) }.writeText(text)
 
@@ -42,8 +42,15 @@ class AgentPermissionPlannerTest {
     }
 
     @Test
+    fun `servers named rider in repo files are ignored`() {
+        put(project.resolve(".mcp.json"), """{"mcpServers": {"rider": {"url": "http://127.0.0.1:1/stream"}}}""")
+        put(project.resolve(".codex/config.toml"), "[mcp_servers.rider]\nurl = \"http://127.0.0.1:1/stream\"\n")
+        assertTrue(planner.plan(PermissionScope.ALL, claudeUserWide = false).all { it.updated == null })
+    }
+
+    @Test
     fun `gemini is trusted only for all tools`() {
-        put(project.resolve(".gemini/settings.json"), """{"mcpServers": {"rider": {"httpUrl": "http://localhost:1/stream"}}}""")
+        put(home.resolve(".gemini/settings.json"), """{"mcpServers": {"rider": {"httpUrl": "http://localhost:1/stream"}}}""")
         assertNull(planner.plan(PermissionScope.READ_ONLY, false).single { it.client == "Gemini CLI" }.updated)
         val all = planner.plan(PermissionScope.ALL, false).single { it.client == "Gemini CLI" }
         assertTrue("\"trust\": true" in all.updated!!)

@@ -17,12 +17,14 @@ data class PlannedEdit(val client: String, val path: Path, val status: String, v
 /**
  * Finds the agent clients connected to this IDE's MCP server and plans the edits that let them
  * call its tools without a prompt. Only clients with a documented, file-based approval setting are
- * edited; the rest are covered by the dialog's manual hints.
+ * edited; the rest are covered by the dialog's manual hints. Only user-owned config files are read:
+ * project files (`.mcp.json`, `.codex/`, `.gemini/`) come with the repo and could name any server.
  */
 internal class AgentPermissionPlanner(
     private val projectDir: Path,
     private val home: Path,
     private val readOnlyTools: List<String>,
+    private val idePort: Int,
 ) {
 
     fun plan(scope: PermissionScope, claudeUserWide: Boolean): List<PlannedEdit> =
@@ -30,8 +32,9 @@ internal class AgentPermissionPlanner(
 
     private fun claudeCode(scope: PermissionScope, userWide: Boolean): List<PlannedEdit> {
         val target = if (userWide) home.resolve(".claude/settings.json") else projectDir.resolve(".claude/settings.local.json")
+        // User-wide rules match the server name in every project, so only user-scope entries count for them.
         val keys = AgentPermissionConfigs.claudeServerKeys(
-            read(home.resolve(".claude.json")), read(projectDir.resolve(".mcp.json")), projectDir.toString()
+            read(home.resolve(".claude.json")), projectDir.toString(), idePort, includeProject = !userWide
         )
         if (keys.isEmpty()) return listOf(PlannedEdit(CLAUDE, target, "not connected to this IDE — skipped", null))
         val rules = AgentPermissionConfigs.claudeAllowRules(keys, scope, readOnlyTools)
@@ -44,8 +47,8 @@ internal class AgentPermissionPlanner(
     private fun codex(scope: PermissionScope): List<PlannedEdit> {
         val codexHome = System.getenv("CODEX_HOME")?.let(Path::of) ?: home.resolve(".codex")
         val mode = AgentPermissionConfigs.codexApprovalMode(scope)
-        return configured(CODEX, listOf(codexHome.resolve("config.toml"), projectDir.resolve(".codex/config.toml"))) { path, text ->
-            val keys = AgentPermissionConfigs.codexServerKeys(text)
+        return configured(CODEX, listOf(codexHome.resolve("config.toml"))) { path, text ->
+            val keys = AgentPermissionConfigs.codexServerKeys(text, idePort)
             if (keys.isEmpty()) return@configured null
             val updated = keys.fold(text) { acc, key -> AgentPermissionConfigs.setCodexApprovalMode(acc, key, mode) ?: acc }
             val status = if (updated == text) "already allowed" else "default_tools_approval_mode = \"$mode\" for ${keys.joinToString()}"
@@ -54,8 +57,8 @@ internal class AgentPermissionPlanner(
     }
 
     private fun gemini(scope: PermissionScope): List<PlannedEdit> =
-        configured(GEMINI, listOf(home.resolve(".gemini/settings.json"), projectDir.resolve(".gemini/settings.json"))) { path, text ->
-            val keys = AgentPermissionConfigs.geminiServerKeys(text)
+        configured(GEMINI, listOf(home.resolve(".gemini/settings.json"))) { path, text ->
+            val keys = AgentPermissionConfigs.geminiServerKeys(text, idePort)
             when {
                 keys.isEmpty() -> null
                 // Gemini CLI trusts a server only as a whole: there is no read-only subset to grant.

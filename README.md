@@ -203,7 +203,7 @@ Every agent client asks before an MCP tool call until you allow it. That setting
 | Gemini CLI | `"trust": true` on the server entry in `settings.json` | — (trusts whole servers only) | ✅ |
 | Copilot CLI, Cursor, VS Code, Windsurf, Junie | nothing — set it in the client: `copilot --allow-tool 'rider'`, or "Always allow" in the tool prompt | | |
 
-- Only clients already connected to this IDE are touched, and only rules are added — nothing is removed. `rider` is the server name from the client's config (also `jetbrains` or your own name — the action detects it by the IDE server URL).
+- Only clients already connected to this IDE are touched, and only rules are added — nothing is removed. `rider` stands for the server name in the client's config (any name works). The server is recognized by this IDE's MCP port, never by name, and only from your user-level client configs: files that come with a repository (`.mcp.json`, `.codex/`, `.gemini/`) are ignored, so a cloned project cannot get its own server trusted. "All projects" for Claude Code uses only user-scope servers.
 - **Read-only** (default) covers tools that declare `readOnlyHint`: the read-only `rider_*` tools (state, context, tool windows, outputs, lists) and built-in tools marked read-only. **All tools** also covers the built-in terminal, file edits and SQL — choose it only for an agent you trust.
 - Restart the agent session afterwards.
 

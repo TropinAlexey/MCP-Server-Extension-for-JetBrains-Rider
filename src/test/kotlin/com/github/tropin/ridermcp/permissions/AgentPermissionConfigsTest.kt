@@ -10,20 +10,27 @@ class AgentPermissionConfigsTest {
 
     // Detection — only entries that point at the IDE MCP server count.
 
+    private val claudeJson = """
+        {"mcpServers": {"rider": {"type": "http", "url": "http://127.0.0.1:64482/stream"}, "other": {"command": "npx"},
+                        "jetbrains": {"url": "http://127.0.0.1:9999/stream"}},
+         "projects": {"/work/app": {"mcpServers": {"ide": {"command": "java", "env": {"IJ_MCP_SERVER_PORT": "64482"}}}}}}
+    """.trimIndent()
+
     @Test
-    fun `claude keys come from user, project and mcp json entries`() {
-        val claudeJson = """
-            {"mcpServers": {"rider": {"type": "http", "url": "http://127.0.0.1:64482/stream"}, "other": {"command": "npx"}},
-             "projects": {"/work/app": {"mcpServers": {"ide": {"url": "http://localhost:64342/sse"}}}}}
-        """.trimIndent()
-        val mcpJson = """{"mcpServers": {"jetbrains": {"command": "java"}}}"""
-        assertEquals(setOf("ide", "jetbrains", "rider"), AgentPermissionConfigs.claudeServerKeys(claudeJson, mcpJson, "/work/app"))
+    fun `claude keys match this IDE's port, never the name`() {
+        assertEquals(setOf("ide", "rider"), AgentPermissionConfigs.claudeServerKeys(claudeJson, "/work/app", 64482, includeProject = true))
+    }
+
+    @Test
+    fun `user-wide claude keys skip project-local entries`() {
+        assertEquals(setOf("rider"), AgentPermissionConfigs.claudeServerKeys(claudeJson, "/work/app", 64482, includeProject = false))
     }
 
     @Test
     fun `claude keys ignore other projects and broken files`() {
-        val claudeJson = """{"projects": {"/other": {"mcpServers": {"rider": {}}}}}"""
-        assertEquals(emptySet(), AgentPermissionConfigs.claudeServerKeys(claudeJson, "{broken", "/work/app"))
+        val other = """{"projects": {"/other": {"mcpServers": {"rider": {"url": "http://127.0.0.1:64482/stream"}}}}}"""
+        assertEquals(emptySet(), AgentPermissionConfigs.claudeServerKeys(other, "/work/app", 64482, includeProject = true))
+        assertEquals(emptySet(), AgentPermissionConfigs.claudeServerKeys("{broken", "/work/app", 64482, includeProject = true))
     }
 
     // Claude Code — rules are only ever appended.
@@ -70,11 +77,14 @@ class AgentPermissionConfigsTest {
 
         [mcp_servers."docs"]
         command = "npx"
+
+        [mcp_servers.jetbrains]
+        url = "http://127.0.0.1:9999/stream"
     """.trimIndent()
 
     @Test
     fun `codex keys match the IDE section only`() {
-        assertEquals(setOf("rider"), AgentPermissionConfigs.codexServerKeys(codexToml))
+        assertEquals(setOf("rider"), AgentPermissionConfigs.codexServerKeys(codexToml, 64482))
     }
 
     @Test
@@ -86,7 +96,7 @@ class AgentPermissionConfigsTest {
 
     @Test
     fun `codex mode is replaced but approve is never narrowed`() {
-        val prompt = codexToml.replace("url = ", "default_tools_approval_mode = \"prompt\"\nurl = ")
+        val prompt = codexToml.replaceFirst("url = ", "default_tools_approval_mode = \"prompt\"\nurl = ")
         val approved = AgentPermissionConfigs.setCodexApprovalMode(prompt, "rider", "approve")!!
         assertTrue("default_tools_approval_mode = \"approve\"" in approved && "\"prompt\"" !in approved)
         assertNull(AgentPermissionConfigs.setCodexApprovalMode(approved, "rider", "writes"))
@@ -102,7 +112,7 @@ class AgentPermissionConfigsTest {
     @Test
     fun `gemini trust is set on the IDE entry`() {
         val settings = """{"theme": "dark", "mcpServers": {"rider": {"httpUrl": "http://127.0.0.1:64482/stream"}}}"""
-        assertEquals(setOf("rider"), AgentPermissionConfigs.geminiServerKeys(settings))
+        assertEquals(setOf("rider"), AgentPermissionConfigs.geminiServerKeys(settings, 64482))
         val updated = AgentPermissionConfigs.setGeminiTrust(settings, "rider")!!
         assertTrue("\"trust\": true" in updated && "\"theme\": \"dark\"" in updated)
         assertNull(AgentPermissionConfigs.setGeminiTrust(updated, "rider"))

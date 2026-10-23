@@ -1,5 +1,6 @@
 package com.github.tropin.ridermcp.permissions
 
+import com.intellij.mcpserver.impl.McpServerService
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.ActionUpdateThread
@@ -33,7 +34,16 @@ class ConfigureAgentPermissionsAction : DumbAwareAction() {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
         val projectDir = project.basePath?.let(Path::of) ?: project.guessProjectDir()?.toNioPath() ?: return
-        val planner = AgentPermissionPlanner(projectDir, Path.of(System.getProperty("user.home")), AgentPermissionPlanner.readOnlyToolNames())
+        val server = McpServerService.getInstance()
+        if (!server.isRunning) {
+            NotificationGroupManager.getInstance().getNotificationGroup(NOTIFICATION_GROUP)
+                .createNotification("Agent permissions", "Enable the MCP server first: Settings → Tools → MCP Server.", NotificationType.WARNING)
+                .notify(project)
+            return
+        }
+        val planner = AgentPermissionPlanner(
+            projectDir, Path.of(System.getProperty("user.home")), AgentPermissionPlanner.readOnlyToolNames(), server.port
+        )
         val dialog = ConfigureAgentPermissionsDialog(project, planner)
         if (!dialog.showAndGet()) return
 

@@ -13,28 +13,30 @@ enum class PermissionScope { READ_ONLY, ALL }
  */
 internal object AgentPermissionConfigs {
 
-    // Server keys the JetBrains MCP Server writes on Auto-Configure (product name, legacy key),
-    // plus any entry pointing at a local /sse or /stream endpoint — the IDE server's URL shape.
-    private val knownKeys = setOf("rider", "jetbrains")
-    private val ideUrl = Regex("""^https?://(127\.0\.0\.1|localhost)(:\d+)?/(sse|stream)/?$""")
+    // An entry is this IDE's server only when it reaches this IDE's port: a local /sse or /stream URL,
+    // or the JetBrains stdio proxy pointed at it via IJ_MCP_SERVER_PORT. Names are never trusted —
+    // any config can call a foreign server "rider".
+    private val ideUrl = Regex("""^https?://(127\.0\.0\.1|localhost):(\d+)/(sse|stream)/?$""")
 
     @OptIn(ExperimentalSerializationApi::class)
     private val json = Json { prettyPrint = true; prettyPrintIndent = "  " }
 
-    fun isIdeServer(key: String, url: String?): Boolean =
-        key.lowercase() in knownKeys || (url != null && ideUrl.matches(url.trim()))
+    fun isIdeUrl(url: String?, port: Int): Boolean =
+        url != null && ideUrl.matchEntire(url.trim())?.groupValues?.get(2) == port.toString()
 
     // --- Claude Code: permissions.allow in settings.json ---
 
-    /** IDE server keys from `~/.claude.json` (user + this project's entry) and the project's `.mcp.json`. */
-    fun claudeServerKeys(claudeJson: String?, mcpJson: String?, projectPath: String): Set<String> {
+    /**
+     * IDE server keys from `~/.claude.json`: user scope, plus this project's local scope when
+     * [includeProject]. The repo's `.mcp.json` is never read — a cloned repo controls it.
+     */
+    fun claudeServerKeys(claudeJson: String?, projectPath: String, port: Int, includeProject: Boolean): Set<String> {
         val root = claudeJson?.let(::parseObject)
         val servers = listOfNotNull(
             root?.obj("mcpServers"),
-            root?.obj("projects")?.obj(projectPath)?.obj("mcpServers"),
-            mcpJson?.let(::parseObject)?.obj("mcpServers"),
+            root?.obj("projects")?.obj(projectPath)?.obj("mcpServers")?.takeIf { includeProject },
         )
-        return servers.flatMap { ideKeys(it) }.toSortedSet()
+        return servers.flatMap { ideKeys(it, port) }.toSortedSet()
     }
 
     fun claudeAllowRules(keys: Collection<String>, scope: PermissionScope, readOnlyTools: Collection<String>): List<String> =
@@ -69,10 +71,15 @@ internal object AgentPermissionConfigs {
      */
     fun codexApprovalMode(scope: PermissionScope): String = if (scope == PermissionScope.ALL) "approve" else "writes"
 
-    fun codexServerKeys(toml: String): Set<String> =
-        codexSections(toml.lines()).filter { (key, range) ->
-            isIdeServer(key, toml.lines().slice(range).firstNotNullOfOrNull { codexUrl.find(it)?.groupValues?.get(1) })
+    fun codexServerKeys(toml: String, port: Int): Set<String> {
+        val lines = toml.lines()
+        val stdioPort = Regex("""IJ_MCP_SERVER_PORT\s*=\s*"?$port"?(\D|$)""")
+        return codexSections(lines).filter { (_, range) ->
+            val section = lines.slice(range)
+            isIdeUrl(section.firstNotNullOfOrNull { codexUrl.find(it)?.groupValues?.get(1) }, port) ||
+                section.any { stdioPort.containsMatchIn(it) }
         }.map { it.first }.toSortedSet()
+    }
 
     fun setCodexApprovalMode(toml: String, key: String, mode: String): String? {
         val lines = toml.lines().toMutableList()
@@ -100,8 +107,8 @@ internal object AgentPermissionConfigs {
 
     // --- Gemini CLI: per-server "trust": true in settings.json ---
 
-    fun geminiServerKeys(settings: String): Set<String> =
-        parseObject(settings)?.obj("mcpServers")?.let(::ideKeys).orEmpty().toSortedSet()
+    fun geminiServerKeys(settings: String, port: Int): Set<String> =
+        parseObject(settings)?.obj("mcpServers")?.let { ideKeys(it, port) }.orEmpty().toSortedSet()
 
     fun setGeminiTrust(settings: String, key: String): String? {
         val root = parseObject(settings) ?: return null
@@ -114,10 +121,11 @@ internal object AgentPermissionConfigs {
 
     // --- helpers ---
 
-    private fun ideKeys(servers: JsonObject): List<String> = servers.mapNotNull { (key, value) ->
+    private fun ideKeys(servers: JsonObject, port: Int): List<String> = servers.mapNotNull { (key, value) ->
         val entry = value as? JsonObject
         val url = (entry?.get("url") ?: entry?.get("httpUrl")) as? JsonPrimitive
-        key.takeIf { isIdeServer(it, url?.contentOrNull) }
+        val stdioPort = (entry?.obj("env")?.get("IJ_MCP_SERVER_PORT") as? JsonPrimitive)?.contentOrNull
+        key.takeIf { isIdeUrl(url?.contentOrNull, port) || stdioPort == port.toString() }
     }
 
     private fun parseObject(text: String): JsonObject? = runCatching { Json.parseToJsonElement(text) as? JsonObject }.getOrNull()
