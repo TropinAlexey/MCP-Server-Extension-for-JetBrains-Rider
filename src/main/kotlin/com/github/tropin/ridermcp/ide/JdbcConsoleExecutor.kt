@@ -160,7 +160,7 @@ internal object JdbcConsoleExecutor {
                     val timedOut = watchdogFired.get() || SqlText.isTimeout(e)
                     val error = if (timedOut) {
                         "Batch $batchIndex timed out after ${opts.timeoutSeconds}s and was cancelled " +
-                            "(raise timeoutSeconds, or narrow with TOP / id ranges): ${SqlText.snippet(batch)}"
+                            "(raise timeoutSeconds, or narrow with TOP/LIMIT / id ranges): ${SqlText.snippet(batch)}"
                     } else "Batch $batchIndex failed: ${SqlText.describe(e)} — ${SqlText.snippet(batch)}"
                     val resultIndex = entries.count { it.batchIndex == batchIndex } + 1
                     entries.add(Entry(batchIndex, resultIndex, if (timedOut) "timeout" else "error", error = error, errorInfo = SqlText.errorInfo(e)))

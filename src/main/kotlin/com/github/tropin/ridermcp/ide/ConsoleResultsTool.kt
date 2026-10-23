@@ -37,7 +37,7 @@ class ConsoleResultsToolset : McpToolset {
         @McpDescription("Max chars per cell, '…[+N chars]' marks a cut; 0 = unlimited, default 4000") maxCellLength: Int = 4000,
         @McpDescription("Output log lines to return from the end, 0-2000, default 40") outputLines: Int = 40,
         @McpDescription("Mask password/secret/token columns and password= values, default true") maskSecrets: Boolean = true,
-        @McpDescription("Write each grid to this .csv/.json/.txt file (txt = one line per row, cells tab-separated, no header; later grids → <name>-<index>.<ext>); relative = project dir; allowed: project, temp/scratchpad dirs, -Drider.mcp.exportDirs. Response keeps path, rowCount and 5 preview rows") outputFile: String? = null,
+        @McpDescription("Write each grid to this .csv/.json/.txt file (txt = one line per row, cells tab-separated, no header; later grids → <name>-<index>.<ext>); relative = project dir; allowed: project, system temp dir (agent scratchpads only when under it), -Drider.mcp.exportDirs / RIDER_MCP_EXPORT_DIRS. Response keeps path, rowCount and 5 preview rows") outputFile: String? = null,
         @McpDescription("Replace outputFile (and its <name>-<index> siblings) when it already exists; default false = fail instead") overwrite: Boolean = false
     ): String {
         val project = coroutineContext.project

@@ -4,7 +4,6 @@ import com.intellij.execution.ExecutionListener
 import com.intellij.execution.ExecutionManager
 import com.intellij.execution.ProgramRunnerUtil
 import com.intellij.execution.RunManager
-import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.executors.DefaultRunExecutor
 import com.intellij.execution.process.OSProcessHandler
 import com.intellij.execution.process.ProcessEvent
@@ -24,6 +23,7 @@ import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.util.Key
+import com.github.tropin.ridermcp.DotnetCli
 import com.github.tropin.ridermcp.OutputSession
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.*
@@ -282,10 +282,10 @@ class TestToolset : McpToolset {
         captureSessionMetadata(session, project)
         val target = resolveDotnetTestTarget(project)
         val cmd = if (target != null) {
-            GeneralCommandLine("dotnet", "test", target.toString(), "--filter", filter)
+            DotnetCli.commandLine(project, listOf("test", target.toString(), "--filter", filter))
                 .withWorkDirectory(target.parent.toString())
         } else {
-            GeneralCommandLine("dotnet", "test", "--filter", filter)
+            DotnetCli.commandLine(project, listOf("test", "--filter", filter))
                 .withWorkDirectory(project.basePath)
         }
         session.appendLine("Running: ${cmd.commandLineString}")

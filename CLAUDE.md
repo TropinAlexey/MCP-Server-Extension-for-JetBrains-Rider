@@ -10,24 +10,19 @@ IntelliJ/Rider plugin that extends JetBrains MCP Server with additional tools fo
 - **Target IDE**: JetBrains Rider 2026.2+ (2026.1 is served by the 1.2.x line on `release/1.2.x`)
 - **JDK**: 21
 
-## New Tool Pattern
+## Contributor rules
 
-Each tool:
-1. A `suspend fun rider_*` inside a `*Toolset : McpToolset` class
-2. Annotated with `@McpTool` + `@McpDescription` (the cookbook recipe lives in the description)
-3. Toolset registered in `src/main/resources/META-INF/plugin.xml` via `mcpServer.mcpToolset`
-4. Returns a JSON string (built with `kotlinx.serialization.json`); errors via `mcpFail(...)`
+Build commands, the new-tool pattern, agent- and OS-agnostic rules, tool hints, recipes over tools
+and docs sync live in CONTRIBUTING.md (shared by every contributor and coding agent):
 
-For long-running operations (test run, NuGet restore, publish) — **polling pattern**:
-- `start_*` → creates `OutputSession` via `SessionManager`, returns `sessionId`
-- `get_*_output(sessionId)` → returns new lines since last call
-- Client polls until `status != "running"`
+@CONTRIBUTING.md
 
 ## Structure
 
 ```
 src/main/kotlin/com/github/tropin/ridermcp/
 ├── SessionManager.kt       # Shared polling session infrastructure
+├── DotnetCli.kt            # `dotnet` command lines for the CLI configured in Rider
 ├── session/                 # rider_get_output: polling for test/NuGet/publish sessions
 ├── process/                 # P0: Process management
 ├── ide/                     # P0+P4: IDE state, tool windows, TODO, endpoints, DB consoles
@@ -41,37 +36,13 @@ src/main/kotlin/com/github/tropin/ridermcp/
 └── admin/                   # Cache invalidation
 ```
 
-## Commands
-
-```bash
-./gradlew buildPlugin          # Build plugin zip
-./gradlew runIde               # Run Rider with plugin for debugging
-./gradlew verifyPlugin         # Check compatibility
-```
-
-## Naming Convention
-
-All tool names start with `rider_` to avoid conflicts with the base MCP Server plugin.
-
 ## Agent Hints
 
 See [AGENTS.md](AGENTS.md) — task→tool map, pagination, tool window map, polling pattern. Shared across all LLM agents. When adding a new tool or parameter, update AGENTS.md.
 
-## Agent-agnostic
+## Evals (maintainer)
 
-The plugin serves any MCP client (Claude Code, Codex, Gemini CLI, Copilot, Cursor, Junie, …).
-Tool descriptions, AGENTS.md, README and IDE UI use neutral wording ("agent", "MCP client");
-client-specific details appear only as a list covering several clients (e.g. permission setup).
-No feature may require one particular client. Mark tools with `@McpToolHints` (placed before
-`@McpTool`): `readOnlyHint = TRUE` only for tools that never change anything — no file-writing parameter either (`outputFile` disqualifies, hence not on `rider_console_results`), `destructiveHint = TRUE`
-for kill/delete/arbitrary-SQL ones — clients use them for auto-approval.
-
-## Tool Design Rules
-
-Recipes over tools (see CONTRACT.md): do not add a new `rider_*` tool when
-a cookbook description on an existing one covers the scenario. A new tool
-requires all three: (1) recipe cannot cover it, (2) reason recorded in the
-commit message, (3) eval delta in `notes/evals` does not regress.
+A new tool also requires that the eval delta in `notes/evals` does not regress (CONTRACT.md, "Recipes over tools").
 
 ## Notes
 

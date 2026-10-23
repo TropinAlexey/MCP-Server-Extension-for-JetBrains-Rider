@@ -10,7 +10,7 @@ import java.nio.file.StandardOpenOption
 
 /**
  * Target files for outputFile exports (rider_execute_console, rider_console_results): format by
- * extension, writes confined to the project, the system temp dirs (agent scratchpads) and
+ * extension, writes confined to the project, the system temp dirs (agent scratchpads under them) and
  * directories listed in `-Drider.mcp.exportDirs` / `RIDER_MCP_EXPORT_DIRS`, no silent overwrite.
  */
 internal object ExportFiles {
@@ -49,7 +49,7 @@ internal object ExportFiles {
         if (roots.none { real.startsWith(it) }) {
             throw IllegalArgumentException(
                 "outputFile '$path' is outside the allowed export directories $roots. Write into the project, " +
-                    "a temp/scratchpad dir, or ask the user to add the directory via -D$EXPORT_DIRS_PROPERTY=<dirs> (Help → Edit Custom VM Options)."
+                    "the system temp dir, or ask the user to add the directory via -D$EXPORT_DIRS_PROPERTY=<dirs> (Help → Edit Custom VM Options) or the $EXPORT_DIRS_ENV environment variable."
             )
         }
         checkWritable(path, overwrite)

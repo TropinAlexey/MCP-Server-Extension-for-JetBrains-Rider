@@ -81,7 +81,8 @@ a new tool. A new `rider_*` tool is justified only when all of these hold:
 
 1. The need cannot be met by a richer `McpDescription`/recipe on an existing tool.
 2. The reason is recorded in the commit message.
-3. Eval delta (notes/evals) does not regress: calls, misroutes, first-try rate.
+3. Eval delta does not regress: calls, misroutes, first-try rate. The maintainer runs the
+   evals (private fixture); contributors describe a manual check in the PR ([CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## Docs sync (enforced by `checkToolDocs`)
 

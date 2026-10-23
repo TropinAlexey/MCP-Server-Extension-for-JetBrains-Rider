@@ -42,15 +42,22 @@ intellijPlatform {
             org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask.FailureLevel.OVERRIDE_ONLY_API_USAGES,
         )
         ides {
-            local("/Applications/Rider.app/Contents")
+            // An installed Rider when there is one (RIDER_PATH, else the default macOS location); otherwise
+            // the build's own Rider artifact, so verifyPlugin runs on any OS and in CI without an install.
+            val localRider = providers.environmentVariable("RIDER_PATH").orElse("/Applications/Rider.app/Contents").get()
+            val hasLocalRider = file(localRider).exists()
+            if (hasLocalRider) local(localRider)
             // Every Rider line the plugin claims (sinceBuild..EAP): the Marketplace verifier rejected
             // 1.2.7 on the 263 EAP, which the local IDE alone does not catch.
             // Rider ships as maven artifacts only (no installer): list versions explicitly and bump the EAP.
-            if (providers.gradleProperty("verifyAllRiders").isPresent) {
-                for (version in listOf("2026.2.3.1", "2026.3-EAP7-SNAPSHOT")) {
-                    create(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.Rider, version) {
-                        useInstaller = false
-                    }
+            val versions = when {
+                providers.gradleProperty("verifyAllRiders").isPresent -> listOf("2026.2.3.1", "2026.3-EAP7-SNAPSHOT")
+                !hasLocalRider -> listOf("2026.2.3.1")
+                else -> emptyList()
+            }
+            for (version in versions) {
+                create(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.Rider, version) {
+                    useInstaller = false
                 }
             }
         }
@@ -97,7 +104,7 @@ tasks.findByName("check")?.dependsOn("checkToolDocs")
 // and it always runs the plugin built from the current tree.
 val runIdeEvals by intellijPlatformTesting.runIde.registering {
     // The developer's installed Rider (same version as daily work), with the task's own sandbox config.
-    providers.environmentVariable("EVAL_RIDER_PATH").orElse("/Applications/Rider.app").get()
+    providers.environmentVariable("EVAL_RIDER_PATH").orElse(providers.environmentVariable("RIDER_PATH")).orElse("/Applications/Rider.app").get()
         .let { path -> if (file(path).exists()) localPath = file(path) }
     task {
         args(

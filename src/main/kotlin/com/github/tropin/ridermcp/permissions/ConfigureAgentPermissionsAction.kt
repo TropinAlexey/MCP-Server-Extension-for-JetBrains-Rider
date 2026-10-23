@@ -73,7 +73,7 @@ private class ConfigureAgentPermissionsDialog(project: Project, private val plan
     private val readOnly = JBRadioButton("Read-only tools (recommended)", true)
     private val all = JBRadioButton("All tools of the IDE MCP server — includes built-in terminal, file edits and SQL")
     private val claudeProject = JBRadioButton("This project only (.claude/settings.local.json, not committed)", true)
-    private val claudeUser = JBRadioButton("All projects (~/.claude/settings.json)")
+    private val claudeUser = JBRadioButton("All projects (user settings.json — ~/.claude or CLAUDE_CONFIG_DIR)")
     private val preview = JBLabel()
 
     init {

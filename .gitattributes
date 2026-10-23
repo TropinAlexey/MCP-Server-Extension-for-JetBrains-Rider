@@ -1,0 +1,9 @@
+* text=auto
+
+# Shell scripts must keep LF even in a Windows checkout (WSL, Docker, Git Bash run them).
+gradlew text eol=lf
+*.sh text eol=lf
+*.bat text eol=crlf
+
+*.jar binary
+*.png binary

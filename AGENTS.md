@@ -4,6 +4,8 @@ MCP Server extension plugin for JetBrains Rider. Adds `rider_*` tools for what t
 
 Per-tool documentation lives in each tool's description (visible on tool call). This file is the routing layer — which tool for which task.
 
+Working on this repository's code rather than using its tools? Contributor rules are in [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Prefer `rider_*` over base MCP Server tools
 
 The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database tools. **Use the `rider_*` versions instead** — they handle more DBMS types and edge cases:
@@ -38,7 +40,7 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
   - Production / "read-only" requests → `readOnly=true` (forced for data sources marked Read-only — see `readOnly` in `rider_list_db_consoles`): DML/DDL rejected before sending, MSSQL runs in a rolled-back transaction, PostgreSQL in a read-only session; `#temp` / `@table` / `CREATE TEMP TABLE` allowed. Dynamic SQL must be literal (`sp_executesql N'…'`, `sp_MSforeachdb '… [?].sys.tables …'`) — SQL assembled in variables is rejected because it cannot be checked. Check `readOnlyEnforced` in the response.
   - Secrets: `maskSecrets` is on by default (password/secret/token columns, `password=` in connection strings). Turn it off only when the user explicitly needs the value.
   - More than a page of rows → raise `pageSize` (up to 5000; response has `columns`, `rowCount`, `hasMore`) — never glue rows with `STRING_AGG` to dodge paging.
-  - Large exports, or data a script on disk will read → `outputFile='<path>.csv|.json|.txt'` (all rows, no page limit; `.txt` = one line per row, no header — a ready list of URLs/ids); the response keeps path, `columns` and a 5-row preview. Allowed dirs: project, temp/scratchpad, `-Drider.mcp.exportDirs`. Existing files → `overwrite=true`.
+  - Large exports, or data a script on disk will read → `outputFile='<path>.csv|.json|.txt'` (all rows, no page limit; `.txt` = one line per row, no header — a ready list of URLs/ids); the response keeps path, `columns` and a 5-row preview. Allowed dirs: project, the system temp dir (`java.io.tmpdir`, `/tmp`; an agent scratchpad only when it lies under one), `-Drider.mcp.exportDirs` or `RIDER_MCP_EXPORT_DIRS` (OS path separator). Existing files → `overwrite=true`.
   - Errors come verbatim with `[error N, SQLState …, severity …, line …]` (multi-batch runs: `errorCode`/`sqlState`/`severity`/`line`/`message` fields per failed batch). `Cannot switch to database …` carries the server's reason: 911 = no such database, 916 = the login has no access.
   - "The open table" / "the tab I have open" → `rider_list_db_consoles` → `tableEditors` (dataSource, database, schema, object; `selected=true` = active tab)
 - Results of a script the USER ran in a console (Services → Database result tabs) → `rider_console_results(console, index?, outputFile?)`; `state=running` while it executes — poll it, the console is not blocked. `hasMoreInIde=true` = the IDE grid fetched only its first page

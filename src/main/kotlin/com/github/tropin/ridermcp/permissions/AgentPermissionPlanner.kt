@@ -25,16 +25,21 @@ internal class AgentPermissionPlanner(
     private val home: Path,
     private val readOnlyTools: List<String>,
     private val idePort: Int,
+    private val env: (String) -> String? = System::getenv,
 ) {
+    // Config dirs the clients let users relocate: CLAUDE_CONFIG_DIR holds both .claude.json and settings.json.
+    private val claudeDir = env("CLAUDE_CONFIG_DIR")?.takeIf { it.isNotBlank() }?.let(Path::of)
+    private val codexHome = env("CODEX_HOME")?.takeIf { it.isNotBlank() }?.let(Path::of) ?: home.resolve(".codex")
 
     fun plan(scope: PermissionScope, claudeUserWide: Boolean): List<PlannedEdit> =
         claudeCode(scope, claudeUserWide) + codex(scope) + gemini(scope)
 
     private fun claudeCode(scope: PermissionScope, userWide: Boolean): List<PlannedEdit> {
-        val target = if (userWide) home.resolve(".claude/settings.json") else projectDir.resolve(".claude/settings.local.json")
+        val userSettings = claudeDir?.resolve("settings.json") ?: home.resolve(".claude/settings.json")
+        val target = if (userWide) userSettings else projectDir.resolve(".claude/settings.local.json")
         // User-wide rules match the server name in every project, so only user-scope entries count for them.
         val keys = AgentPermissionConfigs.claudeServerKeys(
-            read(home.resolve(".claude.json")), projectDir.toString(), idePort, includeProject = !userWide
+            read((claudeDir ?: home).resolve(".claude.json")), projectDir.toString(), idePort, includeProject = !userWide
         )
         if (keys.isEmpty()) return listOf(PlannedEdit(CLAUDE, target, "not connected to this IDE — skipped", null))
         val rules = AgentPermissionConfigs.claudeAllowRules(keys, scope, readOnlyTools)
@@ -45,7 +50,6 @@ internal class AgentPermissionPlanner(
     }
 
     private fun codex(scope: PermissionScope): List<PlannedEdit> {
-        val codexHome = System.getenv("CODEX_HOME")?.let(Path::of) ?: home.resolve(".codex")
         val mode = AgentPermissionConfigs.codexApprovalMode(scope)
         return configured(CODEX, listOf(codexHome.resolve("config.toml"))) { path, text ->
             val keys = AgentPermissionConfigs.codexServerKeys(text, idePort)

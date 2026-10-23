@@ -13,7 +13,8 @@ class AgentPermissionPlannerTest {
 
     private val home: Path = Files.createTempDirectory("home")
     private val project: Path = Files.createTempDirectory("project")
-    private val planner = AgentPermissionPlanner(project, home, listOf("rider_get_context"), idePort = 1)
+    // Hermetic: the developer's own CLAUDE_CONFIG_DIR / CODEX_HOME must not leak into the tests.
+    private val planner = AgentPermissionPlanner(project, home, listOf("rider_get_context"), idePort = 1, env = { null })
 
     private fun put(path: Path, text: String) = path.apply { Files.createDirectories(parent) }.writeText(text)
 
@@ -46,6 +47,21 @@ class AgentPermissionPlannerTest {
         put(project.resolve(".mcp.json"), """{"mcpServers": {"rider": {"url": "http://127.0.0.1:1/stream"}}}""")
         put(project.resolve(".codex/config.toml"), "[mcp_servers.rider]\nurl = \"http://127.0.0.1:1/stream\"\n")
         assertTrue(planner.plan(PermissionScope.ALL, claudeUserWide = false).all { it.updated == null })
+    }
+
+    @Test
+    fun `relocated client config dirs are honored`() {
+        val claudeDir = Files.createTempDirectory("claude-config")
+        val codexDir = Files.createTempDirectory("codex-home")
+        put(claudeDir.resolve(".claude.json"), """{"mcpServers": {"rider": {"url": "http://127.0.0.1:1/stream"}}}""")
+        put(codexDir.resolve("config.toml"), "[mcp_servers.rider]\nurl = \"http://127.0.0.1:1/stream\"\n")
+        val env = mapOf("CLAUDE_CONFIG_DIR" to claudeDir.toString(), "CODEX_HOME" to codexDir.toString())
+        val relocated = AgentPermissionPlanner(project, home, listOf("rider_get_context"), idePort = 1, env = env::get)
+
+        val edits = relocated.plan(PermissionScope.ALL, claudeUserWide = true).associateBy { it.client }
+        assertEquals(claudeDir.resolve("settings.json"), edits.getValue("Claude Code").path)
+        assertTrue("mcp__rider" in edits.getValue("Claude Code").updated!!)
+        assertEquals(codexDir.resolve("config.toml"), edits.getValue("Codex").path)
     }
 
     @Test

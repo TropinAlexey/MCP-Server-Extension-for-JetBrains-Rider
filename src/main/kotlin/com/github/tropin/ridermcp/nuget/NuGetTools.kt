@@ -1,6 +1,6 @@
 package com.github.tropin.ridermcp.nuget
 
-import com.intellij.execution.configurations.GeneralCommandLine
+import com.intellij.execution.process.CapturingProcessHandler
 import com.intellij.execution.process.OSProcessHandler
 import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessListener
@@ -11,7 +11,10 @@ import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
 import com.intellij.openapi.util.Key
 import kotlinx.serialization.json.*
+import com.github.tropin.ridermcp.DotnetCli
 import com.github.tropin.ridermcp.SessionManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.coroutineContext
@@ -80,7 +83,7 @@ class NuGetToolset : McpToolset {
         cmdArgs.addAll(listOf("package", name))
         if (op == "add" && version != null) cmdArgs.addAll(listOf("--version", version))
 
-        val (exitCode, output) = runDotnetSync(project, cmdArgs, timeout = 60)
+        val (exitCode, output) = runDotnetSync(project, cmdArgs, timeout = 50)
         if (exitCode != 0) mcpFail(output.trim())
         return output.trim()
     }
@@ -88,10 +91,10 @@ class NuGetToolset : McpToolset {
     private suspend fun nugetRestore(): String {
         val project = coroutineContext.project
         val session = SessionManager.create("nuget")
-        session.appendLine("Running: dotnet restore")
         try {
-            val cmd = GeneralCommandLine("dotnet", "restore")
+            val cmd = DotnetCli.commandLine(project, listOf("restore"))
                 .withWorkDirectory(project.basePath)
+            session.appendLine("Running: ${cmd.commandLineString}")
             val handler = OSProcessHandler(cmd)
             session.tag = handler
             handler.addProcessListener(object : ProcessListener {
@@ -112,18 +115,16 @@ class NuGetToolset : McpToolset {
         return buildJsonObject { put("sessionId", session.id) }.toString()
     }
 
-    private fun runDotnetSync(project: com.intellij.openapi.project.Project, args: List<String>, timeout: Long = 30): Pair<Int, String> {
+    // Timeouts stay under the ~60 s MCP call limit; the handler kills the process on timeout.
+    private suspend fun runDotnetSync(project: com.intellij.openapi.project.Project, args: List<String>, timeout: Long = 30): Pair<Int, String> {
         val projectPath = project.basePath ?: return -1 to "No project path"
-        val pb = ProcessBuilder(listOf("dotnet") + args)
-            .directory(java.io.File(projectPath))
-            .redirectErrorStream(true)
-        val process = pb.start()
-        val output = process.inputStream.bufferedReader().readText()
-        val completed = process.waitFor(timeout, TimeUnit.SECONDS)
-        if (!completed) {
-            process.destroyForcibly()
-            return -1 to "Command timed out after ${timeout}s"
+        val cmd = DotnetCli.commandLine(project, args)
+            .withWorkDirectory(projectPath)
+            .withRedirectErrorStream(true)
+        val result = withContext(Dispatchers.IO) {
+            CapturingProcessHandler(cmd).runProcess(TimeUnit.SECONDS.toMillis(timeout).toInt(), true)
         }
-        return process.exitValue() to output
+        if (result.isTimeout) return -1 to "Command timed out after ${timeout}s: ${cmd.commandLineString}"
+        return result.exitCode to result.stdout
     }
 }

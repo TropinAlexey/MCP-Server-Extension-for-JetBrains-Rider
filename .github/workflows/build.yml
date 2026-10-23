@@ -8,7 +8,15 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # The plugin runs wherever Rider does: unit tests and tool-doc checks on every OS.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
@@ -19,9 +27,14 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - run: ./gradlew buildPlugin
+      - run: ./gradlew check buildPlugin
 
-      - uses: actions/upload-artifact@v4
+      # Plugin Verifier against the claimed Rider lines once — it is OS-independent.
+      - if: matrix.os == 'ubuntu-latest'
+        run: ./gradlew verifyPlugin -PverifyAllRiders
+
+      - if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
         with:
           name: plugin-zip
           path: build/distributions/*.zip

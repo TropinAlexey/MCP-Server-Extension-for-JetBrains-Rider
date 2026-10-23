@@ -248,14 +248,15 @@ gradlew.bat runIde
 | "No endpoints found..." | Check `rider_get_ide_state` for indexing/build progress and retry when idle; if idle and still empty, verify in Rider via View → Tool Windows → Endpoints (panel has no detected routes). Fallback: text search for route attributes |
 | "No test configurations found" | Create a test run configuration (Run → Edit Configurations → +), or bypass configs by passing `filter`/`className`/`methodName` to run `dotnet test --filter` directly |
 | "Multiple test configs found" | Pass `configName` to pick one |
+| NuGet or `filter` test runs fail with "dotnet: not found" / the wrong SDK | They use the .NET CLI selected in Rider: **Settings → Build, Execution, Deployment → Toolset and Build → .NET CLI executable path** (`dotnet` on PATH only when Rider detects none) |
 | "No active debug session" | Start one with built-in `xdebug_start_debugger_session` (or Debug in Rider) |
 | "Debugger is not paused..." | Pause first — evaluating/stepping require a paused debugger (pausing freezes the live process; prefer a dev/test instance) |
 | Debug console is empty | The session produced no application output (the debugger trace is still in `Debug Output`) |
 | "Configuration '…' not found" | Names must match exactly — list them with the built-in `get_run_configurations` (or IDE Run → Edit Configurations) |
 | `rider_list_db_consoles` returns `[]` | Open the console in an editor tab first (double-click it in the Database tool window) |
 | A tool returns a file path you cannot read | Read only paths from `rider_get_context` (project-relative, always readable); absolute local path as fallback. Never feed one tool's path into another tool blindly |
-| Target database missing from the schema list | The list is the introspected subset, not the truth. Run the query through any introspected database with three-part names (`db.schema.table`) and confirm via `SELECT name FROM sys.databases` |
-| Heavy SQL (`COUNT LIKE` over `CAST`, full-table scans) | Confirm the database context first, then slice: `TOP`, date/id ranges, `EXISTS` instead of `COUNT LIKE`, `pageSize` for paging. Deliberate cancel is normal practice, not a failure |
+| Target database missing from the schema list | The list is the introspected subset, not the truth. Run the query through any introspected database with three-part names (`db.schema.table`, MSSQL) and confirm with the server catalog (MSSQL `sys.databases`, PostgreSQL `pg_database`, MySQL `SHOW DATABASES`) |
+| Heavy SQL (`COUNT LIKE` over `CAST`, full-table scans) | Confirm the database context first, then slice: `TOP`/`LIMIT`, date/id ranges, `EXISTS` instead of `COUNT LIKE`, `pageSize` for paging. Deliberate cancel is normal practice, not a failure |
 | The agent asks for approval on every IDE tool call | **Tools → Configure Agent Permissions…** ([Agent permissions](#agent-permissions)); for clients it cannot configure, choose "Always allow" in the client |
 | Tempted by generic `execute_tool` | Don't — it has no action listing and can't reach DB consoles or run profiles. Use the `rider_*` tool for the job |
 
@@ -279,6 +280,13 @@ gradlew.bat runIde
 - Running commands without confirmation is opt-in ("brave mode" in the MCP server settings) and stays off by default — keep it off unless you trust the agent. This is a security feature, not an inconvenience.
 
 ## What's New
+
+### v2.2.0
+
+- NuGet and `filter` test runs use the .NET CLI selected in Rider (**Settings → Build, Execution, Deployment → Toolset and Build**) instead of whatever `dotnet` is on PATH; `rider_nuget` list/add/remove now honor their timeouts (a hanging `--outdated` no longer outlives the MCP call) and see the shell environment when Rider was started from the macOS Dock
+- **Configure Agent Permissions** honors a relocated Claude Code config (`CLAUDE_CONFIG_DIR`), as it already did for Codex (`CODEX_HOME`)
+- Export errors and descriptions name the allowed directories precisely, including `RIDER_MCP_EXPORT_DIRS`; SQL hints cover PostgreSQL/MySQL next to MSSQL
+- For contributors: [CONTRIBUTING.md](CONTRIBUTING.md) (build on Windows, macOS and Linux, code rules); CI runs tests on all three OSes and the Plugin Verifier; `verifyPlugin` no longer needs a Rider installed at the macOS path (`RIDER_PATH`)
 
 ### v2.1.0
 
@@ -498,6 +506,8 @@ Response changes:
 ## Contributing
 
 Bug reports and feature requests are welcome in [GitHub Issues](https://github.com/TropinAlexey/MCP-Server-Extension-for-JetBrains-Rider/issues).
+
+Build, test and code rules for Windows, macOS and Linux: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Tool response compatibility is covered by [CONTRACT.md](CONTRACT.md): response fields are additive-only.
 
