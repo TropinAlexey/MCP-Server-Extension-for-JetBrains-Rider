@@ -29,7 +29,7 @@ A programmer staring at Rider sees dozens of information surfaces simultaneously
 
 When a build hangs, you see the output frozen at "Building Project7..." — your assistant sees nothing. When a test run or Publish is still going, you see the progress bar — your assistant only knows it started. When the app you are debugging prints an exception, you see it in the Debug console — your assistant sees the debugger, but not the app's output.
 
-This plugin bridges that gap. It gives any MCP-compatible client (Claude Code, Cursor, Windsurf, Continue, custom agents) the same situational awareness a programmer has — the ability to see what the IDE is doing, what it's showing, and what's happening in the background.
+This plugin bridges that gap. It gives any MCP-compatible client (Claude Code, Codex, Gemini CLI, GitHub Copilot, Cursor, Junie, Windsurf, Continue, custom agents) the same situational awareness a programmer has — the ability to see what the IDE is doing, what it's showing, and what's happening in the background.
 
 ### What the stock MCP plugin provides vs. what this adds
 
@@ -182,7 +182,7 @@ Recipes:
 
 ### Prerequisites
 - JetBrains Rider 2026.2+ (the MCP server is built in — no separate plugin to install). On Rider 2026.1 the Marketplace installs the 1.2.x line
-- An MCP-compatible client: Claude Code, Cursor, Windsurf, Continue, or a custom agent
+- An MCP-compatible client: Claude Code, Codex, Gemini CLI, GitHub Copilot, Cursor, Junie, Windsurf, Continue, or a custom agent — the plugin is client-agnostic
 
 ### From Marketplace
 
@@ -190,6 +190,22 @@ Recipes:
 2. Enable the built-in MCP server: **Settings → Tools → MCP Server → Enable MCP Server** (confirm the access dialog), then Apply. If the settings page is missing, check that the bundled MCP Server plugin is enabled under **Settings → Plugins → Installed**.
 3. Connect your client: on the same settings page use **Auto-Configure** next to your client (or copy a manual config for clients not on the list), then restart the client.
 4. Verify: ask your agent something only the IDE knows — e.g. "What is the current IDE state?" or "What does the Problems panel show?". If it answers with live IDE data, the `rider_*` tools are working.
+5. Stop the approval prompts (optional): **Tools → Configure Agent Permissions…**. See [Agent permissions](#agent-permissions).
+
+### Agent permissions
+
+Every agent client asks before an MCP tool call until you allow it. That setting lives in the client, so the plugin cannot switch it on by itself — the action **Tools → Configure Agent Permissions…** does it for you, after you review the changes:
+
+| Client | What the action writes | Read-only only | All tools |
+|---|---|---|---|
+| Claude Code | `permissions.allow` in `.claude/settings.local.json` (this project, not committed) or `~/.claude/settings.json` | `mcp__rider__<tool>` per read-only tool | `mcp__rider` |
+| Codex | `default_tools_approval_mode` under `[mcp_servers.rider]` in `~/.codex/config.toml` | `"writes"` — asks only for tools not marked read-only | `"approve"` |
+| Gemini CLI | `"trust": true` on the server entry in `settings.json` | — (trusts whole servers only) | ✅ |
+| Copilot CLI, Cursor, VS Code, Windsurf, Junie | nothing — set it in the client: `copilot --allow-tool 'rider'`, or "Always allow" in the tool prompt | | |
+
+- Only clients already connected to this IDE are touched, and only rules are added — nothing is removed. `rider` is the server name from the client's config (also `jetbrains` or your own name — the action detects it by the IDE server URL).
+- **Read-only** (default) covers tools that declare `readOnlyHint`: the read-only `rider_*` tools (state, context, tool windows, outputs, lists) and built-in tools marked read-only. **All tools** also covers the built-in terminal, file edits and SQL — choose it only for an agent you trust.
+- Restart the agent session afterwards.
 
 ### Quick Start
 
@@ -240,6 +256,7 @@ gradlew.bat runIde
 | A tool returns a file path you cannot read | Read only paths from `rider_get_context` (project-relative, always readable); absolute local path as fallback. Never feed one tool's path into another tool blindly |
 | Target database missing from the schema list | The list is the introspected subset, not the truth. Run the query through any introspected database with three-part names (`db.schema.table`) and confirm via `SELECT name FROM sys.databases` |
 | Heavy SQL (`COUNT LIKE` over `CAST`, full-table scans) | Confirm the database context first, then slice: `TOP`, date/id ranges, `EXISTS` instead of `COUNT LIKE`, `pageSize` for paging. Deliberate cancel is normal practice, not a failure |
+| The agent asks for approval on every IDE tool call | **Tools → Configure Agent Permissions…** ([Agent permissions](#agent-permissions)); for clients it cannot configure, choose "Always allow" in the client |
 | Tempted by generic `execute_tool` | Don't — it has no action listing and can't reach DB consoles or run profiles. Use the `rider_*` tool for the job |
 
 ## Known limits (accepted, not hidden)
@@ -258,10 +275,16 @@ gradlew.bat runIde
 - Rider must be running with a project open — the tools observe and control the current project.
 - Enabling the MCP server grants external applications access to your open projects (you confirm this in the dialog at enable time). Review which tools are exposed under **Settings → Tools → MCP Server → Exposed Tools**.
 - What the tools can see: file contents, cursor and selection, open editors, tool window text (including consoles and outputs), notifications, database console bindings and query results. What they never do: nothing leaves your machine through this plugin — it only serves the local MCP server; network calls happen only where you ask (NuGet restore, package checks).
-- What the tools can change: sending terminal input, killing processes, editing run configs, toggling inspections, executing SQL, profiling sessions, restarting the IDE after cache invalidation. Read-only tools (state, content, lists, context) never change anything.
+- What the tools can change: sending terminal input, killing processes, editing run configs, toggling inspections, executing SQL, profiling sessions, restarting the IDE after cache invalidation. Read-only tools (state, content, lists, context) never change anything and declare `readOnlyHint`, so clients can auto-approve them while still asking for the rest.
 - Running commands without confirmation is opt-in ("brave mode" in the MCP server settings) and stays off by default — keep it off unless you trust the agent. This is a security feature, not an inconvenience.
 
 ## What's New
+
+### v2.1.0
+
+- New action **Tools → Configure Agent Permissions…**: stops the approval prompt on every IDE tool call. It finds the agent clients connected to this IDE — Claude Code (`permissions.allow`), Codex (`default_tools_approval_mode`), Gemini CLI (`trust`) — and, after you review the planned changes, allows read-only tools (default) or all tools. Only rules are added, nothing is removed. Other clients get a hint in the dialog. See [Agent permissions](#agent-permissions)
+- Tool hints: read-only `rider_*` tools declare `readOnlyHint`; `rider_kill_process`, `rider_invalidate_caches` and `rider_execute_console` declare `destructiveHint`. Clients can auto-approve reads and still ask for the rest (Codex `writes` mode uses this directly)
+- The plugin is client-agnostic: docs list Claude Code, Codex, Gemini CLI, GitHub Copilot, Cursor, Junie, Windsurf and Continue
 
 ### v2.0.0
 

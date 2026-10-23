@@ -4,6 +4,8 @@ import com.intellij.ide.bookmark.BookmarksManager
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
+import com.intellij.mcpserver.annotations.McpToolHintValue
+import com.intellij.mcpserver.annotations.McpToolHints
 import com.intellij.mcpserver.project
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileDocumentManager
@@ -17,6 +19,7 @@ import kotlin.coroutines.coroutineContext
 
 class ContextToolset : McpToolset {
 
+    @McpToolHints(readOnlyHint = McpToolHintValue.TRUE)
     @McpTool
     @McpDescription("Returns what the programmer is looking at right now: active file (project-relative), cursor line+column (1-indexed), selected text with line range, surrounding code (±5 lines, current line marked '>>> '), other open editors, unsaved files, bookmarks, and the absolute project directory. Use for 'what is the user looking at / selected'. Contents may include secrets when open files hold them — do not paste into logs or chats. For IDE busyness use rider_get_ide_state; for any tool window text use rider_tool_window; for open DB consoles use rider_list_db_consoles.")
     suspend fun rider_get_context(): String {

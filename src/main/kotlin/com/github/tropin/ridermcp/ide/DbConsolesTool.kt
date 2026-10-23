@@ -4,6 +4,8 @@ import com.github.tropin.ridermcp.runOnEdt
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
+import com.intellij.mcpserver.annotations.McpToolHintValue
+import com.intellij.mcpserver.annotations.McpToolHints
 import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
 import kotlinx.coroutines.CancellationException
@@ -16,6 +18,7 @@ private const val EMPTY_CONSOLE_LIST = """{"count":0,"consoles":[]}"""
 
 class DbConsolesToolset : McpToolset {
 
+    @McpToolHints(readOnlyHint = McpToolHintValue.TRUE)
     @McpTool
     @McpDescription("Lists open SQL consoles (editor tabs bound to a data source) with console file name, data source name + uniqueId (use as connectionId), DBMS, URL, currentDatabase + currentDatabaseSource (toolbar = picked in the console toolbar | url = the URL's database | login-default = the login's default database from the introspected model; no currentDatabase = unknown until the first rider_execute_console, whose response names the real database), readOnly (data source Read-only flag) and busyJobId when a rider_execute_console job runs there. tableEditors lists open table/view tabs with dataSource, database, schema, object and kind — use them when the user says 'the open table'; selected=true marks the active tab. Call FIRST when the user mentions an open console or table. Run SQL against any of them with rider_execute_console(console=consoleRef) — not the built-in execute_sql_query, which waits for a per-schema IDE confirmation dialog. count=0 when nothing is open (rider_database_connection(action='open_console')).")
     suspend fun rider_list_db_consoles(): String {
@@ -29,6 +32,7 @@ class DbConsolesToolset : McpToolset {
         }
     }
 
+    @McpToolHints(destructiveHint = McpToolHintValue.TRUE)
     @McpTool
     @McpDescription("Executes SQL over the data source of an open console (rider_list_db_consoles) on its own JDBC connection; returns CSV + columns per result set, database = the session's real DB, server errors with code/SQLState/severity/line, PRINT/RAISERROR in messages. T-SQL (MSSQL/Sybase) is split by GO lines, others by ';'. DB = console's currentDatabase unless database=. Long queries: async=true returns a jobId at once — poll rider_console_job; a sync call waits waitSeconds (default 50), then cancels the server query (onClientTimeout=cancel) or keeps it as a job (detach). A busy console answers with its jobId. readOnly (forced for Read-only data sources) rejects DML/DDL before sending, runs in a rolled-back transaction (MSSQL) / read-only session (PG); #temp and @table allowed. maskSecrets (on) hides password/secret/token values. outputFile streams all rows to .csv/.json/.txt (txt: row per line, no header) + preview. hasMore=true: raise pageSize (≤5000) or page with offset. inIde=true runs it in the console itself (result tabs in the IDE). Default to SELECT; confirm DML/DDL with the user.")
     suspend fun rider_execute_console(

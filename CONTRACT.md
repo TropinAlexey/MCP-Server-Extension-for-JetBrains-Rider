@@ -27,6 +27,16 @@ Tools allowlists, agent prompts and scripts.
 4. History: the 09.2026 merges (`rider_run_tests` → `rider_tests(action=…)` etc.)
    shipped in minor 1.1.x without aliases; this rule exists because of them.
 
+## Tool hints
+
+`readOnlyHint` / `destructiveHint` (`@McpToolHints`) are part of the contract: clients
+auto-approve on them (Codex `writes` mode, the Configure Agent Permissions action).
+
+1. Dropping `readOnlyHint` from a tool, or adding a write action to a read-only tool,
+   is a breaking change: users' auto-approval silently starts prompting or, worse,
+   lets writes through. A tool that gains a write action loses the hint in a major version.
+2. Marking a tool read-only, or destructive, is additive.
+
 ## IDE version lines
 
 The Marketplace serves each Rider build the newest plugin update whose

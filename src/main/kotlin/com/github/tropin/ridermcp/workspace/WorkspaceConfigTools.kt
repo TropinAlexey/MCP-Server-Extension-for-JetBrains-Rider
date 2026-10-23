@@ -3,6 +3,8 @@ package com.github.tropin.ridermcp.workspace
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
+import com.intellij.mcpserver.annotations.McpToolHintValue
+import com.intellij.mcpserver.annotations.McpToolHints
 import com.intellij.mcpserver.project
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
@@ -13,6 +15,7 @@ import kotlin.coroutines.coroutineContext
 
 class WorkspaceConfigToolset : McpToolset {
 
+    @McpToolHints(readOnlyHint = McpToolHintValue.TRUE)
     @McpTool
     @McpDescription(
         "Read-only snapshot of the active workspace/build configuration: per-project runnable-project outputs (Configuration, Platform, TargetFramework, exePath, workingDirectory) and the last rider_* publish/test operation captured by this extension. " +

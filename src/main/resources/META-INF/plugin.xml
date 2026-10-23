@@ -5,6 +5,7 @@
 
     <description><![CDATA[
         <p>Extends the JetBrains MCP Server in Rider with the IDE surfaces the built-in tools do not cover.
+        Works with any MCP client: Claude Code, Codex, Gemini CLI, GitHub Copilot, Cursor, Junie and others.
         Everything is prefixed with <code>rider_</code>; build, debugger, terminal, refactorings and search
         stay with the built-in tools, and the tool descriptions point agents to them.</p>
         <ul>
@@ -15,6 +16,8 @@
           <li><b>IDE state and context</b>: indexing/busy, cursor, selection, open editors, unsaved files, bookmarks</li>
           <li><b>Run configurations</b>: create, clone with args/env, update, delete</li>
           <li><b>NuGet, Publish, workspace configuration</b>: add/remove/restore packages, Publish output and RID/publishDir</li>
+          <li><b>Agent permissions</b>: Tools → Configure Agent Permissions lets connected agents (Claude Code, Codex,
+              Gemini CLI) call read-only or all IDE tools without a prompt; read-only tools declare <code>readOnlyHint</code></li>
           <li><b>Solution Wide Analysis</b> error counts, inspection settings, IDE-managed processes, live dotTrace/dotMemory sessions, cache invalidation</li>
         </ul>
         <p>Requires Rider 2026.2+. On Rider 2026.1 the Marketplace installs the 1.2.x line.</p>
@@ -44,5 +47,15 @@
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.admin.AdminToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.profiling.ProfilingToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.profiling.MemoryToolset"/>
+        <notificationGroup id="MCP Server Extension" displayType="BALLOON"/>
     </extensions>
+
+    <actions>
+        <action id="RiderMcp.ConfigureAgentPermissions"
+                class="com.github.tropin.ridermcp.permissions.ConfigureAgentPermissionsAction"
+                text="Configure Agent Permissions…"
+                description="Let AI agents connected to the IDE MCP server call its tools without a prompt">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+    </actions>
 </idea-plugin>

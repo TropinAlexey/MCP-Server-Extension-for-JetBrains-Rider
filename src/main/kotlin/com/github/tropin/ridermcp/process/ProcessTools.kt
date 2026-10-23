@@ -5,6 +5,8 @@ import com.intellij.execution.ui.RunContentManager
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
+import com.intellij.mcpserver.annotations.McpToolHintValue
+import com.intellij.mcpserver.annotations.McpToolHints
 import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
 import kotlinx.serialization.json.*
@@ -12,6 +14,7 @@ import kotlin.coroutines.coroutineContext
 
 class ProcessToolset : McpToolset {
 
+    @McpToolHints(readOnlyHint = McpToolHintValue.TRUE)
     @McpTool
     @McpDescription("Lists live IDE-managed processes (builds, test runs, app runs started from Rider) with display name, inferred type, PID and command line. Optional type filter: 'build', 'test', 'run'. Use to find what is hanging and to resolve processName for rider_kill_process. For rider_* async sessions (with sessionId) prefer rider_get_ide_state.runningSessions + rider_get_output; for finished output use rider_tool_window windowId='Run'. Only non-terminated processes are listed.")
     suspend fun rider_list_processes(
@@ -43,6 +46,7 @@ class ProcessToolset : McpToolset {
         return JsonArray(processes).toString()
     }
 
+    @McpToolHints(destructiveHint = McpToolHintValue.TRUE)
     @McpTool
     @McpDescription("Kills an IDE-managed process by exact display name from rider_list_processes (use it first — names must match exactly; confirm with the user before killing). Pass pid from the same listing to disambiguate when several processes share a name; without pid, an ambiguous name fails instead of killing the first match. Prefer the tool-native stop when applicable (built-in xdebug_control_session for debug sessions). Fails when already terminated.")
     suspend fun rider_kill_process(

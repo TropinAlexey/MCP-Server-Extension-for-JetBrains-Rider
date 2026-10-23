@@ -37,6 +37,7 @@ src/main/kotlin/com/github/tropin/ridermcp/
 ├── nuget/                   # P2: NuGet management
 ├── settings/                # P3: IDE inspections
 ├── profiling/               # dotTrace + dotMemory session control
+├── permissions/             # Tools → Configure Agent Permissions (client config edits)
 └── admin/                   # Cache invalidation
 ```
 
@@ -55,6 +56,15 @@ All tool names start with `rider_` to avoid conflicts with the base MCP Server p
 ## Agent Hints
 
 See [AGENTS.md](AGENTS.md) — task→tool map, pagination, tool window map, polling pattern. Shared across all LLM agents. When adding a new tool or parameter, update AGENTS.md.
+
+## Agent-agnostic
+
+The plugin serves any MCP client (Claude Code, Codex, Gemini CLI, Copilot, Cursor, Junie, …).
+Tool descriptions, AGENTS.md, README and IDE UI use neutral wording ("agent", "MCP client");
+client-specific details appear only as a list covering several clients (e.g. permission setup).
+No feature may require one particular client. Mark tools with `@McpToolHints` (placed before
+`@McpTool`): `readOnlyHint = TRUE` only for tools that never change anything — no file-writing parameter either (`outputFile` disqualifies, hence not on `rider_console_results`), `destructiveHint = TRUE`
+for kill/delete/arbitrary-SQL ones — clients use them for auto-approval.
 
 ## Tool Design Rules
 

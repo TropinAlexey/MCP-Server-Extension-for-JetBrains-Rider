@@ -3,6 +3,8 @@ package com.github.tropin.ridermcp.analysis
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
+import com.intellij.mcpserver.annotations.McpToolHintValue
+import com.intellij.mcpserver.annotations.McpToolHints
 import com.intellij.mcpserver.project
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
@@ -17,6 +19,7 @@ import kotlin.coroutines.coroutineContext
 
 class SweaToolset : McpToolset {
 
+    @McpToolHints(readOnlyHint = McpToolHintValue.TRUE)
     @McpTool
     @McpDescription(
         "Returns Solution Wide Analysis (SWEA) error and warning counts per project, plus top error codes and sample issues. " +

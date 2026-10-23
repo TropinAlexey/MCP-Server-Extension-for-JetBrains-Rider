@@ -5,11 +5,14 @@ import com.github.tropin.ridermcp.paginateLines
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
+import com.intellij.mcpserver.annotations.McpToolHintValue
+import com.intellij.mcpserver.annotations.McpToolHints
 import com.intellij.mcpserver.mcpFail
 import kotlinx.serialization.json.*
 
 class SessionOutputToolset : McpToolset {
 
+    @McpToolHints(readOnlyHint = McpToolHintValue.TRUE)
     @McpTool
     @McpDescription("Polls output of any async session started by rider_tests, rider_nuget(action='restore') or rider_publish. Returns new log lines since the last call plus status and exitCode — keep polling until status is not 'running'. Pass allLines=true to re-read full history (default is delta only). Use fromEnd=true for the tail, pattern for regex grep (case-insensitive, invalid regex matched literally), offset for paging (mutually exclusive with fromEnd). totalLines and returnedRange are session-wide 0-based coordinates; [n] prefixes are session-wide 1-based line numbers. Builds and app runs use the built-in build_solution_state / execute_run_configuration instead.")
     suspend fun rider_get_output(

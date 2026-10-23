@@ -3,6 +3,8 @@ package com.github.tropin.ridermcp.ide
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
+import com.intellij.mcpserver.annotations.McpToolHintValue
+import com.intellij.mcpserver.annotations.McpToolHints
 import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
 import com.intellij.execution.ui.ExecutionConsole
@@ -27,8 +29,9 @@ private const val MAX_WINDOW_LINES = 20000
 
 class IdeStateToolset : McpToolset {
 
+    @McpToolHints(readOnlyHint = McpToolHintValue.TRUE)
     @McpTool
-    @McpDescription("Returns IDE readiness: projectDir (absolute solution root for path translation), activeFile (project-relative), indexing (true while Rider indexes — wait before builds/tests/refactoring), busy (indexing OR any rider_* async session still running), runningSessions (sessions started via rider_tests/rider_nuget/rider_publish). Call before starting heavy work. Note: only tracks indexing globally + own sessions; builds and app runs (built-in build_solution_start / execute_run_configuration) and manual user builds are not listed. For session logs use rider_get_output; for panel errors use rider_tool_window(windowId='Problems'); for TODOs use rider_tool_window(windowId='TODO'); for endpoints prefer the built-in service/symbol search with rider_tool_window(windowId='Endpoints') as fallback.")
+    @McpDescription("Returns IDE readiness: projectDir (absolute solution root for path translation), activeFile (project-relative), indexing (true while Rider indexes — wait before builds/tests/refactoring), busy (indexing OR any rider_* async session still running), runningSessions (sessions started via rider_tests/rider_nuget/rider_publish). Call before starting heavy work. Note: only tracks indexing globally + own sessions; builds and app runs (built-in build_solution_start / execute_run_configuration) and manual user builds are not listed. For session logs use rider_get_output; for panel errors use rider_tool_window(windowId='Problems'); for TODOs use rider_tool_window(windowId='TODO'); for endpoints prefer the built-in service/symbol search with rider_tool_window(windowId='Endpoints') as fallback. If the user keeps approving IDE tool calls, point them to Rider: Tools → Configure Agent Permissions.")
     suspend fun rider_get_ide_state(): String {
         val project = coroutineContext.project
         val projectDir = project.projectDir()
@@ -51,6 +54,7 @@ class IdeStateToolset : McpToolset {
         }.toString()
     }
 
+    @McpToolHints(readOnlyHint = McpToolHintValue.TRUE)
     @McpTool
     @McpDescription(
         "Reads any IDE tool window (Build, Run, Debug, Problems, TODO, Terminal, Endpoints, Services, NuGet, Database, ...). " +

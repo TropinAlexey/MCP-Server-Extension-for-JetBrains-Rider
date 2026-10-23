@@ -85,6 +85,17 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 
 **When the agent cannot run it** (MCP client timeout too short, user prefers to run it): write the script (temp tables + final SELECTs + `raiserror … with nowait` progress, a header saying it is read-only), ask the user to run it in the console, then read it with `rider_console_results`.
 
+## Permission prompts
+
+The plugin works with any MCP client; each client decides on its own whether a tool call needs the user's approval, and no server can grant itself that. When the user keeps approving IDE tool calls (or a call is denied by the client's permission settings), point them to **Rider → Tools → Configure Agent Permissions…**: it finds the clients connected to this IDE and, after the user reviews the changes, adds the rules (read-only tools by default, or all tools):
+
+- Claude Code — `permissions.allow` in `.claude/settings.local.json` (project) or `~/.claude/settings.json`: `mcp__<server>__<tool>` per read-only tool, or `mcp__<server>` for all
+- Codex — `default_tools_approval_mode = "writes"` (prompt only for tools not marked read-only) or `"approve"` under `[mcp_servers.<server>]` in `~/.codex/config.toml`
+- Gemini CLI — `"trust": true` on the server entry in `settings.json` (whole server only)
+- Others (Copilot CLI `--allow-tool '<server>'`, Cursor, VS Code, Windsurf, Junie) — "Always allow" in the client
+
+Read-only `rider_*` tools declare `readOnlyHint`; `rider_kill_process`, `rider_invalidate_caches` and `rider_execute_console` declare `destructiveHint`. Never edit client permission files yourself — suggest the action and let the user decide.
+
 ## Polling Pattern
 
 `rider_tests(action='run')`, `rider_tests(action='rerun_failed')`, `rider_nuget(action='restore')`, `rider_publish` return `sessionId` — poll via `rider_get_output` until `status != "running"`.

@@ -74,7 +74,7 @@ tasks.register("checkToolDocs") {
         val strRe = Regex("\"((?:[^\"\\\\]|\\\\.)*)\"", RegexOption.DOT_MATCHES_ALL)
         val tools = mutableMapOf<String, Int>()
         sources.forEach { f ->
-            f.readText().split("@McpTool").drop(1).forEach { block ->
+            f.readText().split(Regex("@McpTool(?!\\w)")).drop(1).forEach { block ->
                 val name = blockRe.find(block)?.groupValues?.get(1) ?: return@forEach
                 val head = block.substringBefore("suspend fun")
                 tools[name] = strRe.findAll(head).sumOf { it.groupValues[1].length }
