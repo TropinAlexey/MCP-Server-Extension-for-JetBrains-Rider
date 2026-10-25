@@ -30,32 +30,35 @@ import kotlinx.serialization.json.*
 import com.github.tropin.ridermcp.SessionManager
 import kotlin.coroutines.coroutineContext
 
+// Per-call wait cap: the MCP server drops calls longer than ~60 s.
+private const val MAX_WAIT_MS = 50_000
+
 class TestToolset : McpToolset {
 
     @McpTool
     @McpDescription(
         "Runs .NET tests. action='run' (default) starts tests and returns sessionId — poll with rider_get_output, then call rider_tests(action='results', sessionId=...) for the structured tree. " +
-            "action='run_and_wait' runs and blocks up to timeoutMs (default 300000) in one call. " +
-            "action='results' returns the pass/fail tree with durations, errors and stack traces (requires sessionId; IDE config runs only — filter runs have no tree, read failures from session output text instead). " +
+            "action='run_and_wait' blocks ≤ timeoutMs (max 50 s/call); still running → status=running, timedOut=true — call run_and_wait(sessionId) again to wait on. " +
+            "action='results' returns the pass/fail tree with durations, errors and stack traces (requires sessionId; IDE config runs only — filter runs: read failures from session output). " +
             "action='rerun_failed' reruns only previously failed tests. " +
             "Scope with filter (raw 'dotnet test --filter' expr) or className/methodName — a filter run bypasses run configs and auto-resolves the .sln/.csproj. " +
             "WARNING: a bare configName — or no filters at all — ALWAYS runs the ENTIRE configuration (can be thousands of tests). " +
             "On a vague prompt like \"run tests\", NEVER pass a bare configName: scope with filter/className/methodName. " +
             "Do NOT use for building (built-in build_solution_start) or debugging (built-in xdebug_start_debugger_session). " +
-            "If the IDE is busy, check rider_get_ide_state first."
+            "IDE busy → check rider_get_ide_state."
     )
     suspend fun rider_tests(
-        @McpDescription("Action: run (default) starts async run, run_and_wait blocks until done, results returns structured tree, rerun_failed retries failures") action: String = "run",
+        @McpDescription("Action: run (default) starts async run, run_and_wait waits up to 50 s per call (repeat with sessionId), results returns structured tree, rerun_failed retries failures") action: String = "run",
         @McpDescription("IDE run configuration name (whole config runs — always combine with a filter to scope)") configName: String? = null,
         @McpDescription("Raw 'dotnet test --filter' expression, e.g. 'FullyQualifiedName~MyClass'. Bypasses run configs") filter: String? = null,
         @McpDescription("Test class name — converted to FullyQualifiedName~ filter, bypasses run configs") className: String? = null,
         @McpDescription("Test method name — combined with className when both given, otherwise FullyQualifiedName~ filter") methodName: String? = null,
-        @McpDescription("Session ID from run/run_and_wait (required for action='results')") sessionId: String? = null,
-        @McpDescription("Max wait in ms for run_and_wait only, 1000-1800000, default 300000") timeoutMs: Int = 300000
+        @McpDescription("Session ID from run/run_and_wait: required for results; with run_and_wait resumes waiting on that run instead of starting a new one") sessionId: String? = null,
+        @McpDescription("Max wait in ms per run_and_wait call, 1000-50000 (default 50000; MCP drops calls over ~60 s)") timeoutMs: Int = MAX_WAIT_MS
     ): String {
         return when (action.lowercase()) {
             "run" -> runTests(configName, filter, className, methodName)
-            "run_and_wait" -> runTestsAndWait(configName, filter, className, methodName, timeoutMs)
+            "run_and_wait" -> runTestsAndWait(configName, filter, className, methodName, sessionId, timeoutMs)
             "results" -> getTestResults(sessionId)
             "rerun_failed" -> rerunFailedTests()
             else -> mcpFail("Unknown action '$action'. Use: run, run_and_wait, results, rerun_failed")
@@ -69,24 +72,39 @@ class TestToolset : McpToolset {
         return buildJsonObject { put("sessionId", launch.session!!.id) }.toString()
     }
 
-    private suspend fun runTestsAndWait(configName: String?, filter: String?, className: String?, methodName: String?, timeoutMs: Int): String {
-        val project = coroutineContext.project
-        val launch = launchTests(project, configName, filter, className, methodName)
-        if (launch.errorJson != null) return launch.errorJson
-        val session = launch.session!!
+    private suspend fun runTestsAndWait(
+        configName: String?, filter: String?, className: String?, methodName: String?, sessionId: String?, timeoutMs: Int
+    ): String {
+        val session = if (!sessionId.isNullOrBlank()) {
+            if (listOf(configName, filter, className, methodName).any { !it.isNullOrBlank() }) {
+                mcpFail("Pass either sessionId (keep waiting on that run) or configName/filter/className/methodName (start a new run), not both")
+            }
+            val existing = SessionManager.get(sessionId) ?: mcpFail("Session '$sessionId' not found")
+            if (existing.type != "test") mcpFail("Session '$sessionId' is a ${existing.type} session, not a test run — poll it with rider_get_output")
+            existing
+        } else {
+            val launch = launchTests(coroutineContext.project, configName, filter, className, methodName)
+            if (launch.errorJson != null) return launch.errorJson
+            launch.session!!
+        }
 
-        val deadline = System.currentTimeMillis() + timeoutMs.coerceIn(1000, 1800000)
+        val started = System.currentTimeMillis()
+        val deadline = started + timeoutMs.coerceIn(1000, MAX_WAIT_MS)
         while (session.status == "running" && System.currentTimeMillis() < deadline) {
             delay(1000)
         }
 
+        // One snapshot: the run may finish between reads, and status/timedOut/note must agree.
+        val status = session.status
         return buildJsonObject {
-            put("status", session.status)
+            put("status", status)
             put("sessionId", session.id)
+            put("timedOut", status == "running")
+            put("elapsedMs", System.currentTimeMillis() - started)
             session.exitCode?.let { put("exitCode", it) }
             putJsonArray("tail") { session.getAllLines().takeLast(30).forEach { add(it) } }
-            if (session.status == "running") {
-                put("note", "Timeout expired, tests still running. Continue with rider_get_output, then rider_tests(action='results').")
+            if (status == "running") {
+                put("note", "Still running — the run continues in the IDE. Call rider_tests(action='run_and_wait', sessionId='${session.id}') to keep waiting (or poll rider_get_output), then rider_tests(action='results').")
             } else {
                 put("note", "Finished. Call rider_tests(action='results', sessionId='${session.id}') for the structured tree.")
             }

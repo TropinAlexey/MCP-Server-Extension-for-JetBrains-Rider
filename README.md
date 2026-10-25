@@ -266,7 +266,7 @@ gradlew.bat runIde
 - `rider_kill_process` matches by exact display name; ambiguous names fail — pass `pid` from the same listing.
 - Evaluating expressions in a debug session (built-in `xdebug_evaluate_expression`) runs code inside the debuggee (getters can have side effects) — dev/test instances only.
 - `OFFSET` paging without `ORDER BY` is nondeterministic — always pair them.
-- MCP calls longer than ~60 s are dropped by the MCP server (HTTP 404): tools that wait cap themselves at 50 s (`waitSeconds`) or 40 s (long-poll, `open_table`, `inIde`). Longer work → `async=true` + `rider_console_job`.
+- MCP calls longer than ~60 s are dropped by the MCP server (HTTP 404): tools that wait cap themselves at 50 s (`waitSeconds`, `rider_tests` `run_and_wait` — repeat it with `sessionId` to keep waiting) or 40 s (long-poll, `open_table`, `inIde`). Longer work → `async=true` + `rider_console_job`.
 - `rider_execute_console(inIde=true)` is refused on Read-only data sources and with `readOnly=true`: the IDE console run has no rolled-back transaction or read-only session.
 - Agents still sometimes pick the built-in `execute_sql_query`, which waits for a per-schema IDE confirmation dialog ("Allow … to Read Database Data"). Either tick **Always allow** there (Settings → Tools → Database → AI Tools) or hide the tool under **Settings → Tools → MCP Server → Exposed Tools**.
 - Eval rounds R8–R10 (DB consoles, S4/S12–S21) run automatically in an isolated sandbox Rider against a docker fixture — never against real servers. Ship-gate per `CONTRACT.md`.
@@ -280,6 +280,10 @@ gradlew.bat runIde
 - Running commands without confirmation is opt-in ("brave mode" in the MCP server settings) and stays off by default — keep it off unless you trust the agent. This is a security feature, not an inconvenience.
 
 ## What's New
+
+### v2.2.1
+
+- `rider_tests(action='run_and_wait')` no longer outlives the MCP call (clients reported `Request timed out` on long Testcontainers runs): it waits at most 50 s per call (`timeoutMs` 1000–50000, default 50000) and, if the run is still going, answers `status=running`, `timedOut=true`, `elapsedMs` and `sessionId` — the run continues in the IDE. Call `run_and_wait` again with that `sessionId` to keep waiting instead of starting a new run
 
 ### v2.2.0
 
