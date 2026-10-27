@@ -62,10 +62,12 @@ intellijPlatform {
                     useInstaller = false
                 }
             }
-            // RustRover verification
-            for (version in versions) {
-                create(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.RustRover, version) {
-                    useInstaller = false
+            // RustRover verification — only on macOS (no Linux Maven artifacts)
+            if (System.getProperty("os.name").lowercase().startsWith("mac")) {
+                for (version in versions) {
+                    create(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.RustRover, version) {
+                        useInstaller = false
+                    }
                 }
             }
         }
