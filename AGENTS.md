@@ -1,6 +1,10 @@
 # Rider MCP — Agent Guide
 
-MCP Server extension plugin for JetBrains Rider. Adds `rider_*` tools for what the built-in MCP server does not cover: test runner, DB consoles, tool windows, IDE state and context, run config CRUD, NuGet, Publish, profiling sessions, and more. Build, debugger and terminal are the built-in tools.
+**Language rule: speak Russian in chat; all code, docs, tool descriptions, and technical output in English.**
+
+MCP Server extension plugin for JetBrains **Rider and RustRover**. Adds `rider_*` tools for what the built-in MCP server does not cover: test runner, DB consoles, tool windows, IDE state and context, run config CRUD, NuGet, Publish, profiling sessions, and more. Build, debugger and terminal are the built-in tools.
+
+The Rider dependency is **optional** (`com.intellij.modules.rider` loaded via `rider-only.xml`). Rider-only tools (NuGet, Publish, SWEA, dotTrace/dotMemory, WorkspaceConfig) are unavailable in RustRover; all other tools work in both IDEs.
 
 Per-tool documentation lives in each tool's description (visible on tool call). This file is the routing layer — which tool for which task.
 
@@ -16,6 +20,7 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 | Edit DB connection | `rider_database_connection(action='edit')` | `edit_database_connection` |
 | Execute SQL | `rider_execute_console` (via open console) | `execute_sql_query` (hides driver errors as "Unknown error", 10-row pages, no file export, no T-SQL batches, no timeout control, requires schema introspection — DMV/server queries fail with "Schema … is not found", and a database the login cannot access is reported the same way; use `rider_execute_console(database='master')`) |
 | Results the user ran in a console | `rider_console_results` | `list_recent_sql_queries` / `fetch_query_result` (no result set ids for console runs), `rider_tool_window(section=…)` on Services (ambiguous titles) |
+| Query an OPEN table/console tab | `rider_list_db_consoles` → `tableEditors` → `rider_execute_console` | `list_database_connections` + `execute_sql_query` (built-in tools don't know which tab is open; they require schema introspection and fail on DBs the login can't access) |
 
 ## Task → Tool Map
 
@@ -32,7 +37,7 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 - API endpoints → built-in `search_symbol` or `get_service_map`; fallback: `rider_tool_window(action='content', windowId='Endpoints')`
 - IDE terminal commands → built-in `execute_terminal_command` (returns the output)
 - Build → built-in `build_solution_start` + `build_solution_state` (errors with file/line). Files just written outside the IDE: check `get_file_problems` on them first — a build fired before the IDE sees the file can report success
-- Publish → `rider_publish` (`configName?`) + `rider_get_output`
+- Publish → `rider_publish` (`configName?`) + `rider_get_output` **(Rider only)**
 - Run tests → `rider_tests` (actions: `run`, `run_and_wait`, `results`, `rerun_failed`) + `rider_get_output` (`configName` alone runs the whole config — scope with filters)
   - Long runs (Testcontainers, integration suites) → `run_and_wait` waits at most 50 s per call and answers `status=running`, `timedOut=true`, `elapsedMs`, `sessionId`; the run continues in the IDE. Call `rider_tests(action='run_and_wait', sessionId)` again until `status != running` — never a larger `timeoutMs` (calls over ~60 s are dropped as a client timeout) and never a fresh run
 - Create/edit DB connections → `rider_database_connection` (actions: `create`, `edit`, `open_console`). Production source on the user's request → `readOnly=true`. The flag cannot be lifted through MCP (`readOnly=false` is rejected) — if a write is really intended, the user unticks Read-only in Rider. No console open for a connection → `action='open_console'` instead of asking the user to double-click. Show a table to the user → `action='open_table', table='db.schema.table'`. Built-in model tools answer "Schema … is not found" → `action='refresh'` (re-introspection; databases outside the source's Schemas scope stay invisible — the user ticks them)
@@ -45,15 +50,15 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
   - Errors come verbatim with `[error N, SQLState …, severity …, line …]` (multi-batch runs: `errorCode`/`sqlState`/`severity`/`line`/`message` fields per failed batch). `Cannot switch to database …` carries the server's reason: 911 = no such database, 916 = the login has no access.
   - "The open table" / "the tab I have open" → `rider_list_db_consoles` → `tableEditors` (dataSource, database, schema, object; `selected=true` = active tab)
 - Results of a script the USER ran in a console (Services → Database result tabs) → `rider_console_results(console, index?, outputFile?)`; `state=running` while it executes — poll it, the console is not blocked. `hasMoreInIde=true` = the IDE grid fetched only its first page
-- NuGet packages → `rider_nuget` (actions: `list`, `add`, `remove`, `restore`)
+- NuGet packages → `rider_nuget` (actions: `list`, `add`, `remove`, `restore`) **(Rider only)**
 - Run/Debug configurations → `rider_run_config` (actions: `create`, `update`, `delete`). New config for a .NET app with args/env → `create` with `copyFrom='<existing config of that project>'` + `programArgs`/`env` (a bare `typeId='DotNetProject'` config has no project and won't run; an unknown `typeId` lists the valid IDs). Built-in `get_run_configurations` lists existing configs with their args/env; launch with built-in `execute_run_configuration` (run) or `xdebug_start_debugger_session` (debug), tests via `rider_tests`
 - Debugging → built-in `xdebug_*` (`xdebug_start_debugger_session`, `xdebug_set_breakpoint`, `xdebug_control_session`, `xdebug_get_frame_values`, `xdebug_evaluate_expression`). Remove the breakpoints you set (`xdebug_remove_breakpoint`) and resume the process before answering. App stdout of a debug session → `rider_tool_window(windowId='Debug', section='Console')`
 - Run an app and read its output → built-in `execute_run_configuration` (`waitForExit=true` + `timeout` for a snapshot of a long-running app)
 - IDE processes → `rider_list_processes` / `rider_kill_process`
 - Code inspections → `rider_inspections` (actions: `list`, `toggle`)
 - IDE caches → `rider_invalidate_caches`
-- Profiling (dotTrace) → `rider_profiling` (actions: `state`, `control`)
-- Profiling (dotMemory) → `rider_memory` (actions: `state`, `control`)
+- Profiling (dotTrace) → `rider_profiling` (actions: `state`, `control`) **(Rider only)**
+- Profiling (dotMemory) → `rider_memory` (actions: `state`, `control`) **(Rider only)**
 
 ## Database consoles playbook
 
@@ -90,7 +95,7 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 
 ## Permission prompts
 
-The plugin works with any MCP client; each client decides on its own whether a tool call needs the user's approval, and no server can grant itself that. When the user keeps approving IDE tool calls (or a call is denied by the client's permission settings), point them to **Rider → Tools → Configure Agent Permissions…**: it finds the clients connected to this IDE and, after the user reviews the changes, adds the rules (read-only tools by default, or all tools):
+The plugin works with any MCP client; each client decides on its own whether a tool call needs the user's approval, and no server can grant itself that. When the user keeps approving IDE tool calls (or a call is denied by the client's permission settings), point them to **Rider/RustRover → Tools → Configure Agent Permissions…**: it finds the clients connected to this IDE and, after the user reviews the changes, adds the rules (read-only tools by default, or all tools):
 
 - Claude Code — `permissions.allow` in `.claude/settings.local.json` (project) or `~/.claude/settings.json`: `mcp__<server>__<tool>` per read-only tool, or `mcp__<server>` for all
 - Codex — `default_tools_approval_mode = "writes"` (prompt only for tools not marked read-only) or `"approve"` under `[mcp_servers.<server>]` in `~/.codex/config.toml`
