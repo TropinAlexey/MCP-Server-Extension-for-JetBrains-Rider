@@ -16,7 +16,6 @@ import com.intellij.execution.testframework.AbstractTestProxy
 import com.intellij.execution.testframework.sm.runner.SMTestProxy
 import com.intellij.execution.testframework.sm.runner.ui.SMTestRunnerResultsForm
 import com.intellij.mcpserver.McpToolset
-import com.jetbrains.rider.projectView.SolutionConfigurationManager
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
@@ -330,13 +329,18 @@ class TestToolset : McpToolset {
 
     private fun captureSessionMetadata(session: OutputSession, project: com.intellij.openapi.project.Project, configName: String? = null) {
         configName?.let { session.metadata["configName"] = it }
+        // SolutionConfigurationManager is Rider-only; access via reflection to support other IDEs
         try {
-            SolutionConfigurationManager.getInstance(project).activeConfigurationAndPlatform?.let { active ->
-                session.metadata["configuration"] = active.configuration
-                session.metadata["platform"] = active.platform
+            val scmClass = Class.forName("com.jetbrains.rider.projectView.SolutionConfigurationManager")
+            val scm = scmClass.getMethod("getInstance", com.intellij.openapi.project.Project::class.java).invoke(null, project)
+            val active = scmClass.getMethod("getActiveConfigurationAndPlatform").invoke(scm)
+            if (active != null) {
+                val activeClass = active.javaClass
+                (activeClass.getMethod("getConfiguration").invoke(active) as? String)?.let { session.metadata["configuration"] = it }
+                (activeClass.getMethod("getPlatform").invoke(active) as? String)?.let { session.metadata["platform"] = it }
             }
         } catch (_: Throwable) {
-            // configuration manager may not be ready yet
+            // not available in non-Rider IDEs
         }
     }
 

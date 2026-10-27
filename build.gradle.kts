@@ -10,7 +10,9 @@ dependencies {
         }
         bundledPlugin("com.intellij.mcpServer")
         bundledPlugin("com.intellij.database")
-        // 262 moved SolutionAnalysisHost and project.solution into this product module.
+        // Rider-only classes are needed at compile time (SweaTools, ProfilingTools, etc.)
+        // but loaded only in Rider via rider-only.xml (optional dependency).
+        // In RustRover these classes are never instantiated.
         bundledModule("intellij.rider.rdclient.dotnet")
         testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
     }
@@ -57,6 +59,12 @@ intellijPlatform {
             }
             for (version in versions) {
                 create(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.Rider, version) {
+                    useInstaller = false
+                }
+            }
+            // RustRover verification
+            for (version in versions) {
+                create(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.RustRover, version) {
                     useInstaller = false
                 }
             }

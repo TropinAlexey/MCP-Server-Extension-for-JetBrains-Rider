@@ -9,7 +9,6 @@ import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
-import com.jetbrains.rider.run.configurations.RiderConfigurationParametersAware
 import kotlinx.serialization.json.*
 import kotlin.coroutines.coroutineContext
 
@@ -128,6 +127,7 @@ class RunConfigToolset : McpToolset {
     private class Applied(val supported: Boolean, val changes: List<String>)
 
     // Platform runnable configs and Rider's .NET project/exe configs (their args live in ExeConfigurationParameters).
+    // RiderConfigurationParametersAware is accessed via reflection to avoid hard dependency on Rider classes.
     private fun applyArgsEnv(config: RunConfiguration, programArgs: String?, env: String?): Applied {
         val changes = mutableListOf<String>()
         when {
@@ -135,12 +135,37 @@ class RunConfigToolset : McpToolset {
                 programArgs?.let { config.programParameters = it; changes.add("programArgs") }
                 env?.let { config.envs = parseEnvString(it); changes.add("env") }
             }
-            config is RiderConfigurationParametersAware<*> -> {
-                val params = config.parameters
-                programArgs?.let { params.programParameters = it; changes.add("programArgs") }
-                env?.let { params.envs = parseEnvString(it); changes.add("env") }
+            else -> {
+                // Try Rider's RiderConfigurationParametersAware via reflection (only available in Rider)
+                val riderAwareClass = runCatching {
+                    Class.forName("com.jetbrains.rider.run.configurations.RiderConfigurationParametersAware")
+                }.getOrNull()
+                
+                if (riderAwareClass != null && riderAwareClass.isInstance(config)) {
+                    val params = runCatching {
+                        val getter = config.javaClass.getMethod("getParameters")
+                        getter.invoke(config)
+                    }.getOrNull()
+                    
+                    if (params != null) {
+                        programArgs?.let {
+                            runCatching {
+                                val setter = params.javaClass.getMethod("setProgramParameters", String::class.java)
+                                setter.invoke(params, it)
+                            }.onSuccess { changes.add("programArgs") }
+                        }
+                        env?.let {
+                            val envMap = parseEnvString(it)
+                            runCatching {
+                                val setter = params.javaClass.getMethod("setEnvs", Map::class.java)
+                                setter.invoke(params, envMap)
+                            }.onSuccess { changes.add("env") }
+                        }
+                        if (changes.isNotEmpty()) return Applied(true, changes)
+                    }
+                }
+                return Applied(false, changes)
             }
-            else -> return Applied(false, changes)
         }
         return Applied(true, changes)
     }

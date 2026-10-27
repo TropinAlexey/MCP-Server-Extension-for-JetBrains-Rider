@@ -4,7 +4,7 @@
     <vendor url="https://github.com/tropin">tropin</vendor>
 
     <description><![CDATA[
-        <p>Extends the JetBrains MCP Server in Rider with the IDE surfaces the built-in tools do not cover.
+        <p>Extends the JetBrains MCP Server with IDE surfaces the built-in tools do not cover.
         Works with any MCP client: Claude Code, Codex, Gemini CLI, GitHub Copilot, Cursor, Junie and others.
         Everything is prefixed with <code>rider_</code>; build, debugger, terminal, refactorings and search
         stay with the built-in tools, and the tool descriptions point agents to them.</p>
@@ -15,16 +15,16 @@
           <li><b>Tool windows</b>: any panel as text (Run, Debug app console, Build, Problems, TODO, Endpoints, Services)</li>
           <li><b>IDE state and context</b>: indexing/busy, cursor, selection, open editors, unsaved files, bookmarks</li>
           <li><b>Run configurations</b>: create, clone with args/env, update, delete</li>
-          <li><b>NuGet, Publish, workspace configuration</b>: add/remove/restore packages, Publish output and RID/publishDir</li>
+          <li><b>NuGet, Publish, workspace configuration</b>: add/remove/restore packages, Publish output and RID/publishDir (Rider only)</li>
           <li><b>Agent permissions</b>: Tools → Configure Agent Permissions lets connected agents (Claude Code, Codex,
               Gemini CLI) call read-only or all IDE tools without a prompt; read-only tools declare <code>readOnlyHint</code></li>
           <li><b>Solution Wide Analysis</b> error counts, inspection settings, IDE-managed processes, live dotTrace/dotMemory sessions, cache invalidation</li>
         </ul>
-        <p>Requires Rider 2026.2+. On Rider 2026.1 the Marketplace installs the 1.2.x line.</p>
+        <p>Requires 2026.2+. Supports Rider and RustRover (Rider-only tools such as NuGet, Publish, dotTrace/dotMemory, SWEA are unavailable in RustRover).</p>
     ]]></description>
 
-    <depends>com.intellij.modules.rider</depends>
     <depends>com.intellij.mcpServer</depends>
+    <depends optional="true" config-file="rider-only.xml">com.intellij.modules.rider</depends>
     <depends optional="true" config-file="db-consoles.xml">com.intellij.database</depends>
 
     <!-- Test runner: a separate plugin since 2026.2, part of the platform in 2026.1. A hard dependency
@@ -33,20 +33,17 @@
     <depends optional="true" config-file="test-runner.xml">intellij.testRunner.plugin</depends>
 
     <extensions defaultExtensionNs="com.intellij">
+        <!-- Platform-only toolsets: work in any IDE with MCP Server (Rider, RustRover, CLion, etc.) -->
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.session.SessionOutputToolset"/>
-        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.analysis.SweaToolset"/>
-        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.workspace.WorkspaceConfigToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.process.ProcessToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.ide.IdeStateToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.context.ContextToolset"/>
-        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.testing.TestToolset"/>
-        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.publish.PublishToolset"/>
-        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.nuget.NuGetToolset"/>
-        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.runconfig.RunConfigToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.settings.SettingsToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.admin.AdminToolset"/>
-        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.profiling.ProfilingToolset"/>
-        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.profiling.MemoryToolset"/>
+        <!-- Rider-only toolsets are registered in rider-only.xml -->
+        <!-- Cross-IDE toolsets with conditional backends -->
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.testing.TestToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.runconfig.RunConfigToolset"/>
         <notificationGroup id="MCP Server Extension" displayType="BALLOON"/>
     </extensions>
 

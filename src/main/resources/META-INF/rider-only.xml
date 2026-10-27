@@ -1,0 +1,11 @@
+<!-- Rider-only extensions: loaded only when com.intellij.modules.rider is present -->
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.analysis.SweaToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.workspace.WorkspaceConfigToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.publish.PublishToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.nuget.NuGetToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.profiling.ProfilingToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.profiling.MemoryToolset"/>
+    </extensions>
+</idea-plugin>
