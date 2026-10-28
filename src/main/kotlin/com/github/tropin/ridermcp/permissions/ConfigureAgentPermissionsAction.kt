@@ -120,6 +120,7 @@ private class ConfigureAgentPermissionsDialog(project: Project, private val plan
                 comment(
                     "GitHub Copilot CLI: start with <code>--allow-tool '<server>'</code> (server name from its MCP config, e.g. <code>rider</code>).<br>" +
                         "OpenCode: add <code>\"permission\": {\"mcp_rider_\": \"allow\"}</code> to <code>~/.config/opencode/opencode.json</code> (global) or project <code>opencode.json</code>.<br>" +
+                        "Continue: add <code>allow: [\"mcp_rider_*\"]</code> to <code>~/.continue/permissions.yaml</code> (global) or project <code>.continue/permissions.yaml</code>.<br>" +
                         "Cursor, VS Code, Windsurf, Junie and others: pick “Always allow” / “Allow for session” in the client's tool prompt or its MCP tool settings."
                 )
             }
