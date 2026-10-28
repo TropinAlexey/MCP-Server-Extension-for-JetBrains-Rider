@@ -103,6 +103,7 @@ The plugin works with any MCP client; each client decides on its own whether a t
 - OpenCode — `permission.mcp_rider_` in `~/.config/opencode/opencode.json` (global) or project `opencode.json`: `"allow"` for read-only prefix, `"allow"` for `mcp_rider_`
 - Continue — `allow` in `~/.continue/permissions.yaml` (global) or project `.continue/permissions.yaml`: `mcp_rider_<tool>` for read-only tools, `mcp_rider_` prefix for all
 - Zed — `agent.tool_permissions.tools["mcp:rider:*"]` in `~/.config/zed/settings.json`: `default: "allow"` per read-only tool, `default: "allow"` for `mcp:rider:*`
+- Cline — `mcpServers` in `~/.cline/data/settings/cline_mcp_settings.json` (VS Code) / `~/.cline/mcp.json` (CLI); tool permissions via UI in MCP panel
 - Others (Copilot CLI `--allow-tool '<server>'`, Cursor, VS Code, Windsurf, Junie) — "Always allow" in the client
 
 Read-only `rider_*` tools declare `readOnlyHint`; `rider_kill_process`, `rider_invalidate_caches` and `rider_execute_console` declare `destructiveHint`. Never edit client permission files yourself — suggest the action and let the user decide.

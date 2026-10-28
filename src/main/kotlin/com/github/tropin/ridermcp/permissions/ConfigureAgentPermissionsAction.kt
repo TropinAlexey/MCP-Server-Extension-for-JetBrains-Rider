@@ -122,6 +122,7 @@ private class ConfigureAgentPermissionsDialog(project: Project, private val plan
                         "OpenCode: add <code>\"permission\": {\"mcp_rider_\": \"allow\"}</code> to <code>~/.config/opencode/opencode.json</code> (global) or project <code>opencode.json</code>.<br>" +
                         "Continue: add <code>allow: [\"mcp_rider_*\"]</code> to <code>~/.continue/permissions.yaml</code> (global) or project <code>.continue/permissions.yaml</code>.<br>" +
                         "Zed: add <code>\"agent.tool_permissions.tools\": {\"mcp:rider:*\": {\"default\": \"allow\"}}</code> to <code>~/.config/zed/settings.json</code>.<br>" +
+                        "Cline: configure MCP servers in <code>~/.cline/data/settings/cline_mcp_settings.json</code> (VS Code) or <code>~/.cline/mcp.json</code> (CLI); set tool permissions via MCP panel UI.<br>" +
                         "Cursor, VS Code, Windsurf, Junie and others: pick “Always allow” / “Allow for session” in the client's tool prompt or its MCP tool settings."
                 )
             }
