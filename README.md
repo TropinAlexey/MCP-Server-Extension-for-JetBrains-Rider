@@ -10,11 +10,12 @@
   <a href="https://github.com/TropinAlexey/MCP-Server-Extension-for-JetBrains-Rider/releases/latest"><img src="https://img.shields.io/github/v/release/TropinAlexey/MCP-Server-Extension-for-JetBrains-Rider?style=flat-square&label=version" alt="Version"></a>
   <a href="https://github.com/TropinAlexey/MCP-Server-Extension-for-JetBrains-Rider/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/TropinAlexey/MCP-Server-Extension-for-JetBrains-Rider/build.yml?style=flat-square" alt="Build"></a>
   <img src="https://img.shields.io/badge/Rider-2026.2%2B-blue?style=flat-square&logo=jetbrains" alt="Rider 2026.2+">
+  <img src="https://img.shields.io/badge/RustRover-2026.2%2B-orange?style=flat-square&logo=jetbrains" alt="RustRover 2026.2+">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="MIT License"></a>
 </p>
 
 <p align="center">
-  A JetBrains Rider plugin that extends the built-in <a href="https://www.jetbrains.com/help/idea/mcp-server.html">MCP Server</a> with full IDE observability and control tools for AI agents.
+  A JetBrains **Rider and RustRover** plugin that extends the built-in <a href="https://www.jetbrains.com/help/idea/mcp-server.html">MCP Server</a> with full IDE observability and control tools for AI agents.
 </p>
 
 [What's New →](#whats-new)
@@ -181,12 +182,14 @@ Recipes:
 ## Installation
 
 ### Prerequisites
-- JetBrains Rider 2026.2+ (the MCP server is built in — no separate plugin to install). On Rider 2026.1 the Marketplace installs the 1.2.x line
+- **JetBrains Rider 2026.2+** or **RustRover 2026.2+** (the MCP server is built in — no separate plugin to install). On Rider 2026.1 the Marketplace installs the 1.2.x line
 - An MCP-compatible client: Claude Code, Codex, Gemini CLI, GitHub Copilot, Cursor, Junie, Windsurf, Continue, or a custom agent — the plugin is client-agnostic
+
+> **RustRover note:** The plugin works in both IDEs. Rider-only tools (NuGet, Publish, SWEA, dotTrace/dotMemory, WorkspaceConfig) are unavailable in RustRover; all other tools (tests, DB consoles, tool windows, IDE state, run configs, inspections, processes, profiling via built-in tools) work identically.
 
 ### From Marketplace
 
-1. In Rider: **Settings → Plugins → Marketplace**, search for "MCP Server Extension", install, and restart.
+1. In **Rider** or **RustRover**: **Settings → Plugins → Marketplace**, search for "MCP Server Extension", install, and restart.
 2. Enable the built-in MCP server: **Settings → Tools → MCP Server → Enable MCP Server** (confirm the access dialog), then Apply. If the settings page is missing, check that the bundled MCP Server plugin is enabled under **Settings → Plugins → Installed**.
 3. Connect your client: on the same settings page use **Auto-Configure** next to your client (or copy a manual config for clients not on the list), then restart the client.
 4. Verify: ask your agent something only the IDE knows — e.g. "What is the current IDE state?" or "What does the Problems panel show?". If it answers with live IDE data, the `rider_*` tools are working.
