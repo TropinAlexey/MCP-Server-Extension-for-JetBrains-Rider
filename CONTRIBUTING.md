@@ -6,18 +6,18 @@ Thanks for helping. This file is for people and coding agents working on the plu
 ## Build and test (Windows, macOS, Linux)
 
 Requirements: a JDK 17+ to start Gradle (JDK 21 for the build is downloaded automatically) and,
-for `runIde`, nothing else — the Rider SDK comes from Maven.
+for `runIde`, nothing else — the Rider/RustRover SDK comes from Maven.
 
 | Task | Linux / macOS | Windows |
 |---|---|---|
 | Unit tests + tool-doc checks | `./gradlew check` | `gradlew.bat check` |
 | Plugin zip (`build/distributions/`) | `./gradlew buildPlugin` | `gradlew.bat buildPlugin` |
-| Rider with the plugin loaded | `./gradlew runIde` | `gradlew.bat runIde` |
+| Rider/RustRover with the plugin loaded | `./gradlew runIde` | `gradlew.bat runIde` |
 | Plugin Verifier | `./gradlew verifyPlugin` | `gradlew.bat verifyPlugin` |
 
 - `verifyPlugin` uses an installed Rider when `RIDER_PATH` points at it (default: `/Applications/Rider.app/Contents`),
-  otherwise the Rider version the build compiles against. `-PverifyAllRiders` checks every Rider line the plugin claims.
-- CI runs `check buildPlugin` on Ubuntu, Windows and macOS, and the Plugin Verifier on Ubuntu. Keep all three green.
+  otherwise the Rider/RustRover version the build compiles against. `-PverifyAllRiders` checks every Rider/RustRover line the plugin claims.
+- CI runs `check buildPlugin` on Ubuntu, Windows and macOS, and the Plugin Verifier on Ubuntu (Rider + RustRover on macOS). Keep all three green.
 
 ## Rules for code
 
@@ -31,7 +31,7 @@ No feature may require one particular client.
 - Paths via `java.nio.file.Path`; never hard-code `/`, `\`, `/tmp`, `C:\` or a user's home layout.
   List separators: `File.pathSeparatorChar`.
 - External processes via `GeneralCommandLine` (it loads the user's shell environment, unlike `ProcessBuilder`
-  in an IDE started from the macOS Dock). Run `dotnet` through `DotnetCli` — it uses the CLI configured in Rider.
+  in an IDE started from the macOS Dock). Run `dotnet` through `DotnetCli` — it uses the CLI configured in Rider/RustRover.
 - Client config locations honor the clients' own overrides (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`); read them
   through an injectable `env` so tests stay hermetic.
 - SQL hints and errors name the DBMS when a construct is dialect-specific (`TOP` vs `LIMIT`).
@@ -63,5 +63,5 @@ request, describe how you checked the change by hand (the prompt you gave an age
 
 ## Feedback and issues
 
-Bugs, misrouted tools and confusing descriptions: [GitHub Issues](https://github.com/TropinAlexey/MCP-Server-Extension-for-JetBrains-Rider/issues).
+Bugs, misrouted tools and confusing descriptions: [GitHub Issues](https://github.com/TropinAlexey/MCP-Server-Extension-for-Rider-and-RustRover/issues).
 Code and comments are in English.

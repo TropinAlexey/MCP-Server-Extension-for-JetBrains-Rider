@@ -7,7 +7,7 @@ IntelliJ/Rider plugin that extends JetBrains MCP Server with additional tools fo
 - **Type**: IntelliJ Platform Plugin (Kotlin)
 - **Dependency**: `com.intellij.mcpServer` — base JetBrains MCP Server plugin
 - **Extension point**: `com.intellij.mcpServer.mcpTool` — registers new MCP tools
-- **Target IDE**: JetBrains Rider 2026.2+ (2026.1 is served by the 1.2.x line on `release/1.2.x`)
+- **Target IDEs**: JetBrains Rider 2026.2+ and RustRover 2026.2+ (2026.1 is served by the 1.2.x line on `release/1.2.x`)
 - **JDK**: 21
 
 ## Contributor rules

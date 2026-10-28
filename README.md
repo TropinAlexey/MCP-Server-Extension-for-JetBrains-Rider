@@ -2,20 +2,21 @@
   <img src="icon.png" alt="MCP Server Extension" width="80">
 </p>
 
-<h1 align="center">MCP Server Extension for JetBrains Rider</h1>
+<h1 align="center">JetBrains MCP Server Extension for Rider & RustRover</h1>
 
 <p align="center">
   <a href="https://plugins.jetbrains.com/plugin/34264-mcp-server-extension"><img src="https://img.shields.io/jetbrains/plugin/v/34264?style=flat-square&label=marketplace" alt="JetBrains Marketplace"></a>
   <a href="https://plugins.jetbrains.com/plugin/34264-mcp-server-extension"><img src="https://img.shields.io/jetbrains/plugin/d/34264?style=flat-square&label=downloads" alt="Downloads"></a>
-  <a href="https://github.com/TropinAlexey/MCP-Server-Extension-for-JetBrains-Rider/releases/latest"><img src="https://img.shields.io/github/v/release/TropinAlexey/MCP-Server-Extension-for-JetBrains-Rider?style=flat-square&label=version" alt="Version"></a>
-  <a href="https://github.com/TropinAlexey/MCP-Server-Extension-for-JetBrains-Rider/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/TropinAlexey/MCP-Server-Extension-for-JetBrains-Rider/build.yml?style=flat-square" alt="Build"></a>
+  <a href="https://github.com/TropinAlexey/MCP-Server-Extension-for-Rider-and-RustRover/releases/latest"><img src="https://img.shields.io/github/v/release/TropinAlexey/MCP-Server-Extension-for-Rider-and-RustRover?style=flat-square&label=version" alt="Version"></a>
+  <a href="https://github.com/TropinAlexey/MCP-Server-Extension-for-Rider-and-RustRover/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/TropinAlexey/MCP-Server-Extension-for-Rider-and-RustRover/build.yml?style=flat-square" alt="Build"></a>
   <img src="https://img.shields.io/badge/Rider-2026.2%2B-blue?style=flat-square&logo=jetbrains" alt="Rider 2026.2+">
   <img src="https://img.shields.io/badge/RustRover-2026.2%2B-orange?style=flat-square&logo=jetbrains" alt="RustRover 2026.2+">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="MIT License"></a>
 </p>
 
 <p align="center">
-  A JetBrains **Rider and RustRover** plugin that extends the built-in <a href="https://www.jetbrains.com/help/idea/mcp-server.html">MCP Server</a> with full IDE observability and control tools for AI agents.
+  Extends the built-in <a href="https://www.jetbrains.com/help/idea/mcp-server.html">JetBrains MCP Server</a> with full IDE observability and control tools for AI agents.
+  Works in <b>Rider</b> and <b>RustRover</b> 2026.2+.
 </p>
 
 [What's New →](#whats-new)
@@ -221,8 +222,8 @@ Once connected, try:
 ### From Source
 
 ```bash
-git clone https://github.com/TropinAlexey/MCP-Server-Extension-for-JetBrains-Rider.git
-cd MCP-Server-Extension-for-JetBrains-Rider
+git clone https://github.com/TropinAlexey/MCP-Server-Extension-for-Rider-and-RustRover.git
+cd MCP-Server-Extension-for-Rider-and-RustRover
 
 # Linux / macOS
 ./gradlew buildPlugin
@@ -512,7 +513,7 @@ Response changes:
 
 ## Contributing
 
-Bug reports and feature requests are welcome in [GitHub Issues](https://github.com/TropinAlexey/MCP-Server-Extension-for-JetBrains-Rider/issues).
+Bug reports and feature requests are welcome in [GitHub Issues](https://github.com/TropinAlexey/MCP-Server-Extension-for-Rider-and-RustRover/issues).
 
 Build, test and code rules for Windows, macOS and Linux: [CONTRIBUTING.md](CONTRIBUTING.md).
 
