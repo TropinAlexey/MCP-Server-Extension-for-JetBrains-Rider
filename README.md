@@ -184,7 +184,7 @@ Recipes:
 
 ### Prerequisites
 - **JetBrains Rider 2026.2+** or **RustRover 2026.2+** (the MCP server is built in — no separate plugin to install). On Rider 2026.1 the Marketplace installs the 1.2.x line
-- An MCP-compatible client: Claude Code, Codex, Gemini CLI, GitHub Copilot, Cursor, Junie, Windsurf, Continue, or a custom agent — the plugin is client-agnostic
+- An MCP-compatible client: **Claude Code, Codex, Gemini CLI, GitHub Copilot, Cursor, Junie, Windsurf, Continue, OpenCode**, or a custom agent — the plugin is client-agnostic
 
 > **RustRover note:** The plugin works in both IDEs. Rider-only tools (NuGet, Publish, SWEA, dotTrace/dotMemory, WorkspaceConfig) are unavailable in RustRover; all other tools (tests, DB consoles, tool windows, IDE state, run configs, inspections, processes, profiling via built-in tools) work identically.
 
@@ -205,6 +205,7 @@ Every agent client asks before an MCP tool call until you allow it. That setting
 | Claude Code | `permissions.allow` in `.claude/settings.local.json` (this project, not committed) or `~/.claude/settings.json` | `mcp__rider__<tool>` per read-only tool | `mcp__rider` |
 | Codex | `default_tools_approval_mode` under `[mcp_servers.rider]` in `~/.codex/config.toml` | `"writes"` — asks only for tools not marked read-only | `"approve"` |
 | Gemini CLI | `"trust": true` on the server entry in `settings.json` | — (trusts whole servers only) | ✅ |
+| OpenCode | `permission.mcp_rider_` in `~/.config/opencode/opencode.json` (global) or project `opencode.json` | `"allow"` for read-only tool prefix | `"allow"` for `mcp_rider_` |
 | Copilot CLI, Cursor, VS Code, Windsurf, Junie | nothing — set it in the client: `copilot --allow-tool 'rider'`, or "Always allow" in the tool prompt | | |
 
 - Only clients already connected to this IDE are touched, and only rules are added — nothing is removed. `rider` stands for the server name in the client's config (any name works). The server is recognized by this IDE's MCP port, never by name, and only from your user-level client configs: files that come with a repository (`.mcp.json`, `.codex/`, `.gemini/`) are ignored, so a cloned project cannot get its own server trusted. "All projects" for Claude Code uses only user-scope servers.

@@ -100,6 +100,7 @@ The plugin works with any MCP client; each client decides on its own whether a t
 - Claude Code — `permissions.allow` in `.claude/settings.local.json` (project) or `~/.claude/settings.json`: `mcp__<server>__<tool>` per read-only tool, or `mcp__<server>` for all
 - Codex — `default_tools_approval_mode = "writes"` (prompt only for tools not marked read-only) or `"approve"` under `[mcp_servers.<server>]` in `~/.codex/config.toml`
 - Gemini CLI — `"trust": true` on the server entry in `settings.json` (whole server only)
+- OpenCode — `permission.mcp_rider_` in `~/.config/opencode/opencode.json` (global) or project `opencode.json`: `"allow"` for read-only prefix, `"allow"` for `mcp_rider_`
 - Others (Copilot CLI `--allow-tool '<server>'`, Cursor, VS Code, Windsurf, Junie) — "Always allow" in the client
 
 Read-only `rider_*` tools declare `readOnlyHint`; `rider_kill_process`, `rider_invalidate_caches` and `rider_execute_console` declare `destructiveHint`. Never edit client permission files yourself — suggest the action and let the user decide.
