@@ -209,6 +209,7 @@ Every agent client asks before an MCP tool call until you allow it. That setting
 | Continue | `allow` in `~/.continue/permissions.yaml` (global) or project `.continue/permissions.yaml` | `mcp_rider_<tool>` for read-only tools | `mcp_rider_` prefix |
 | Zed | `agent.tool_permissions.tools["mcp:rider:*"]` in `~/.config/zed/settings.json` | `default: "allow"` per read-only tool | `default: "allow"` for `mcp:rider:*` |
 | Cline | `mcpServers` in `~/.cline/data/settings/cline_mcp_settings.json` (VS Code) / `~/.cline/mcp.json` (CLI) | configure via UI (MCP panel → Configure → tool permissions) | configure via UI |
+| Cody | `servers` in `.vscode/mcp.json` (workspace) or user `mcp.json` (VS Code profile) | per-tool via VS Code UI (chat.mcp.access) | per-tool via VS Code UI |
 | Copilot CLI, Cursor, VS Code, Windsurf, Junie | nothing — set it in the client: `copilot --allow-tool 'rider'`, or "Always allow" in the tool prompt | | |
 
 - Only clients already connected to this IDE are touched, and only rules are added — nothing is removed. `rider` stands for the server name in the client's config (any name works). The server is recognized by this IDE's MCP port, never by name, and only from your user-level client configs: files that come with a repository (`.mcp.json`, `.codex/`, `.gemini/`) are ignored, so a cloned project cannot get its own server trusted. "All projects" for Claude Code uses only user-scope servers.
