@@ -2,6 +2,8 @@ package com.github.tropin.ridermcp.permissions
 
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.*
+import org.yaml.snakeyaml.Yaml
+import java.util.regex.Pattern
 
 /** Which tools of the IDE MCP server an agent may call without asking. */
 enum class PermissionScope { READ_ONLY, ALL }
@@ -131,4 +133,123 @@ internal object AgentPermissionConfigs {
     private fun parseObject(text: String): JsonObject? = runCatching { Json.parseToJsonElement(text) as? JsonObject }.getOrNull()
 
     private fun JsonObject.obj(key: String): JsonObject? = this[key] as? JsonObject
+
+    // --- OpenCode: permission.mcp_rider_ in opencode.json ---
+
+    private val opencodeUrl = Regex("""^https?://(127\.0\.0\.1|localhost):(\d+)/?$""")
+
+    private fun isOpencodeIdeUrl(url: String?, port: Int): Boolean =
+        url != null && opencodeUrl.matchEntire(url.trim())?.groupValues?.get(2) == port.toString()
+
+    fun opencodeServerKeys(opencodeJson: String, port: Int): Set<String> {
+        val root = parseObject(opencodeJson) ?: return emptySet()
+        val mcp = root.obj("mcp") ?: return emptySet()
+        return mcp.mapNotNull { (key, value) ->
+            val entry = value as? JsonObject
+            val url = entry?.get("url") as? JsonPrimitive
+            key.takeIf { isOpencodeIdeUrl(url?.contentOrNull, port) }
+        }.toSortedSet()
+    }
+
+    fun opencodeRule(scope: PermissionScope): Pair<String, String> = when (scope) {
+        PermissionScope.READ_ONLY -> "permission.mcp_rider_" to "allow"
+        PermissionScope.ALL -> "permission.mcp_rider_" to "allow"
+    }
+
+    fun setOpencodePermission(opencodeJson: String, key: String, ruleKey: String, ruleValue: String): String? {
+        val root = parseObject(opencodeJson) ?: return null
+        val mcp = root.obj("mcp") ?: return null
+        val entry = mcp.obj(key) ?: return null
+        val permission = entry.obj("permission") ?: JsonObject(emptyMap())
+        val current = permission[ruleKey] as? JsonPrimitive
+        if (current?.contentOrNull == ruleValue) return null
+        val updatedPermission = JsonObject(permission + (ruleKey to JsonPrimitive(ruleValue)))
+        val updatedEntry = JsonObject(entry + ("permission" to updatedPermission))
+        val updatedMcp = JsonObject(mcp + (key to updatedEntry))
+        return json.encodeToString(JsonObject.serializer(), JsonObject(root + ("mcp" to updatedMcp))) + "\n"
+    }
+
+    // --- Continue: allow in permissions.yaml ---
+
+    private val continueServerKey = Regex("""^  (?:mcp_)?([^:]+):$""")
+
+    fun continueServerKeys(continueYaml: String, port: Int): Set<String> {
+        // Continue stores MCP servers in config.yaml, but permissions.yaml only has allow/ask/exclude lists
+        // We match mcp_rider_* patterns in the allow/ask lists
+        val servers = mutableSetOf<String>()
+        val yaml = try {
+            Yaml().load(continueYaml) as? Map<*, *>
+        } catch (_: Exception) {
+            return emptySet()
+        }
+        if (yaml == null) return emptySet()
+        val allow = (yaml["allow"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+        val ask = (yaml["ask"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+        (allow + ask).forEach { entry ->
+            val prefix = entry.substringBefore("_").takeIf { it.startsWith("mcp_") }
+            prefix?.let { servers.add(it) }
+        }
+        return servers.toSortedSet()
+    }
+
+    fun continueRule(scope: PermissionScope): String = when (scope) {
+        PermissionScope.READ_ONLY -> "mcp_rider_*"
+        PermissionScope.ALL -> "mcp_rider_*"
+    }
+
+    fun setContinuePermission(continueYaml: String, key: String, rule: String): String? {
+        val yaml = try {
+            Yaml().load(continueYaml) as? MutableMap<String, Any>
+        } catch (_: Exception) {
+            return null
+        }
+        if (yaml == null) return null
+        val allow = (yaml["allow"] as? MutableList<*>)?.mapNotNull { it as? String }?.toMutableList() ?: mutableListOf()
+        if (rule in allow) return null
+        allow.add(rule)
+        yaml["allow"] = allow
+        return Yaml().dump(yaml)
+    }
+
+    // --- Zed: agent.tool_permissions.tools["mcp:rider:*"] in settings.json ---
+
+    private val zedUrl = Regex("""^https?://(127\.0\.0\.1|localhost):(\d+)/?$""")
+
+    private fun isZedIdeUrl(url: String?, port: Int): Boolean =
+        url != null && zedUrl.matchEntire(url.trim())?.groupValues?.get(2) == port.toString()
+
+    fun zedServerKeys(zedJson: String, port: Int): Set<String> {
+        val root = parseObject(zedJson) ?: return emptySet()
+        val contextServers = root.obj("context_servers") ?: return emptySet()
+        return contextServers.mapNotNull { (key, value) ->
+            val entry = value as? JsonObject
+            val command = entry?.obj("command")
+            val args = command?.get("args") as? JsonArray
+            val url = entry?.get("url") as? JsonPrimitive
+            val env = entry?.obj("env")
+            val portFromEnv = env?.get("IJ_MCP_SERVER_PORT") as? JsonPrimitive
+            val matches = isZedIdeUrl(url?.contentOrNull, port) || portFromEnv?.contentOrNull == port.toString() ||
+                (args?.joinToString(" ")?.contains(port.toString()) == true)
+            key.takeIf { matches }
+        }.toSortedSet()
+    }
+
+    fun zedRule(scope: PermissionScope): String = when (scope) {
+        PermissionScope.READ_ONLY -> "allow"
+        PermissionScope.ALL -> "allow"
+    }
+
+    fun setZedPermission(zedJson: String, key: String, ruleKey: String, ruleValue: String): String? {
+        val root = parseObject(zedJson) ?: return null
+        val agent = root.obj("agent") ?: JsonObject(emptyMap())
+        val toolPermissions = agent.obj("tool_permissions") ?: JsonObject(emptyMap())
+        val tools = toolPermissions.obj("tools") ?: JsonObject(emptyMap())
+        val current = tools[ruleKey] as? JsonObject
+        if (current != null && (current["default"] as? JsonPrimitive)?.contentOrNull == ruleValue) return null
+        val toolEntry = JsonObject(mapOf("default" to JsonPrimitive(ruleValue)))
+        val updatedTools = JsonObject(tools + (ruleKey to toolEntry))
+        val updatedToolPermissions = JsonObject(toolPermissions + ("tools" to updatedTools))
+        val updatedAgent = JsonObject(agent + ("tool_permissions" to updatedToolPermissions))
+        return json.encodeToString(JsonObject.serializer(), JsonObject(root + ("agent" to updatedAgent))) + "\n"
+    }
 }

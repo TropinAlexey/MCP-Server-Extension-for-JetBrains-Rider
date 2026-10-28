@@ -21,7 +21,7 @@ class AgentPermissionPlannerTest {
     @Test
     fun `unconnected clients are reported and nothing is written`() {
         val edits = planner.plan(PermissionScope.READ_ONLY, claudeUserWide = false)
-        assertEquals(listOf("Claude Code", "Codex", "Gemini CLI"), edits.map { it.client })
+        assertEquals(listOf("Claude Code", "Codex", "Gemini CLI", "OpenCode", "Continue", "Zed"), edits.map { it.client })
         assertTrue(edits.all { it.updated == null && "not connected" in it.status })
     }
 
