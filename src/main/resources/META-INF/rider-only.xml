@@ -6,6 +6,5 @@
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.publish.PublishToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.nuget.NuGetToolset"/>
         <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.profiling.ProfilingToolset"/>
-        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.profiling.MemoryToolset"/>
     </extensions>
 </idea-plugin>

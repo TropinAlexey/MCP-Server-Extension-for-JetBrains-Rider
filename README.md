@@ -56,7 +56,7 @@ Rider 2026.2 ships a strong built-in MCP server. This plugin covers what it does
 | IDE-managed processes | ❌ | ✅ `rider_list_processes` + `rider_kill_process` (processes started from Rider) |
 | Database | ✅ connections (create/edit/test; MSSQL URLs are rejected), schema introspection, table preview, `execute_sql_query` with paging and cancel (asks per schema in an IDE dialog unless always allowed) | ✅ open consoles and table tabs (`rider_list_db_consoles`); scripts with `GO` batches, background jobs with PRINT/RAISERROR progress, read-only guard, secret masking, CSV/JSON export (`rider_execute_console`); results of what the user ran (`rider_console_results`) |
 | Inspection settings | ❌ | ✅ `rider_inspections(action=list/toggle)` |
-| dotTrace / dotMemory | Partial: dotTrace snapshot analysis (call tree, timeline, report) | ✅ live dotTrace / dotMemory sessions: state, start/stop, snapshot (`rider_profiling`, `rider_memory`) |
+| dotTrace / dotMemory | Partial: dotTrace snapshot analysis (call tree, timeline, report) | ✅ live dotTrace / dotMemory sessions: state, start/stop, snapshot (`rider_profiling` action=state|control)
 | OpenTelemetry (logs, spans, service map) | ✅ `get_log_records`, `get_spans`, `get_service_map` | — |
 | VCS | ✅ `git_status`, `get_repositories` | — |
 | Cache invalidation | ❌ | ✅ `rider_invalidate_caches` (invalidate + restart) |
@@ -135,7 +135,6 @@ MCP tools are synchronous (request → response). Long-running operations of thi
 | Tool | Args | Description |
 |---|---|---|
 | `rider_profiling` | `action=state\|control`, `command?=start\|stop\|drop\|detach\|close`, `pid?` | Live dotTrace session (start it from Rider Run → Profile first) |
-| `rider_memory` | `action=state\|control`, `command?=snapshot\|open\|detach\|kill`, `pid?`, `path?` | Live dotMemory session (snapshot needs pid, open needs .dmw path) |
 
 ### Admin & context
 | Tool | Args | Description |
@@ -440,7 +439,6 @@ Response changes:
 ### v1.1.0
 
 - New `rider_execute_console`: run SQL in an open console's data source without IDE introspection
-- New `rider_memory_state` / `rider_memory_control`: live dotMemory sessions — status, snapshots, detach/kill (snapshot analysis stays with the stock tools)
 - Config-less test runs: `filter`/`className`/`methodName` resolve the `.sln` automatically (no more MSB1011); non-runnable profiles (Publish/MSBuild) fail fast instead of hanging
 - `rider_get_ide_state` reports `indexing`/`busy`/`runningSessions` — check before piling onto a busy IDE
 - Honest, actionable error texts across debug, tests, endpoints and DB tools

@@ -37,6 +37,7 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 - API endpoints → built-in `search_symbol` or `get_service_map`; fallback: `rider_tool_window(action='content', windowId='Endpoints')`
 - IDE terminal commands → built-in `execute_terminal_command` (returns the output)
 - Build → built-in `build_solution_start` + `build_solution_state` (errors with file/line). Files just written outside the IDE: check `get_file_problems` on them first — a build fired before the IDE sees the file can report success
+- Profiling (dotTrace/dotMemory) → `rider_profiling` (actions: `state`, `control` with commands: start/stop/drop/detach/close for dotTrace; snapshot/open/detach/kill for dotMemory) **(Rider only)**
 - Publish → `rider_publish` (`configName?`) + `rider_get_output` **(Rider only)**
 - Run tests → `rider_tests` (actions: `run`, `run_and_wait`, `results`, `rerun_failed`) + `rider_get_output` (`configName` alone runs the whole config — scope with filters)
   - Long runs (Testcontainers, integration suites) → `run_and_wait` waits at most 50 s per call and answers `status=running`, `timedOut=true`, `elapsedMs`, `sessionId`; the run continues in the IDE. Call `rider_tests(action='run_and_wait', sessionId)` again until `status != running` — never a larger `timeoutMs` (calls over ~60 s are dropped as a client timeout) and never a fresh run
@@ -56,10 +57,6 @@ The base JetBrains MCP Server (`com.intellij.mcpServer`) ships its own database 
 - Run an app and read its output → built-in `execute_run_configuration` (`waitForExit=true` + `timeout` for a snapshot of a long-running app)
 - IDE processes → `rider_list_processes` / `rider_kill_process`
 - Code inspections → `rider_inspections` (actions: `list`, `toggle`)
-- IDE caches → `rider_invalidate_caches`
-- Profiling (dotTrace) → `rider_profiling` (actions: `state`, `control`) **(Rider only)**
-- Profiling (dotMemory) → `rider_memory` (actions: `state`, `control`) **(Rider only)**
-
 ## Database consoles playbook
 
 **Pick the database first.** `rider_list_db_consoles` → `consoles[]` (`consoleRef`, `currentDatabase`, `readOnly`, `busyJobId`) and `tableEditors[]` (open table/view tabs with `database`/`schema`/`object`; `selected=true` = active tab; `query` = how to query it — `rider_execute_console` on the same data source's console, not the built-in `execute_sql_query`). When the user says "the open console/table", take database and schema from here — never guess between similarly named databases.
@@ -173,7 +170,7 @@ Model: **window → tabs → Swing component tree**. Navigate: `rider_tool_windo
 | `Terminal` | One per terminal | Shell console |
 | `TODO` | Scope filter | TODO/FIXME/HACK tree |
 | `Endpoints` | — | HTTP routes tree/list |
-| `Services` | Dashboard entries | May be `has no content` until opened once in UI. Result grids are read as CSV, but titles repeat across runs/servers — for console results use `rider_console_results` instead of `section` |
+| `Services` | Dashboard entries | Read via `rider_tool_window(windowId='Services', section='docker'|'kubernetes'|'database')`; for console results use `rider_console_results` instead 
 | Others | Varies | Generic extraction: sub-tabs marked `--- <title> ---`, editors as text, trees flattened with indent |
 
 Recipes:
