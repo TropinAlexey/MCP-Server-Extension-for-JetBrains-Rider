@@ -12,6 +12,8 @@ import com.jetbrains.rd.util.lifetime.Lifetime
 import com.jetbrains.rider.projectView.solution
 import kotlinx.serialization.json.*
 import kotlin.coroutines.coroutineContext
+import java.lang.reflect.Field
+import java.lang.reflect.Method
 
 class ProfilingToolset : McpToolset {
 
@@ -44,15 +46,9 @@ class ProfilingToolset : McpToolset {
         val dotTraceSession = dotTraceHost.activeSession.value
 
         // dotMemory state
-        val dotMemoryHost = try {
-            project.solution.getOrCreateExtension("dotMemoryHost", DotMemoryHost::class) {
-                throw UnsupportedOperationException("dotMemoryHost extension not provided")
-            }
-        } catch (_: Exception) {
-            null
-        }
-        val dotMemoryAvailable = dotMemoryHost?.isDotMemoryAvailable.valueOrNull ?: false
-        val dotMemorySession = dotMemoryHost?.profilingSession.value
+        val dotMemoryHost = getDotMemoryHost(project)
+        val dotMemoryAvailable = dotMemoryHost?.let { getDotMemoryAvailable(it) } ?: false
+        val dotMemorySession = getDotMemorySession(dotMemoryHost)
 
         return buildJsonObject {
             // dotTrace section
@@ -108,11 +104,14 @@ class ProfilingToolset : McpToolset {
             }
 
             // dotMemory section
+            val dotMemoryAvailable = dotMemoryHost?.let { getDotMemoryAvailable(it) } ?: false
+            val dotMemorySession = getDotMemorySession(dotMemoryHost)
+
             put("dotMemory", buildJsonObject {
                 put("available", dotMemoryAvailable)
                 if (dotMemorySession != null) {
                     putJsonObject("activeSession") {
-                        put("isFinished", dotMemorySession.isFinished.valueOrNull ?: false)
+                        put("isFinished", getIsFinished(dotMemorySession) ?: false)
                     }
                 }
             })
@@ -133,6 +132,69 @@ class ProfilingToolset : McpToolset {
         }.toString()
     }
 
+    private fun getDotMemoryHost(project: com.intellij.openapi.project.Project): Any? {
+        try {
+            val solution = project.solution
+            val method = solution.javaClass.getDeclaredMethod("getOrCreateExtension", String::class.java)
+            method.isAccessible = true
+            return method.invoke(solution, "dotMemoryHost")
+        } catch (_: Exception) {
+            return null
+        }
+    }
+
+    private fun getDotMemoryAvailable(host: Any?): Boolean {
+        return host?.let { it ->
+            try {
+                val field = it.javaClass.getDeclaredField("isDotMemoryAvailable")
+                field.isAccessible = true
+                val value = field.get(it)
+                value?.let {
+                    // Use reflection to get the value property from RdProperty
+                    val valueProperty = it.javaClass.getDeclaredMethod("getValue")
+                    valueProperty.isAccessible = true
+                    (valueProperty.invoke(it) as? Boolean) == true
+                } ?: false
+            } catch (_: Exception) {
+                false
+            }
+        } ?: false
+    }
+
+    private fun getDotMemorySession(host: Any?): Any? {
+        return host?.let { it ->
+            try {
+                val field = it.javaClass.getDeclaredField("profilingSession")
+                field.isAccessible = true
+                val value = field.get(it)
+                value?.let {
+                    val valueProperty = it.javaClass.getDeclaredMethod("getValue")
+                    valueProperty.isAccessible = true
+                    valueProperty.invoke(it)
+                }
+            } catch (_: Exception) {
+                null
+            }
+        } ?: null
+    }
+
+    private fun getIsFinished(session: Any?): Boolean? {
+        return session?.let { it ->
+            try {
+                val field = it.javaClass.getDeclaredField("isFinished")
+                field.isAccessible = true
+                val value = field.get(it)
+                value?.let {
+                    val valueProperty = it.javaClass.getDeclaredMethod("getValue")
+                    valueProperty.isAccessible = true
+                    valueProperty.invoke(it) as? Boolean
+                }
+            } catch (_: Exception) {
+                null
+            }
+        } ?: null
+    }
+
     private suspend fun profilingControl(command: String?, pid: Int, path: String?): String {
         if (command.isNullOrBlank()) mcpFail("command is required for action='control'")
 
@@ -142,27 +204,31 @@ class ProfilingToolset : McpToolset {
         val isDotMemoryCmd = listOf("snapshot", "open", "detach", "kill").contains(command?.lowercase())
 
         if (isDotMemoryCmd) {
-            val dotMemoryHost = try {
-                project.solution.getOrCreateExtension("dotMemoryHost", DotMemoryHost::class.java) {
-                    throw UnsupportedOperationException("dotMemoryHost not available")
-                }
-            } catch (_: Exception) {
-                mcpFail("dotMemory is not available in this IDE")
-            }
+            val dotMemoryHost = getDotMemoryHost(project)
+                ?: mcpFail("dotMemory is not available in this IDE")
 
-            val session = dotMemoryHost.profilingSession.value
+            val session = getDotMemorySession(dotMemoryHost)
                 ?: mcpFail("No active memory profiling session. Start profiling from Rider first.")
 
             when (command?.lowercase()) {
                 "snapshot" -> {
                     if (pid == 0) mcpFail("snapshot requires pid. Use rider_list_processes to find it.")
-                    dotMemoryHost.getSnapshot.start(Lifetime.Eternal, pid)
+                    val getSnapshotMethod = dotMemoryHost.javaClass.getDeclaredMethod("getSnapshot")
+                    getSnapshotMethod.isAccessible = true
+                    val snapshotManager = getSnapshotMethod.invoke(dotMemoryHost)
+                    snapshotManager?.let {
+                        val startMethod = it.javaClass.getDeclaredMethod("start", Lifetime::class.java, Int::class.java)
+                        startMethod.isAccessible = true
+                        startMethod.invoke(it, Lifetime.Eternal, pid)
+                    }
                 }
                 "open" -> {
                     if (path.isNullOrBlank()) mcpFail("open requires path to a .dmw workspace")
                     if (!path.endsWith(".dmw", ignoreCase = true)) mcpFail("open requires a .dmw workspace file, got '$path'")
                     if (!java.io.File(path).exists()) mcpFail("Workspace file not found: '$path'")
-                    dotMemoryHost.importWorkspace.fire(path)
+                    val importWorkspace = dotMemoryHost.javaClass.getDeclaredMethod("importWorkspace")
+                    importWorkspace.isAccessible = true
+                    importWorkspace.invoke(dotMemoryHost, path)
                 }
                 "detach", "kill" -> {
                     val cmd = if (command.lowercase() == "detach") {
@@ -170,7 +236,16 @@ class ProfilingToolset : McpToolset {
                     } else {
                         DotMemoryHostSessionCommandType.KillProcess
                     }
-                    session.sessionCommand.fire(cmd)
+                    val session = getDotMemorySession(dotMemoryHost)
+                        ?: mcpFail("No active memory profiling session.")
+                    val sessionCommandField = session.javaClass.getDeclaredField("sessionCommand")
+                    sessionCommandField.isAccessible = true
+                    val cmdProperty = sessionCommandField.get(session)
+                    cmdProperty?.let {
+                        val fireMethod = it.javaClass.getDeclaredMethod("fire", DotMemoryHostSessionCommandType::class.java)
+                        fireMethod.isAccessible = true
+                        fireMethod.invoke(it, cmd)
+                    }
                 }
                 else -> mcpFail("Unknown dotMemory command '$command'. Use: snapshot, open, detach, kill")
             }
@@ -198,9 +273,9 @@ class ProfilingToolset : McpToolset {
         }
 
         if (pid != 0) {
-            session.coreCommand.fire(CommandDef(cmd, pid))
+            session.coreCommand?.fire(CommandDef(cmd, pid))
         } else {
-            session.sessionCommand.fire(cmd)
+            session.sessionCommand?.fire(cmd)
         }
 
         return buildJsonObject {

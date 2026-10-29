@@ -12,7 +12,6 @@ import com.github.tropin.ridermcp.ide.IdeStateToolset
 import com.github.tropin.ridermcp.nuget.NuGetToolset
 import com.github.tropin.ridermcp.permissions.ConfigureAgentPermissionsAction
 import com.github.tropin.ridermcp.process.ProcessToolset
-import com.github.tropin.ridermcp.profiling.MemoryToolset
 import com.github.tropin.ridermcp.profiling.ProfilingToolset
 import com.github.tropin.ridermcp.publish.PublishToolset
 import com.github.tropin.ridermcp.runconfig.RunConfigToolset
@@ -38,7 +37,6 @@ class ContractTest {
         ConfigureAgentPermissionsAction::class.java,
         ProcessToolset::class.java,
         ProfilingToolset::class.java,
-        MemoryToolset::class.java,
         PublishToolset::class.java,
         RunConfigToolset::class.java,
         SessionOutputToolset::class.java,
