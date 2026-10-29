@@ -175,7 +175,7 @@ class ProfilingToolset : McpToolset {
             } catch (_: Exception) {
                 null
             }
-        } ?: null
+        }
     }
 
     private fun getIsFinished(session: Any?): Boolean? {
@@ -192,7 +192,7 @@ class ProfilingToolset : McpToolset {
             } catch (_: Exception) {
                 null
             }
-        } ?: null
+        }
     }
 
     private suspend fun profilingControl(command: String?, pid: Int, path: String?): String {
@@ -201,7 +201,7 @@ class ProfilingToolset : McpToolset {
         val project = coroutineContext.project
 
         // Check if it's a dotMemory command
-        val isDotMemoryCmd = listOf("snapshot", "open", "detach", "kill").contains(command?.lowercase())
+        val isDotMemoryCmd = listOf("snapshot", "open", "detach", "kill").contains(command.lowercase())
 
         if (isDotMemoryCmd) {
             val dotMemoryHost = getDotMemoryHost(project)
@@ -210,7 +210,7 @@ class ProfilingToolset : McpToolset {
             val session = getDotMemorySession(dotMemoryHost)
                 ?: mcpFail("No active memory profiling session. Start profiling from Rider first.")
 
-            when (command?.lowercase()) {
+            when (command.lowercase()) {
                 "snapshot" -> {
                     if (pid == 0) mcpFail("snapshot requires pid. Use rider_list_processes to find it.")
                     val getSnapshotMethod = dotMemoryHost.javaClass.getDeclaredMethod("getSnapshot")
@@ -263,7 +263,7 @@ class ProfilingToolset : McpToolset {
         val session = dotTraceHost.activeSession.value
             ?: mcpFail("No active profiling session. Start profiling from Rider: Run → Profile.")
 
-        val cmd = when (command?.lowercase()) {
+        val cmd = when (command.lowercase()) {
             "start" -> ProfilerCoreCommand.Start
             "stop" -> ProfilerCoreCommand.StopSave
             "drop" -> ProfilerCoreCommand.Drop
@@ -273,9 +273,9 @@ class ProfilingToolset : McpToolset {
         }
 
         if (pid != 0) {
-            session.coreCommand?.fire(CommandDef(cmd, pid))
+            session.coreCommand.fire(CommandDef(cmd, pid))
         } else {
-            session.sessionCommand?.fire(cmd)
+            session.sessionCommand.fire(cmd)
         }
 
         return buildJsonObject {

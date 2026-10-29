@@ -52,7 +52,7 @@ class ContractTest {
         toolsetClasses.flatMap { mcToolMethods(it) }
 
     @Test
-    fun `toolset classes have rider_* methods with @McpTool`() {
+    fun `toolset classes have rider_ methods with @McpTool`() {
         toolsetClasses.forEach { clazz ->
             val methods = mcToolMethods(clazz)
             if (methods.isEmpty()) {
@@ -76,7 +76,7 @@ class ContractTest {
             
             if (isReadOnly) {
                 val hasOutputFile = method.parameters.any { it.name == "outputFile" }
-                val isDestructive = hints?.destructiveHint == McpToolHintValue.TRUE
+                val isDestructive = hints.destructiveHint == McpToolHintValue.TRUE
                 
                 assertTrue("Read-only tool '\$toolName' must not have outputFile parameter") { !hasOutputFile }
                 assertTrue("Read-only tool '\$toolName' must not be destructive") { !isDestructive }
