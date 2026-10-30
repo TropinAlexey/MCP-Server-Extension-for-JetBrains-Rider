@@ -119,7 +119,7 @@ MCP tools are synchronous (request → response). Long-running operations of thi
 ### Cargo (RustRover)
 | Tool | Args | Description |
 |---|---|---|
-| `rider_cargo` | `action=list\|add\|remove\|update\|tree`, `name?`, `projectPath?`, `version?`, `features?`, `package?`, `tree?` | list/add/remove/update crates via cargo; tree shows dependency tree; add/remove mutate Cargo.toml — confirm with user first |
+| `rider_cargo` | `action=list\|add\|remove\|update\|tree\|check\|clippy\|fmt\|test`, `name?`, `projectPath?`, `version?`, `features?`, `package?`, `tree?`, `fix?`, `check?`, `testFilter?`, `noRun?` | Cargo package & quality management: list/add/remove/update crates, tree=dependency tree, check=fast type-check, clippy=lints (--fix), fmt=format (--check), test=run tests (sessionId for polling via rider_get_output, --no-run to only compile) |
 
 ### Inspections
 | Tool | Args | Description |

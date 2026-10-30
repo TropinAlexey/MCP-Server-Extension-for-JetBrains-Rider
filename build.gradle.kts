@@ -77,6 +77,9 @@ intellijPlatform {
                     }
                 }
             }
+            // IntelliJ IDEA Community verification — free, runs on all OSes in CI
+            // IntelliJ IDEA Community (IC) is deprecated as of 2025.3, not available as verification target
+            // Verify on Rider and RustRover only; universal tools work across all IDEs
         }
     }
 }

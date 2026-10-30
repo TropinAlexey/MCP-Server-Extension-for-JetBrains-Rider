@@ -34,23 +34,31 @@ class CargoToolset : McpToolset {
 
     @McpTool
     @McpDescription(
-        "Manages Cargo packages via 'cargo add/remove/update/list/tree'. " +
+        "Manages Cargo packages and runs quality checks via 'cargo add/remove/update/list/tree/check/clippy/fmt/test'. " +
             "action='list' (default) shows installed dependencies (optional projectPath to scope to one Cargo.toml, tree=true for dependency tree). " +
             "action='add' installs a crate (requires name; optional version/projectPath/features). " +
             "action='remove' uninstalls a crate (requires name; optional projectPath). " +
             "action='update' runs 'cargo update' (optional package to update specific crate). " +
             "action='tree' shows dependency tree. " +
+            "action='check' runs 'cargo check' (fast type-check, no codegen). " +
+            "action='clippy' runs 'cargo clippy' (lints, optional --fix to auto-fix). " +
+            "action='fmt' runs 'cargo fmt' (formats code, --check to verify only). " +
+            "action='test' runs 'cargo test' (unit/integration tests, returns sessionId for polling via rider_get_output). " +
             "add/remove/update mutate Cargo.toml/Cargo.lock — confirm with the user first. " +
             "projectPath must stay inside the project dir. Do NOT use for building (built-in build_solution_start) or running tests (rider_tests)."
     )
     suspend fun rider_cargo(
-        @McpDescription("Action: list (default), add, remove, update, tree") action: String = "list",
+        @McpDescription("Action: list (default), add, remove, update, tree, check, clippy, fmt, test") action: String = "list",
         @McpDescription("Crate name, e.g. 'serde' or 'tokio' (required for add/remove)") name: String? = null,
         @McpDescription("Project-relative Cargo.toml path to scope the operation (omit = workspace root)") projectPath: String? = null,
         @McpDescription("Crate version for add, e.g. '1.0.0' (omit = latest)") version: String? = null,
         @McpDescription("Features to enable for add, comma-separated (e.g. 'full,derive')") features: String? = null,
         @McpDescription("Package to update (update only, omit = all)") `package`: String? = null,
-        @McpDescription("Show dependency tree (list only, default false)") tree: Boolean = false
+        @McpDescription("Show dependency tree (list only, default false)") tree: Boolean = false,
+        @McpDescription("Auto-fix clippy lints (clippy only, default false)") fix: Boolean = false,
+        @McpDescription("Check formatting only without writing (fmt only, default false)") check: Boolean = false,
+        @McpDescription("Test filter (test only, e.g. 'my_test' or 'my_module::tests')") testFilter: String? = null,
+        @McpDescription("Run tests with --no-run to only compile (test only, default false)") noRun: Boolean = false
     ): String {
         return when (action.lowercase()) {
             "list" -> listPackages(projectPath, tree)
@@ -58,7 +66,11 @@ class CargoToolset : McpToolset {
             "remove" -> managePackage("remove", name, projectPath, null, null)
             "update" -> updatePackages(`package`)
             "tree" -> showTree(projectPath)
-            else -> mcpFail("Unknown action '$action'. Use: list, add, remove, update, tree")
+            "check" -> runCheck(projectPath)
+            "clippy" -> runClippy(projectPath, fix)
+            "fmt" -> runFmt(projectPath, check)
+            "test" -> runTests(projectPath, testFilter, noRun)
+            else -> mcpFail("Unknown action '$action'. Use: list, add, remove, update, tree, check, clippy, fmt, test")
         }
     }
 
@@ -110,6 +122,74 @@ class CargoToolset : McpToolset {
 
     private suspend fun showTree(projectPath: String?): String {
         return listPackages(projectPath, true)
+    }
+
+    private suspend fun runCheck(projectPath: String?): String {
+        val project = coroutineContext.project
+        projectPath?.let { validateProjectPath(project, it)?.let { err -> mcpFail(err) } }
+        val cmdArgs = mutableListOf("check")
+        projectPath?.let { cmdArgs.add("--manifest-path"); cmdArgs.add(it) }
+        val (exitCode, output) = runCargoSync(project, cmdArgs, timeout = 120)
+        if (exitCode != 0) mcpFail("cargo check failed:\n$output")
+        return output.trim().ifEmpty { "cargo check: OK" }
+    }
+
+    private suspend fun runClippy(projectPath: String?, fix: Boolean): String {
+        val project = coroutineContext.project
+        projectPath?.let { validateProjectPath(project, it)?.let { err -> mcpFail(err) } }
+        val cmdArgs = mutableListOf("clippy")
+        if (fix) cmdArgs.add("--fix")
+        projectPath?.let { cmdArgs.add("--manifest-path"); cmdArgs.add(it) }
+        val (exitCode, output) = runCargoSync(project, cmdArgs, timeout = 180)
+        if (exitCode != 0) mcpFail("cargo clippy failed:\n$output")
+        return output.trim().ifEmpty { "cargo clippy: OK" }
+    }
+
+    private suspend fun runFmt(projectPath: String?, check: Boolean): String {
+        val project = coroutineContext.project
+        projectPath?.let { validateProjectPath(project, it)?.let { err -> mcpFail(err) } }
+        val cmdArgs = mutableListOf("fmt")
+        if (check) cmdArgs.add("--check")
+        projectPath?.let { cmdArgs.add("--manifest-path"); cmdArgs.add(it) }
+        val (exitCode, output) = runCargoSync(project, cmdArgs, timeout = 60)
+        if (exitCode != 0) mcpFail("cargo fmt failed:\n$output")
+        return output.trim().ifEmpty { "cargo fmt: OK" }
+    }
+
+    private suspend fun runTests(projectPath: String?, testFilter: String?, noRun: Boolean): String {
+        val project = coroutineContext.project
+        projectPath?.let { validateProjectPath(project, it)?.let { err -> mcpFail(err) } }
+        val session = SessionManager.create("cargo_test")
+        val cmdArgs = mutableListOf("test")
+        if (noRun) cmdArgs.add("--no-run")
+        testFilter?.let { cmdArgs.add(it) }
+        projectPath?.let { cmdArgs.add("--manifest-path"); cmdArgs.add(it) }
+
+        try {
+            val cargoCmd = findCargo(project)
+            val cmd = com.intellij.execution.configurations.GeneralCommandLine(cargoCmd)
+                .withWorkDirectory(project.basePath)
+                .withParameters(*cmdArgs.toTypedArray())
+                .withRedirectErrorStream(true)
+            session.appendLine("Running: ${cmd.commandLineString}")
+            val handler = OSProcessHandler(cmd)
+            session.tag = handler
+            handler.addProcessListener(object : ProcessListener {
+                override fun onTextAvailable(event: ProcessEvent, outputType: Key<*>) {
+                    val text = event.text.trimEnd('\n', '\r')
+                    if (text.isNotEmpty()) session.appendLine(text)
+                }
+                override fun processTerminated(event: ProcessEvent) {
+                    session.exitCode = event.exitCode
+                    session.status = if (event.exitCode == 0) "succeeded" else "failed"
+                }
+            })
+            handler.startNotify()
+        } catch (e: Exception) {
+            session.status = "failed"
+            session.appendLine("Error: ${e.message}")
+        }
+        return buildJsonObject { put("sessionId", session.id) }.toString()
     }
 
     // Timeouts stay under the ~60 s MCP call limit; the handler kills the process on timeout.
