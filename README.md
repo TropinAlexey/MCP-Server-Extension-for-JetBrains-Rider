@@ -186,6 +186,33 @@ Recipes:
 
 > **IDE-specific note:** Rider-only tools (NuGet, Publish, SWEA, dotTrace/dotMemory, WorkspaceConfig) are unavailable in other IDEs; all other tools (tests, DB consoles, tool windows, IDE state, run configs, inspections, processes, profiling via built-in tools) work identically across all IDEs.
 
+### Tool Availability by IDE
+
+| Tool | All IDEs | Rider / RustRover Only |
+|---|---|---|
+| `rider_get_context` | ✅ | |
+| `rider_get_ide_state` | ✅ | |
+| `rider_get_output` | ✅ | |
+| `rider_tool_window` | ✅ | |
+| `rider_database_connection` | ✅ | |
+| `rider_list_db_consoles` | ✅ | |
+| `rider_execute_console` | ✅ | |
+| `rider_console_job` | ✅ | |
+| `rider_console_results` | ✅ | |
+| `rider_run_config` | ✅ | |
+| `rider_tests` | ✅ | |
+| `rider_list_processes` | ✅ | |
+| `rider_kill_process` | ✅ | |
+| `rider_inspections` | ✅ | |
+| `rider_invalidate_caches` | ✅ | |
+| `rider_profiling` | | ✅ (dotTrace/dotMemory) |
+| `rider_nuget` | | ✅ |
+| `rider_publish` | | ✅ |
+| `rider_workspace_config` | | ✅ |
+| `rider_swea_errors` | | ✅ |
+
+**Total: 20 tools** — 15 universal, 5 Rider/RustRover-only.
+
 ### From Marketplace
 
 1. In **any JetBrains IDE**: **Settings → Plugins → Marketplace**, search for "MCP Server Extension", install, and restart.
