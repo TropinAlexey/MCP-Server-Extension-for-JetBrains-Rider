@@ -112,12 +112,12 @@ issues-шаблоны, verifyPlugin без ошибок.
 
 ## P6 — Cross-IDE & Ecosystem (New, 10.2026)
 
-### Universal IDE support (DONE: Rider, RustRover, all IntelliJ-based)
+### Universal IDE support (DONE: Rider, RustRover, PyCharm, all IntelliJ-based)
 - [x] Plugin loads in all JetBrains IDEs 2026.2+ (IntelliJ IDEA, PyCharm, WebStorm, GoLand, CLion, DataGrip, PhpStorm, RubyMine, Android Studio, etc.)
 - [x] Rider-only tools isolated via `rider-only.xml` (NuGet, Publish, SWEA, dotTrace/dotMemory, WorkspaceConfig)
 - [x] RustRover-only tool: `rider_cargo` (Cargo package management) via `rust-only.xml`
+- [x] PyCharm-only tools: `rider_python_env`, `rider_pip`, `rider_pytest`, `rider_django` via `python-only.xml`
 - [ ] Add IDE-specific tools per platform:
-  - Python (PyCharm): venv/conda env management, pip, pytest runner, Django manage.py
   - Go (GoLand): go mod, go test, gopls diagnostics
   - JavaScript/TypeScript (WebStorm): npm/yarn/pnpm, jest/vitest, eslint
   - Java/Kotlin (IntelliJ IDEA): Maven/Gradle, JUnit/TestNG

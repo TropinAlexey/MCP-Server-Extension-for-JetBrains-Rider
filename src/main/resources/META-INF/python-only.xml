@@ -1,0 +1,9 @@
+<!-- PyCharm/Python-only extensions: loaded only when com.intellij.modules.python is present -->
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.python.PythonEnvToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.python.PipToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.python.PytestToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.python.DjangoToolset"/>
+    </extensions>
+</idea-plugin>

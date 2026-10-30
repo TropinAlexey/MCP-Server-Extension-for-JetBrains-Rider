@@ -77,9 +77,15 @@ intellijPlatform {
                     }
                 }
             }
+            // PyCharm Community verification — free, runs on all OSes in CI
+            for (version in versions) {
+                create(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.PyCharmCommunity, version) {
+                    useInstaller = false
+                }
+            }
             // IntelliJ IDEA Community verification — free, runs on all OSes in CI
             // IntelliJ IDEA Community (IC) is deprecated as of 2025.3, not available as verification target
-            // Verify on Rider and RustRover only; universal tools work across all IDEs
+            // Verify on Rider, RustRover, and PyCharm only; universal tools work across all IDEs
         }
     }
 }
