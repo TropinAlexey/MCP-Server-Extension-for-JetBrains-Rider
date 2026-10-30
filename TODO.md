@@ -109,3 +109,43 @@ issues-шаблоны, verifyPlugin без ошибок.
   не отправляется (уже частично в Limitations — расширить и держать)
 - [ ] Brave mode выключен по умолчанию — так и оставить, задокументировать
   как фичу безопасности, а не как неудобство
+
+## P6 — Cross-IDE & Ecosystem (New, 10.2026)
+
+### Universal IDE support (DONE: Rider, RustRover, all IntelliJ-based)
+- [x] Plugin loads in all JetBrains IDEs 2026.2+ (IntelliJ IDEA, PyCharm, WebStorm, GoLand, CLion, DataGrip, PhpStorm, RubyMine, Android Studio, etc.)
+- [x] Rider-only tools isolated via `rider-only.xml` (NuGet, Publish, SWEA, dotTrace/dotMemory, WorkspaceConfig)
+- [x] RustRover-only tool: `rider_cargo` (Cargo package management) via `rust-only.xml`
+- [ ] Add IDE-specific tools per platform:
+  - Python (PyCharm): venv/conda env management, pip, pytest runner, Django manage.py
+  - Go (GoLand): go mod, go test, gopls diagnostics
+  - JavaScript/TypeScript (WebStorm): npm/yarn/pnpm, jest/vitest, eslint
+  - Java/Kotlin (IntelliJ IDEA): Maven/Gradle, JUnit/TestNG
+  - C++ (CLion): CMake, Conan, GDB/LLDB
+  - PHP (PhpStorm): Composer, PHPUnit, Psalm/PHPStan
+  - Ruby (RubyMine): Bundler, RSpec, RuboCop
+- [ ] Document IDE-specific tool availability in a generated matrix (auto-sync from code)
+
+### Cargo tool enhancements (RustRover)
+- [ ] `rider_cargo`: support `cargo test` integration (parallel with `rider_tests`)
+- [ ] `rider_cargo`: `cargo check` / `cargo clippy` / `cargo fmt` actions
+- [ ] `rider_cargo`: workspace member filtering, target filtering
+- [ ] `rider_cargo`: registry/auth management (crates.io tokens, private registries)
+
+### Cross-IDE workflows
+- [ ] Universal `rider_workspace_config` that works per-IDE (build output paths, run configs)
+- [ ] Universal test runner abstraction over IDE's native test frameworks
+- [ ] Universal database tooling (already done via JDBC — works everywhere)
+
+### Marketplace & Distribution
+- [ ] Screenshots/GIFs in README and Marketplace listing
+- [ ] Automated changelog generation from conventional commits
+- [ ] Separate versioning track for RustRover-specific features if needed
+- [ ] Verify Plugin Verifier on all target IDEs (Rider, RustRover, IntelliJ IDEA Community, PyCharm Community)
+
+### Quality & Testing
+- [ ] Add integration tests for `rider_cargo` (mock cargo or use test fixture)
+- [ ] CI: add RustRover verification on Linux (if artifacts become available)
+- [ ] CI: add IntelliJ IDEA Community verification (free, no license needed)
+- [ ] Mutation testing for critical paths (DB read-only guard, secret masking)
+- [ ] Property-based testing for SQL parsing (GO splitting, semicolon handling)
