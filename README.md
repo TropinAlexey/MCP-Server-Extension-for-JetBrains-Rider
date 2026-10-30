@@ -184,11 +184,11 @@ Recipes:
 - **Any JetBrains IDE 2026.2+** (IntelliJ IDEA, Rider, RustRover, PyCharm, WebStorm, GoLand, CLion, DataGrip, PhpStorm, RubyMine, Android Studio, etc.) — the MCP server is built in, no separate plugin to install
 - An MCP-compatible client: **Claude Code, Codex, Gemini CLI, GitHub Copilot, Cursor, Junie, Windsurf, Continue, OpenCode**, or a custom agent — the plugin is client-agnostic
 
-> **IDE-specific note:** Rider-only tools (NuGet, Publish, SWEA, dotTrace/dotMemory, WorkspaceConfig) are unavailable in other IDEs; all other tools (tests, DB consoles, tool windows, IDE state, run configs, inspections, processes, profiling via built-in tools) work identically across all IDEs.
+> **IDE-specific note:** Rider-only tools (NuGet, Publish, SWEA, dotTrace/dotMemory, WorkspaceConfig) are unavailable in other IDEs (including RustRover); all other tools (tests, DB consoles, tool windows, IDE state, run configs, inspections, processes, profiling via built-in tools) work identically across all IDEs.
 
 ### Tool Availability by IDE
 
-| Tool | All IDEs | Rider / RustRover Only |
+| Tool | All IDEs | Rider Only |
 |---|---|---|
 | `rider_get_context` | ✅ | |
 | `rider_get_ide_state` | ✅ | |
@@ -205,13 +205,13 @@ Recipes:
 | `rider_kill_process` | ✅ | |
 | `rider_inspections` | ✅ | |
 | `rider_invalidate_caches` | ✅ | |
-| `rider_profiling` | | ✅ (dotTrace/dotMemory) |
+| `rider_profiling` (dotTrace/dotMemory) | | ✅ |
 | `rider_nuget` | | ✅ |
 | `rider_publish` | | ✅ |
 | `rider_workspace_config` | | ✅ |
 | `rider_swea_errors` | | ✅ |
 
-**Total: 20 tools** — 15 universal, 5 Rider/RustRover-only.
+**Total: 20 tools** — 15 universal (all IDEs), 5 Rider-only (unavailable in RustRover and other IDEs).
 
 ### From Marketplace
 
