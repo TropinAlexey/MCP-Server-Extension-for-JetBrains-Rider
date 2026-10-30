@@ -2,21 +2,20 @@
   <img src="icon.png" alt="MCP Server Extension" width="80">
 </p>
 
-<h1 align="center">JetBrains MCP Server Extension for Rider & RustRover</h1>
+<h1 align="center">JetBrains MCP Server Extension</h1>
 
 <p align="center">
   <a href="https://plugins.jetbrains.com/plugin/34264-mcp-server-extension"><img src="https://img.shields.io/jetbrains/plugin/v/34264?style=flat-square&label=marketplace" alt="JetBrains Marketplace"></a>
   <a href="https://plugins.jetbrains.com/plugin/34264-mcp-server-extension"><img src="https://img.shields.io/jetbrains/plugin/d/34264?style=flat-square&label=downloads" alt="Downloads"></a>
   <a href="https://github.com/TropinAlexey/MCP-Server-Extension-for-Rider-and-RustRover/releases/latest"><img src="https://img.shields.io/github/v/release/TropinAlexey/MCP-Server-Extension-for-Rider-and-RustRover?style=flat-square&label=version" alt="Version"></a>
   <a href="https://github.com/TropinAlexey/MCP-Server-Extension-for-Rider-and-RustRover/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/TropinAlexey/MCP-Server-Extension-for-Rider-and-RustRover/build.yml?style=flat-square" alt="Build"></a>
-  <img src="https://img.shields.io/badge/Rider-2026.2%2B-blue?style=flat-square&logo=jetbrains" alt="Rider 2026.2+">
-  <img src="https://img.shields.io/badge/RustRover-2026.2%2B-orange?style=flat-square&logo=jetbrains" alt="RustRover 2026.2+">
+  <img src="https://img.shields.io/badge/JetBrains%20IDEs-2026.2%2B-blue?style=flat-square&logo=jetbrains" alt="JetBrains IDEs 2026.2+">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="MIT License"></a>
 </p>
 
 <p align="center">
   Extends the built-in <a href="https://www.jetbrains.com/help/idea/mcp-server.html">JetBrains MCP Server</a> with full IDE observability and control tools for AI agents.
-  Works in <b>Rider</b> and <b>RustRover</b> 2026.2+.
+  Works in <b>all JetBrains IDEs</b> 2026.2+ (IntelliJ IDEA, Rider, RustRover, PyCharm, WebStorm, GoLand, CLion, DataGrip, PhpStorm, RubyMine, Android Studio, etc.).
 </p>
 
 [What's New →](#whats-new)
@@ -182,14 +181,14 @@ Recipes:
 ## Installation
 
 ### Prerequisites
-- **JetBrains Rider 2026.2+** or **RustRover 2026.2+** (the MCP server is built in — no separate plugin to install). On Rider 2026.1 the Marketplace installs the 1.2.x line
+- **Any JetBrains IDE 2026.2+** (IntelliJ IDEA, Rider, RustRover, PyCharm, WebStorm, GoLand, CLion, DataGrip, PhpStorm, RubyMine, Android Studio, etc.) — the MCP server is built in, no separate plugin to install
 - An MCP-compatible client: **Claude Code, Codex, Gemini CLI, GitHub Copilot, Cursor, Junie, Windsurf, Continue, OpenCode**, or a custom agent — the plugin is client-agnostic
 
-> **RustRover note:** The plugin works in both IDEs. Rider-only tools (NuGet, Publish, SWEA, dotTrace/dotMemory, WorkspaceConfig) are unavailable in RustRover; all other tools (tests, DB consoles, tool windows, IDE state, run configs, inspections, processes, profiling via built-in tools) work identically.
+> **IDE-specific note:** Rider-only tools (NuGet, Publish, SWEA, dotTrace/dotMemory, WorkspaceConfig) are unavailable in other IDEs; all other tools (tests, DB consoles, tool windows, IDE state, run configs, inspections, processes, profiling via built-in tools) work identically across all IDEs.
 
 ### From Marketplace
 
-1. In **Rider** or **RustRover**: **Settings → Plugins → Marketplace**, search for "MCP Server Extension", install, and restart.
+1. In **any JetBrains IDE**: **Settings → Plugins → Marketplace**, search for "MCP Server Extension", install, and restart.
 2. Enable the built-in MCP server: **Settings → Tools → MCP Server → Enable MCP Server** (confirm the access dialog), then Apply. If the settings page is missing, check that the bundled MCP Server plugin is enabled under **Settings → Plugins → Installed**.
 3. Connect your client: on the same settings page use **Auto-Configure** next to your client (or copy a manual config for clients not on the list), then restart the client.
 4. Verify: ask your agent something only the IDE knows — e.g. "What is the current IDE state?" or "What does the Problems panel show?". If it answers with live IDE data, the `rider_*` tools are working.
@@ -234,12 +233,12 @@ cd MCP-Server-Extension-for-Rider-and-RustRover
 gradlew.bat buildPlugin
 ```
 
-Then install: **Rider → Settings → Plugins → ⚙️ → Install Plugin from Disk → select `build/distributions/mcp-server-extension-*.zip`**
+Then install: **Settings → Plugins → ⚙️ → Install Plugin from Disk → select `build/distributions/mcp-server-extension-*.zip`**
 
 ### Development
 
 ```bash
-# Run Rider with the plugin loaded (Linux/macOS)
+# Run any JetBrains IDE with the plugin loaded (Linux/macOS)
 ./gradlew runIde
 
 # Windows
@@ -250,12 +249,12 @@ gradlew.bat runIde
 
 | Symptom | What to do |
 |---|---|
-| Agent says a tool window "has no content/tabs" | Open that window once in Rider (**View → Tool Windows → …**) — unopened windows have nothing to read |
-| "No endpoints found..." | Check `rider_get_ide_state` for indexing/build progress and retry when idle; if idle and still empty, verify in Rider via View → Tool Windows → Endpoints (panel has no detected routes). Fallback: text search for route attributes |
+| Agent says a tool window "has no content/tabs" | Open that window once in the IDE (**View → Tool Windows → …**) — unopened windows have nothing to read |
+| "No endpoints found..." | Check `rider_get_ide_state` for indexing/build progress and retry when idle; if idle and still empty, verify in the IDE via View → Tool Windows → Endpoints (panel has no detected routes). Fallback: text search for route attributes |
 | "No test configurations found" | Create a test run configuration (Run → Edit Configurations → +), or bypass configs by passing `filter`/`className`/`methodName` to run `dotnet test --filter` directly |
 | "Multiple test configs found" | Pass `configName` to pick one |
-| NuGet or `filter` test runs fail with "dotnet: not found" / the wrong SDK | They use the .NET CLI selected in Rider: **Settings → Build, Execution, Deployment → Toolset and Build → .NET CLI executable path** (`dotnet` on PATH only when Rider detects none) |
-| "No active debug session" | Start one with built-in `xdebug_start_debugger_session` (or Debug in Rider) |
+| NuGet or `filter` test runs fail with "dotnet: not found" / the wrong SDK | They use the .NET CLI selected in the IDE: **Settings → Build, Execution, Deployment → Toolset and Build → .NET CLI executable path** (`dotnet` on PATH only when the IDE detects none) |
+| "No active debug session" | Start one with built-in `xdebug_start_debugger_session` (or Debug in the IDE) |
 | "Debugger is not paused..." | Pause first — evaluating/stepping require a paused debugger (pausing freezes the live process; prefer a dev/test instance) |
 | Debug console is empty | The session produced no application output (the debugger trace is still in `Debug Output`) |
 | "Configuration '…' not found" | Names must match exactly — list them with the built-in `get_run_configurations` (or IDE Run → Edit Configurations) |
@@ -279,7 +278,7 @@ gradlew.bat runIde
 
 ## Limitations & Privacy
 
-- Rider must be running with a project open — the tools observe and control the current project.
+- The IDE must be running with a project open — the tools observe and control the current project.
 - Enabling the MCP server grants external applications access to your open projects (you confirm this in the dialog at enable time). Review which tools are exposed under **Settings → Tools → MCP Server → Exposed Tools**.
 - What the tools can see: file contents, cursor and selection, open editors, tool window text (including consoles and outputs), notifications, database console bindings and query results. What they never do: nothing leaves your machine through this plugin — it only serves the local MCP server; network calls happen only where you ask (NuGet restore, package checks).
 - What the tools can change: sending terminal input, killing processes, editing run configs, toggling inspections, executing SQL, profiling sessions, restarting the IDE after cache invalidation. Read-only tools (state, content, lists, context) never change anything and declare `readOnlyHint`, so clients can auto-approve them while still asking for the rest.
