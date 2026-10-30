@@ -313,6 +313,19 @@ gradlew.bat runIde
 
 ## What's New
 
+### v2.2.3
+
+- **Universal IDE support:** Plugin now works in all JetBrains IDEs 2026.2+ (IntelliJ IDEA, PyCharm, WebStorm, GoLand, CLion, DataGrip, PhpStorm, RubyMine, Android Studio, etc.) — Rider-only tools (NuGet, Publish, SWEA, dotTrace/dotMemory, WorkspaceConfig) remain unavailable in other IDEs; 15 universal tools work identically everywhere
+- Tool availability table by IDE added to README
+- Added OpenCode, Continue, Zed, Cline, Sourcegraph Cody to supported clients
+- RustRover support: optional Rider dependency via reflection, explicit RustRover 2026.2+ support documented
+
+### v2.2.2
+
+- Consolidated tools: removed `rider_services` (folded into `rider_tool_window` with `section` parameter), merged `rider_memory` into `rider_profiling` with unified `action=state|control`
+- Tool count: 20 (was 21)
+- Updated `plugin.xml`, `README.md`, `AGENTS.md`
+
 ### v2.2.1
 
 - `rider_tests(action='run_and_wait')` no longer outlives the MCP call (clients reported `Request timed out` on long Testcontainers runs): it waits at most 50 s per call (`timeoutMs` 1000–50000, default 50000) and, if the run is still going, answers `status=running`, `timedOut=true`, `elapsedMs` and `sessionId` — the run continues in the IDE. Call `run_and_wait` again with that `sessionId` to keep waiting instead of starting a new run
