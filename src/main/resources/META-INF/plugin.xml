@@ -20,11 +20,12 @@
               Gemini CLI) call read-only or all IDE tools without a prompt; read-only tools declare <code>readOnlyHint</code></li>
           <li><b>Solution Wide Analysis</b> error counts, inspection settings, IDE-managed processes, live dotTrace/dotMemory sessions, cache invalidation</li>
         </ul>
-        <p>Requires 2026.2+. Supports Rider and RustRover (Rider-only tools such as NuGet, Publish, dotTrace/dotMemory, SWEA are unavailable in RustRover).</p>
+        <p>Requires 2026.2+. Supports Rider and RustRover (Rider-only tools such as NuGet, Publish, dotTrace/dotMemory, SWEA are unavailable in RustRover; RustRover-only tools such as Cargo are unavailable in Rider).</p>
     ]]></description>
 
     <depends>com.intellij.mcpServer</depends>
     <depends optional="true" config-file="rider-only.xml">com.intellij.modules.rider</depends>
+    <depends optional="true" config-file="rust-only.xml">com.intellij.modules.rust</depends>
     <depends optional="true" config-file="db-consoles.xml">com.intellij.database</depends>
 
     <!-- Test runner: a separate plugin since 2026.2, part of the platform in 2026.1. A hard dependency

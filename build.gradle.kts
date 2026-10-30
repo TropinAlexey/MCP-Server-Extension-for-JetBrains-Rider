@@ -13,6 +13,7 @@ dependencies {
         // Rider-only classes are needed at compile time (SweaTools, ProfilingTools, etc.)
         // but loaded only in Rider via rider-only.xml (optional dependency).
         // In RustRover these classes are never instantiated.
+        // RustRover-only classes (CargoTools) loaded via rust-only.xml.
         bundledModule("intellij.rider.rdclient.dotnet")
         testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
     }

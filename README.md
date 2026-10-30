@@ -116,6 +116,11 @@ MCP tools are synchronous (request → response). Long-running operations of thi
 |---|---|---|
 | `rider_nuget` | `action=list\|add\|remove\|restore`, `name?`, `projectPath?`, `version?`, `outdated?` | list/add/remove packages; restore returns sessionId for polling |
 
+### Cargo (RustRover)
+| Tool | Args | Description |
+|---|---|---|
+| `rider_cargo` | `action=list\|add\|remove\|update\|tree`, `name?`, `projectPath?`, `version?`, `features?`, `package?`, `tree?` | list/add/remove/update crates via cargo; tree shows dependency tree; add/remove mutate Cargo.toml — confirm with user first |
+
 ### Inspections
 | Tool | Args | Description |
 |---|---|---|
@@ -188,30 +193,31 @@ Recipes:
 
 ### Tool Availability by IDE
 
-| Tool | All IDEs | Rider Only |
-|---|---|---|
-| `rider_get_context` | ✅ | |
-| `rider_get_ide_state` | ✅ | |
-| `rider_get_output` | ✅ | |
-| `rider_tool_window` | ✅ | |
-| `rider_database_connection` | ✅ | |
-| `rider_list_db_consoles` | ✅ | |
-| `rider_execute_console` | ✅ | |
-| `rider_console_job` | ✅ | |
-| `rider_console_results` | ✅ | |
-| `rider_run_config` | ✅ | |
-| `rider_tests` | ✅ | |
-| `rider_list_processes` | ✅ | |
-| `rider_kill_process` | ✅ | |
-| `rider_inspections` | ✅ | |
-| `rider_invalidate_caches` | ✅ | |
-| `rider_profiling` (dotTrace/dotMemory) | | ✅ |
-| `rider_nuget` | | ✅ |
-| `rider_publish` | | ✅ |
-| `rider_workspace_config` | | ✅ |
-| `rider_swea_errors` | | ✅ |
+| Tool | All IDEs | Rider Only | RustRover Only |
+|---|---|---|---|
+| `rider_get_context` | ✅ | | |
+| `rider_get_ide_state` | ✅ | | |
+| `rider_get_output` | ✅ | | |
+| `rider_tool_window` | ✅ | | |
+| `rider_database_connection` | ✅ | | |
+| `rider_list_db_consoles` | ✅ | | |
+| `rider_execute_console` | ✅ | | |
+| `rider_console_job` | ✅ | | |
+| `rider_console_results` | ✅ | | |
+| `rider_run_config` | ✅ | | |
+| `rider_tests` | ✅ | | |
+| `rider_list_processes` | ✅ | | |
+| `rider_kill_process` | ✅ | | |
+| `rider_inspections` | ✅ | | |
+| `rider_invalidate_caches` | ✅ | | |
+| `rider_profiling` (dotTrace/dotMemory) | | ✅ | |
+| `rider_nuget` | | ✅ | |
+| `rider_publish` | | ✅ | |
+| `rider_workspace_config` | | ✅ | |
+| `rider_swea_errors` | | ✅ | |
+| `rider_cargo` | | | ✅ |
 
-**Total: 20 tools** — 15 universal (all IDEs), 5 Rider-only (unavailable in RustRover and other IDEs).
+**Total: 21 tools** — 15 universal (all IDEs), 5 Rider-only (unavailable in RustRover and other IDEs), 1 RustRover-only (unavailable in Rider and other IDEs).
 
 ### From Marketplace
 

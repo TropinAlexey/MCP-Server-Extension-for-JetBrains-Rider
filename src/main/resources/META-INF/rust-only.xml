@@ -1,0 +1,6 @@
+<!-- RustRover-only extensions: loaded only when com.intellij.modules.rust is present -->
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.cargo.CargoToolset"/>
+    </extensions>
+</idea-plugin>
