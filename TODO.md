@@ -127,8 +127,8 @@ issues-шаблоны, verifyPlugin без ошибок.
 - [ ] Document IDE-specific tool availability in a generated matrix (auto-sync from code)
 
 ### Cargo tool enhancements (RustRover)
-- [ ] `rider_cargo`: support `cargo test` integration (parallel with `rider_tests`)
-- [ ] `rider_cargo`: `cargo check` / `cargo clippy` / `cargo fmt` actions
+- [x] `rider_cargo`: support `cargo test` integration (parallel with `rider_tests`)
+- [x] `rider_cargo`: `cargo check` / `cargo clippy` / `cargo fmt` actions
 - [ ] `rider_cargo`: workspace member filtering, target filtering
 - [ ] `rider_cargo`: registry/auth management (crates.io tokens, private registries)
 
@@ -141,11 +141,11 @@ issues-шаблоны, verifyPlugin без ошибок.
 - [ ] Screenshots/GIFs in README and Marketplace listing
 - [ ] Automated changelog generation from conventional commits
 - [ ] Separate versioning track for RustRover-specific features if needed
-- [ ] Verify Plugin Verifier on all target IDEs (Rider, RustRover, IntelliJ IDEA Community, PyCharm Community)
+- [ ] Verify Plugin Verifier on all target IDEs (Rider, RustRover, PyCharm Community)
 
 ### Quality & Testing
 - [ ] Add integration tests for `rider_cargo` (mock cargo or use test fixture)
 - [ ] CI: add RustRover verification on Linux (if artifacts become available)
-- [ ] CI: add IntelliJ IDEA Community verification (free, no license needed)
+- [ ] CI: IntelliJ IDEA Community verification — deprecated in 2025.3, skipped
 - [ ] Mutation testing for critical paths (DB read-only guard, secret masking)
 - [ ] Property-based testing for SQL parsing (GO splitting, semicolon handling)
