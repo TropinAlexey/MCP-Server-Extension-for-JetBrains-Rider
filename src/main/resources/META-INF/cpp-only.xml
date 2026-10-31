@@ -1,0 +1,8 @@
+<!-- CLion/C++-only extensions: loaded only when com.intellij.modules.clion is present -->
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.cpp.CMakeTools"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.cpp.ConanTools"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.cpp.DebuggerTools"/>
+    </extensions>
+</idea-plugin>
