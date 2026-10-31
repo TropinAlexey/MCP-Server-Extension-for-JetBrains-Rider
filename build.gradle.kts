@@ -91,9 +91,17 @@ intellijPlatform {
                     useInstaller = false
                 }
             }
+            // WebStorm verification — only on macOS (no Linux Maven artifacts)
+            if (System.getProperty("os.name").lowercase().startsWith("mac")) {
+                for (version in versions) {
+                    create(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.WebStorm, version) {
+                        useInstaller = false
+                    }
+                }
+            }
             // IntelliJ IDEA Community verification — free, runs on all OSes in CI
             // IntelliJ IDEA Community (IC) is deprecated as of 2025.3, not available as verification target
-            // Verify on Rider, RustRover, PyCharm, and GoLand only; universal tools work across all IDEs
+            // Verify on Rider, RustRover, PyCharm, GoLand, and WebStorm only; universal tools work across all IDEs
         }
     }
 }

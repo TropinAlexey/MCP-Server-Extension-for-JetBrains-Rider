@@ -1,0 +1,8 @@
+<!-- WebStorm/JS-only extensions: loaded only when com.intellij.modules.javascript is present -->
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.js.NpmToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.js.JSTestToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.js.ESLintToolset"/>
+    </extensions>
+</idea-plugin>
