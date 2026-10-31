@@ -77,6 +77,14 @@ intellijPlatform {
                     }
                 }
             }
+            // GoLand verification — only on macOS (no Linux Maven artifacts)
+            if (System.getProperty("os.name").lowercase().startsWith("mac")) {
+                for (version in versions) {
+                    create(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.GoLand, version) {
+                        useInstaller = false
+                    }
+                }
+            }
             // PyCharm Community verification — free, runs on all OSes in CI
             for (version in versions) {
                 create(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.PyCharmCommunity, version) {
@@ -85,7 +93,7 @@ intellijPlatform {
             }
             // IntelliJ IDEA Community verification — free, runs on all OSes in CI
             // IntelliJ IDEA Community (IC) is deprecated as of 2025.3, not available as verification target
-            // Verify on Rider, RustRover, and PyCharm only; universal tools work across all IDEs
+            // Verify on Rider, RustRover, PyCharm, and GoLand only; universal tools work across all IDEs
         }
     }
 }

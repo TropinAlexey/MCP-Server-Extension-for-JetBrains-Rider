@@ -129,6 +129,13 @@ MCP tools are synchronous (request → response). Long-running operations of thi
 | `rider_pytest` | `action=run\|run_and_wait\|coverage\|collect\|rerun_failed`, `filter?`, `envType?`, `envName?`, `projectPath?`, `extraArgs?`, `coverageFormat?`, `timeoutMs?`, `sessionId?` | Run pytest in a Python environment: run/collect/coverage tests, filter by pattern, sessionId polling |
 | `rider_django` | `action=run\|migrate\|makemigrations\|runserver\|shell\|createsuperuser\|collectstatic\|check\|dbshell\|test`, `command?`, `envType?`, `envName?`, `projectPath?`, `args?`, `settingsModule?`, `appName?` | Run Django management commands: migrate/makemigrations/runserver/shell/createsuperuser/collectstatic/check/dbshell/test |
 
+### Go (GoLand)
+| Tool | Args | Description |
+|---|---|---|
+| `rider_go_mod` | `action=tidy\|download\|verify\|graph\|why\|vendor\|init`, `modulePath?`, `target?`, `projectPath?` | Manage Go modules: tidy/download/verify/graph/why/vendor/init |
+| `rider_go_test` | `action=run\|run_and_wait\|cover\|bench\|list\|vet`, `pkg?`, `runFilter?`, `benchFilter?`, `projectPath?`, `race?`, `count?`, `coverProfile?`, `extraArgs?`, `timeoutMs?`, `sessionId?` | Run Go tests: run/cover/bench/list/vet, race detector, flaky detection, coverage |
+| `rider_gopls` | `action=diagnostics\|hover\|definition\|references\|completion\|symbols\|format\|imports`, `file?`, `line?`, `column?`, `projectPath?`, `query?`, `includeTests?` | gopls LSP queries: diagnostics, hover, go-to-definition, references, completion, symbols, format, imports |
+
 ### Inspections
 | Tool | Args | Description |
 |---|---|---|
@@ -197,39 +204,42 @@ Recipes:
 - **Any JetBrains IDE 2026.2+** (IntelliJ IDEA, Rider, RustRover, PyCharm, WebStorm, GoLand, CLion, DataGrip, PhpStorm, RubyMine, Android Studio, etc.) — the MCP server is built in, no separate plugin to install
 - An MCP-compatible client: **Claude Code, Codex, Gemini CLI, GitHub Copilot, Cursor, Junie, Windsurf, Continue, OpenCode**, or a custom agent — the plugin is client-agnostic
 
-> **IDE-specific note:** Rider-only tools (NuGet, Publish, SWEA, dotTrace/dotMemory, WorkspaceConfig) are unavailable in other IDEs (including RustRover); RustRover-only tools (Cargo) are unavailable in Rider and other IDEs; PyCharm-only tools (Python env, pip, pytest, Django) are unavailable in Rider, RustRover, and other IDEs; all other tools (tests, DB consoles, tool windows, IDE state, run configs, inspections, processes, profiling via built-in tools) work identically across all IDEs.
+> **IDE-specific note:** Rider-only tools (NuGet, Publish, SWEA, dotTrace/dotMemory, WorkspaceConfig) are unavailable in other IDEs (including RustRover); RustRover-only tools (Cargo) are unavailable in Rider and other IDEs; PyCharm-only tools (Python env, pip, pytest, Django) are unavailable in Rider, RustRover, and other IDEs; GoLand-only tools (Go mod, test, gopls) are unavailable in Rider, RustRover, PyCharm, and other IDEs; all other tools (tests, DB consoles, tool windows, IDE state, run configs, inspections, processes, profiling via built-in tools) work identically across all IDEs.
 
 ### Tool Availability by IDE
 
-| Tool | All IDEs | Rider Only | RustRover Only | PyCharm Only |
-|---|---|---|---|---|
-| `rider_get_context` | ✅ | | | |
-| `rider_get_ide_state` | ✅ | | | |
-| `rider_get_output` | ✅ | | | |
-| `rider_tool_window` | ✅ | | | |
-| `rider_database_connection` | ✅ | | | |
-| `rider_list_db_consoles` | ✅ | | | |
-| `rider_execute_console` | ✅ | | | |
-| `rider_console_job` | ✅ | | | |
-| `rider_console_results` | ✅ | | | |
-| `rider_run_config` | ✅ | | | |
-| `rider_tests` | ✅ | | | |
-| `rider_list_processes` | ✅ | | | |
-| `rider_kill_process` | ✅ | | | |
-| `rider_inspections` | ✅ | | | |
-| `rider_invalidate_caches` | ✅ | | | |
-| `rider_profiling` (dotTrace/dotMemory) | | ✅ | | |
-| `rider_nuget` | | ✅ | | |
-| `rider_publish` | | ✅ | | |
-| `rider_workspace_config` | | ✅ | | |
-| `rider_swea_errors` | | ✅ | | |
-| `rider_cargo` | | | ✅ | |
-| `rider_python_env` | | | | ✅ |
-| `rider_pip` | | | | ✅ |
-| `rider_pytest` | | | | ✅ |
-| `rider_django` | | | | ✅ |
+| Tool | All IDEs | Rider Only | RustRover Only | PyCharm Only | GoLand Only |
+|---|---|---|---|---|---|
+| `rider_get_context` | ✅ | | | | |
+| `rider_get_ide_state` | ✅ | | | | |
+| `rider_get_output` | ✅ | | | | |
+| `rider_tool_window` | ✅ | | | | |
+| `rider_database_connection` | ✅ | | | | |
+| `rider_list_db_consoles` | ✅ | | | | |
+| `rider_execute_console` | ✅ | | | | |
+| `rider_console_job` | ✅ | | | | |
+| `rider_console_results` | ✅ | | | | |
+| `rider_run_config` | ✅ | | | | |
+| `rider_tests` | ✅ | | | | |
+| `rider_list_processes` | ✅ | | | | |
+| `rider_kill_process` | ✅ | | | | |
+| `rider_inspections` | ✅ | | | | |
+| `rider_invalidate_caches` | ✅ | | | | |
+| `rider_profiling` (dotTrace/dotMemory) | | ✅ | | | |
+| `rider_nuget` | | ✅ | | | |
+| `rider_publish` | | ✅ | | | |
+| `rider_workspace_config` | | ✅ | | | |
+| `rider_swea_errors` | | ✅ | | | |
+| `rider_cargo` | | | ✅ | | |
+| `rider_python_env` | | | | ✅ | |
+| `rider_pip` | | | | ✅ | |
+| `rider_pytest` | | | | ✅ | |
+| `rider_django` | | | | ✅ | |
+| `rider_go_mod` | | | | | ✅ |
+| `rider_go_test` | | | | | ✅ |
+| `rider_gopls` | | | | | ✅ |
 
-**Total: 25 tools** — 15 universal (all IDEs), 5 Rider-only (unavailable in RustRover and other IDEs), 1 RustRover-only (unavailable in Rider and other IDEs), 4 PyCharm-only (unavailable in Rider, RustRover, and other IDEs).
+**Total: 28 tools** — 15 universal (all IDEs), 5 Rider-only (unavailable in RustRover and other IDEs), 1 RustRover-only (unavailable in Rider and other IDEs), 4 PyCharm-only (unavailable in Rider, RustRover, and other IDEs), 3 GoLand-only (unavailable in Rider, RustRover, PyCharm, and other IDEs).
 
 ### From Marketplace
 

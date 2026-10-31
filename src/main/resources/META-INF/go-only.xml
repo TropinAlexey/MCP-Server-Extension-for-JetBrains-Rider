@@ -1,0 +1,8 @@
+<!-- GoLand/Go-only extensions: loaded only when com.intellij.modules.go is present -->
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.go.GoModToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.go.GoTestToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.go.GoplsToolset"/>
+    </extensions>
+</idea-plugin>
