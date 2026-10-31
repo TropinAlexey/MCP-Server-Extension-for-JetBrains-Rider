@@ -20,7 +20,7 @@
               Gemini CLI) call read-only or all IDE tools without a prompt; read-only tools declare <code>readOnlyHint</code></li>
           <li><b>Solution Wide Analysis</b> error counts, inspection settings, IDE-managed processes, live dotTrace/dotMemory sessions, cache invalidation</li>
         </ul>
-        <p>Requires 2026.2+. Supports all JetBrains IDEs: Rider, RustRover, PyCharm, GoLand, WebStorm, IntelliJ IDEA, CLion, PhpStorm, RubyMine, DataGrip, Android Studio. IDE-specific tools: Rider (NuGet, Publish, SWEA, dotTrace/dotMemory, WorkspaceConfig), RustRover (Cargo), PyCharm (Python env, pip, pytest, Django), GoLand (Go mod, test, gopls), WebStorm (npm, test, eslint).</p>
+        <p>Requires 2026.2+. Supports all JetBrains IDEs: IntelliJ IDEA, Rider, RustRover, PyCharm, GoLand, WebStorm, CLion, PhpStorm, RubyMine, DataGrip, Android Studio. IDE-specific tools: Rider (NuGet, Publish, SWEA, dotTrace/dotMemory, WorkspaceConfig), RustRover (Cargo), PyCharm (Python env, pip, pytest, Django), GoLand (Go mod, test, gopls), WebStorm (npm, test, eslint), IntelliJ IDEA (Maven, Gradle, JUnit).</p>
     ]]></description>
 
     <depends>com.intellij.mcpServer</depends>
@@ -29,6 +29,7 @@
     <depends optional="true" config-file="python-only.xml">com.intellij.modules.python</depends>
     <depends optional="true" config-file="go-only.xml">com.intellij.modules.go</depends>
     <depends optional="true" config-file="js-only.xml">com.intellij.modules.javascript</depends>
+    <depends optional="true" config-file="java-only.xml">com.intellij.modules.java</depends>
     <depends optional="true" config-file="db-consoles.xml">com.intellij.database</depends>
 
     <!-- Test runner: a separate plugin since 2026.2, part of the platform in 2026.1. A hard dependency

@@ -1,0 +1,8 @@
+<!-- IntelliJ IDEA/Java-only extensions: loaded only when com.intellij.modules.java is present -->
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.java.MavenToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.java.GradleToolset"/>
+        <mcpServer.mcpToolset implementation="com.github.tropin.ridermcp.java.JUnitToolset"/>
+    </extensions>
+</idea-plugin>

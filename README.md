@@ -143,6 +143,20 @@ MCP tools are synchronous (request → response). Long-running operations of thi
 | `rider_js_test` | `action=run\|run_and_wait\|coverage\|list\|watch`, `runner?=jest\|vitest\|mocha\|playwright`, `pattern?`, `filePattern?`, `projectPath?`, `coverage?`, `coverageFormat?`, `extraArgs?`, `timeoutMs?`, `sessionId?` | Run JS/TS tests: jest/vitest/mocha/playwright, run/collect/coverage/watch, filter by pattern |
 | `rider_eslint` | `action=lint\|fix\|check\|config`, `pattern?`, `projectPath?`, `configFile?`, `format?`, `maxWarnings?`, `ignorePattern?`, `cache?`, `quiet?` | ESLint linting/fixing: lint/fix/check/config, configurable format/patterns |
 
+### JavaScript/TypeScript (WebStorm)
+| Tool | Args | Description |
+|---|---|---|
+| `rider_npm` | `action=list\|add\|remove\|update\|audit\|outdated\|run`, `name?`, `version?`, `manager?=npm\|yarn\|pnpm`, `dev?`, `peer?`, `optional?`, `outdated?`, `script?`, `extraArgs?` | Manage packages via npm/yarn/pnpm: list/add/remove/update/audit/outdated/run scripts |
+| `rider_js_test` | `action=run\|run_and_wait\|coverage\|list\|watch`, `runner?=jest\|vitest\|mocha\|playwright`, `pattern?`, `filePattern?`, `projectPath?`, `coverage?`, `coverageFormat?`, `extraArgs?`, `timeoutMs?`, `sessionId?` | Run JS/TS tests: jest/vitest/mocha/playwright, run/collect/coverage/watch, filter by pattern |
+| `rider_eslint` | `action=lint\|fix\|check\|config`, `pattern?`, `projectPath?`, `configFile?`, `format?`, `maxWarnings?`, `ignorePattern?`, `cache?`, `quiet?` | ESLint linting/fixing: lint/fix/check/config, configurable format/patterns |
+
+### Java (IntelliJ IDEA)
+| Tool | Args | Description |
+|---|---|---|
+| `rider_maven` | `action=compile\|test\|package\|install\|deploy\|clean\|verify\|dependency:tree\|dependency:analyze\|versions:display-plugin-updates\|versions:display-dependency-updates\|help:describe`, `projectPath?`, `profiles?`, `skipTests?`, `offline?`, `extraArgs?`, `goal?` | Manage Maven projects: compile/test/package/install/deploy, dependency analysis, version updates |
+| `rider_gradle` | `action=tasks\|build\|test\|assemble\|check\|clean\|dependencies\|dependencyInsight\|wrapper\|help`, `projectPath?`, `task?`, `dependency?`, `extraArgs?` | Manage Gradle projects: tasks/build/test/assemble/check/clean/dependencies/dependencyInsight/wrapper/help |
+| `rider_junit` | `action=run\|run_and_wait\|list`, `classPattern?`, `methodPattern?`, `buildSystem?=maven\|gradle`, `projectPath?`, `extraArgs?`, `timeoutMs?`, `sessionId?` | Run JUnit tests via Maven/Gradle: run/list tests, sessionId polling, class/method filters |
+
 ### Inspections
 | Tool | Args | Description |
 |---|---|---|
@@ -211,7 +225,7 @@ Recipes:
 - **Any JetBrains IDE 2026.2+** (IntelliJ IDEA, Rider, RustRover, PyCharm, WebStorm, GoLand, CLion, DataGrip, PhpStorm, RubyMine, Android Studio, etc.) — the MCP server is built in, no separate plugin to install
 - An MCP-compatible client: **Claude Code, Codex, Gemini CLI, GitHub Copilot, Cursor, Junie, Windsurf, Continue, OpenCode**, or a custom agent — the plugin is client-agnostic
 
-> **IDE-specific note:** Rider-only tools (NuGet, Publish, SWEA, dotTrace/dotMemory, WorkspaceConfig) are unavailable in other IDEs (including RustRover); RustRover-only tools (Cargo) are unavailable in Rider and other IDEs; PyCharm-only tools (Python env, pip, pytest, Django) are unavailable in Rider, RustRover, and other IDEs; GoLand-only tools (Go mod, test, gopls) are unavailable in Rider, RustRover, PyCharm, and other IDEs; WebStorm-only tools (npm, test, eslint) are unavailable in Rider, RustRover, PyCharm, GoLand, and other IDEs; all other tools (tests, DB consoles, tool windows, IDE state, run configs, inspections, processes, profiling via built-in tools) work identically across all IDEs.
+> **IDE-specific note:** Rider-only tools (NuGet, Publish, SWEA, dotTrace/dotMemory, WorkspaceConfig) are unavailable in other IDEs (including RustRover); RustRover-only tools (Cargo) are unavailable in Rider and other IDEs; PyCharm-only tools (Python env, pip, pytest, Django) are unavailable in Rider, RustRover, and other IDEs; GoLand-only tools (Go mod, test, gopls) are unavailable in Rider, RustRover, PyCharm, and other IDEs; WebStorm-only tools (npm, test, eslint) are unavailable in Rider, RustRover, PyCharm, GoLand, and other IDEs; IntelliJ IDEA-only tools (Maven, Gradle, JUnit) are unavailable in Rider, RustRover, PyCharm, GoLand, WebStorm, and other IDEs; all other tools (tests, DB consoles, tool windows, IDE state, run configs, inspections, processes, profiling via built-in tools) work identically across all IDEs.
 
 ### Tool Availability by IDE
 
